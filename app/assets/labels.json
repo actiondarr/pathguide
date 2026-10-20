@@ -1,0 +1,488 @@
+{
+  "generated_from": "configs/classes.json",
+  "note": "由 scripts/gen_dart_labels.py 生成，請勿手工編輯。",
+  "num_classes": 52,
+  "announcement_order": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9,
+    11,
+    14,
+    17,
+    19,
+    21,
+    23,
+    24,
+    25,
+    50,
+    51,
+    5,
+    10,
+    12,
+    13,
+    15,
+    16,
+    18,
+    20,
+    22,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    48,
+    49,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    47,
+    45,
+    46
+  ],
+  "labels": [
+    {
+      "id": 0,
+      "name_en": "footbridge_entrance",
+      "name_zh": "天橋入口",
+      "group": "footbridge",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 1,
+      "name_en": "stairs",
+      "name_zh": "樓梯",
+      "group": "footbridge",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 2,
+      "name_en": "escalator_outdoor",
+      "name_zh": "戶外扶手電梯",
+      "group": "footbridge",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 3,
+      "name_en": "elevator",
+      "name_zh": "升降機",
+      "group": "footbridge",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 4,
+      "name_en": "ramp",
+      "name_zh": "斜道",
+      "group": "footbridge",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 5,
+      "name_en": "footbridge_railing",
+      "name_zh": "天橋欄杆",
+      "group": "footbridge",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 6,
+      "name_en": "pedestrian",
+      "name_zh": "行人",
+      "group": "obstacle",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 7,
+      "name_en": "bin",
+      "name_zh": "垃圾桶",
+      "group": "obstacle",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 8,
+      "name_en": "bollard",
+      "name_zh": "護柱",
+      "group": "obstacle",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 9,
+      "name_en": "traffic_cone",
+      "name_zh": "交通錐",
+      "group": "obstacle",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 10,
+      "name_en": "barrier_water",
+      "name_zh": "水馬",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 11,
+      "name_en": "bicycle",
+      "name_zh": "單車",
+      "group": "obstacle",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 12,
+      "name_en": "scooter",
+      "name_zh": "滑板車",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 13,
+      "name_en": "push_cart",
+      "name_zh": "手推車",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true,
+      "note": "v3 由 cart_trolley 改名而来，语义收窄。原先一个类盖住 手推車/唧車/嬰兒車/搬運車 四种形状差异很大的东西，**id 保持不变**以保住既有 2 个标注；后三者另立 hand_truck(39) / pallet(40) / pushchair(41)。"
+    },
+    {
+      "id": 14,
+      "name_en": "step",
+      "name_zh": "台階",
+      "group": "obstacle",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 15,
+      "name_en": "tactile_paving",
+      "name_zh": "盲道",
+      "group": "guide",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 16,
+      "name_en": "zebra_crossing",
+      "name_zh": "斑馬線",
+      "group": "guide",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 17,
+      "name_en": "glass_door",
+      "name_zh": "玻璃門",
+      "group": "indoor",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 18,
+      "name_en": "door",
+      "name_zh": "推拉門",
+      "group": "indoor",
+      "priority": "P1",
+      "announced": true,
+      "note": "推/拉/双向由 **tag** 表达（action:pull / action:push / action:both），不拆成类别——拆开会让同一个门在不同帧被标成不同类，且推拉方向常被遮挡。"
+    },
+    {
+      "id": 19,
+      "name_en": "escalator_indoor",
+      "name_zh": "商場扶手電梯",
+      "group": "indoor",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 20,
+      "name_en": "sign_pictogram",
+      "name_zh": "指示牌",
+      "group": "indoor",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 21,
+      "name_en": "glass_door_indoor",
+      "name_zh": "商場玻璃門",
+      "group": "indoor",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 22,
+      "name_en": "shop_front",
+      "name_zh": "店鋪門面",
+      "group": "classifier",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 23,
+      "name_en": "fork_in_road",
+      "name_zh": "分岔路口",
+      "group": "guide",
+      "priority": "P0",
+      "announced": true,
+      "note": "PDF 原文标了 (??)，定义确实模糊。本项目的定义：**地面标线或路缘分叉成两条可通行方向的点**，框住分叉处的地面区域（不含建筑）。采集时只收「站在岔口前看得见分叉」的视角。"
+    },
+    {
+      "id": 24,
+      "name_en": "caution_slippery",
+      "name_zh": "小心地滑",
+      "group": "obstacle",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 25,
+      "name_en": "crowds_of_people_queuing",
+      "name_zh": "排隊人潮",
+      "group": "obstacle",
+      "priority": "P0",
+      "announced": true,
+      "note": "与 pedestrian(6) 并存而非替代：单个行人是避让对象，人潮是**不可穿越的块**，处理方式不同（一个绕、一个改道）。PDF 另注人潮有队头/队尾/横跨三种形态。"
+    },
+    {
+      "id": 26,
+      "name_en": "fence",
+      "name_zh": "圍欄",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 27,
+      "name_en": "barrier_fencing",
+      "name_zh": "工程圍網",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 28,
+      "name_en": "scaffold",
+      "name_zh": "鷹架",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 29,
+      "name_en": "road_excavation",
+      "name_zh": "掘路工程",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true,
+      "note": "PDF 注「同時出現多種 label 應可辨識」——本类就是那个复合场景的单一标签，框住整个施工区域。"
+    },
+    {
+      "id": 30,
+      "name_en": "power_distribution_box",
+      "name_zh": "配電箱",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 31,
+      "name_en": "goods",
+      "name_zh": "街邊貨物",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true,
+      "note": "商家摆到街上的货。形态无定，是已知较难的一类。"
+    },
+    {
+      "id": 32,
+      "name_en": "goods_rack",
+      "name_zh": "貨物架",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 33,
+      "name_en": "cardboard",
+      "name_zh": "紙皮",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 34,
+      "name_en": "table",
+      "name_zh": "桌椅",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 35,
+      "name_en": "roll_up_banner_stand",
+      "name_zh": "易拉架",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 36,
+      "name_en": "billboard",
+      "name_zh": "廣告看板",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true
+    },
+    {
+      "id": 37,
+      "name_en": "traffic_cone_connector_rod",
+      "name_zh": "交通錐連接杆",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": true
+    },
+    {
+      "id": 38,
+      "name_en": "abrasion_resistant_steel_plates",
+      "name_zh": "鋪路鋼板",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": true,
+      "note": "铺在路面上的钢板。既是障碍也是**湿滑面**，对盲杖使用者尤其危险。"
+    },
+    {
+      "id": 39,
+      "name_en": "hand_truck",
+      "name_zh": "搬運手推車",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": true
+    },
+    {
+      "id": 40,
+      "name_en": "pallet",
+      "name_zh": "唧車",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": true
+    },
+    {
+      "id": 41,
+      "name_en": "pushchair",
+      "name_zh": "嬰兒車",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": true
+    },
+    {
+      "id": 42,
+      "name_en": "broken_tree",
+      "name_zh": "樹木",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": true
+    },
+    {
+      "id": 43,
+      "name_en": "tree_root_on_the_road",
+      "name_zh": "地面樹根",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": true
+    },
+    {
+      "id": 44,
+      "name_en": "cycle_path",
+      "name_zh": "單車徑",
+      "group": "guide",
+      "priority": "P2",
+      "announced": true
+    },
+    {
+      "id": 45,
+      "name_en": "streetlight",
+      "name_zh": "路燈",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": false,
+      "note": "announced=false：路灯到处都有，而「前方有路灯」对视障用户**不可行动**。检测它只用于避撞与场景理解，不播报——否则会把真正该说的话挤掉。"
+    },
+    {
+      "id": 46,
+      "name_en": "sign_post",
+      "name_zh": "標誌桿",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": false,
+      "note": "announced=false，理由同 streetlight：细长杆件密集出现，逐根播报等于噪声。"
+    },
+    {
+      "id": 47,
+      "name_en": "bucket",
+      "name_zh": "水桶",
+      "group": "obstacle",
+      "priority": "P2",
+      "announced": true
+    },
+    {
+      "id": 48,
+      "name_en": "obstacle",
+      "name_zh": "障礙物",
+      "group": "obstacle",
+      "priority": "P1",
+      "announced": true,
+      "note": "v4 新增（用户决定）：**泛化的兜底类**。用途有两个 —— ① 具体类无法判定时给出可播报的结论：对视障用户而言「前面有東西擋路」往往比「那是什么」更重要、也更早能说；② 充当「未识别障碍物」上传闭环的判据（此前实测 98% 的街景帧都有检出，所以「有无检出」不能当条件；有了这一类，就可以用「检出 obstacle 但置信度不高」当条件）。**边界必须遵守，否则标注会漂移**：凡能归入任一具体类（垃圾桶/護柱/交通錐/水馬/單車/圍欄…）的一律用具体类，只有确实无法归类时才标 obstacle；**行人、以及升降機/扶梯/路燈等设施不标 obstacle**。来源：Roboflow everyday-object-finder 的 2156 个 `barrier` 标注（该项目把通用屏障与細分类混标，几何上与水馬/圍欄都不同形，无法安全映到既有类）。"
+    },
+    {
+      "id": 49,
+      "name_en": "escalator",
+      "name_zh": "扶手電梯",
+      "group": "footbridge",
+      "priority": "P1",
+      "announced": true,
+      "note": "v4 新增（用户决定）：**通用扶梯**，按「先辨识出来再分」——先能可靠说出「这里有扶梯」，方向与室内外的细分等数据够了再做。**与既有 id 2 escalator_outdoor / id 19 escalator_indoor 的关系**：那两类当前**零标注**；而现有第三方数据的 1980 个 `escalator` 标注**无法区分室内外**（实测其图片含新加坡/樟宜/中国等来源，且标注无方向信息），硬映到其中一个必然有错。因此三者并存，但**只有通用类会有数据**，两个细分槽位暂时休眠——与 v3 删除 ambiguous_vertical 占位类属同一情形，这次保留槽位以免触动索引。将来要细分时，应**新增**方向/场景子类，不要复用这两个槽位。"
+    },
+    {
+      "id": 50,
+      "name_en": "downstairs",
+      "name_zh": "落樓梯",
+      "group": "footbridge",
+      "priority": "P0",
+      "announced": true
+    },
+    {
+      "id": 51,
+      "name_en": "upstairs",
+      "name_zh": "上樓梯",
+      "group": "footbridge",
+      "priority": "P0",
+      "announced": true
+    }
+  ]
+}
