@@ -5,3 +5,5 @@
 App 以導航首頁啟動，提供「搜尋目的地」、「我的路線」和「錄製新路線」的未來功能介面；底部「探索」頁已支援 iOS／Android 真實相機、香港九類裝置端 TFLite 辨識、三類模擬資料及粵語播報。最低 iOS 15。
 
 未來導航功能會清楚標示「開發中」，目前不會建立真實路線或記錄 GPS。
+
+PathGuide: Flutter accessibility navigation and on-device object recognition app.
