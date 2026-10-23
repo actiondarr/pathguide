@@ -1,21 +1,25 @@
 {
   "format": 1,
-  "version": "2026-10-19.hk9.1",
+  "version": "2026-10-23.hkdi10.pilot.1",
   "file": "detector.tflite",
-  "bytes": 10694183,
-  "sha256": "8bbfa43b1fe2b440e608652e75fa86d15e571031c45b7b21f30689852468e3c9",
+  "bytes": 10695168,
+  "sha256": "e5f581cc805656d73c7393303db7dc8ff973deef9a74fd3d377aed5f4cb2c7df",
   "inputSize": 640,
-  "modelClassCount": 9,
+  "modelClassCount": 10,
   "modelClassIds": [
+    6,
     11,
     7,
     8,
-    50,
-    49,
-    6,
     9,
-    51,
-    24
+    24,
+    1,
+    49,
+    26,
+    18
   ],
-  "trainedAt": "2026-10-19"
+  "trainedAt": "2026-10-23",
+  "experimental": true,
+  "datasetProfile": "agent-reviewed pilot: 110 train / 29 val / 23 test",
+  "trainingScope": "head layers only; feature backbone and neck frozen"
 }

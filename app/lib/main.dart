@@ -6,11 +6,16 @@ import 'ui/app_shell.dart';
 import 'ui/app_theme.dart';
 import 'ui/demo_page.dart';
 import 'settings/app_settings.dart';
+import 'account/account_controller.dart';
+import 'account/firebase_accounts.dart';
+import 'account/account_ui.dart';
+import 'photos/photo_controller.dart';
+import 'photos/firebase_photos.dart';
+import 'photos/photo_ui.dart';
 
 /// 領路通 · PathGuide HK。
 ///
-/// 導航首頁先展示目的地搜尋、已儲存路線及路線錄製的未來產品方向；
-/// 這些入口會明確標示為開發中，不會假裝已連接導航 API。
+/// 任務首頁不啟動相機；使用者進入辨識頁後才請求權限並自動開始。
 /// Android 與 iOS 的「探索」頁均使用原生相機及同一個裝置端模型，也可
 /// 切換三類模擬框，並共用繁體中文閾值、標籤及粵語播報控制。
 Future<void> main() async {
@@ -30,52 +35,89 @@ Future<void> main() async {
     ),
   );
 
-  runApp(PathGuideApp(settings: settings));
+  final account = await configuredAccounts();
+  final photos = await configuredPhotos(account);
+  runApp(PathGuideApp(settings: settings, account: account, photos: photos));
 }
 
 class PathGuideApp extends StatefulWidget {
   const PathGuideApp({
     super.key,
     this.initialMode = SourceMode.camera,
-    this.initialSection = AppSection.navigation,
+    this.initialSection = AppSection.home,
     this.settings,
+    this.theme,
+    this.account,
+    this.photos,
   });
 
   final SourceMode initialMode;
   final AppSection initialSection;
   final AppSettings? settings;
+  final ThemeData? theme;
+  final AccountController? account;
+  final PhotoController? photos;
 
   @override
   State<PathGuideApp> createState() => _PathGuideAppState();
 }
 
-class _PathGuideAppState extends State<PathGuideApp> {
+class _PathGuideAppState extends State<PathGuideApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.photos?.foreground(state == AppLifecycleState.resumed);
+  }
+
   late final AppSettings _settings = widget.settings ?? AppSettings.memory();
+
+  late final AccountController _account =
+      widget.account ?? unconfiguredAccounts();
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.photos?.dispose();
+    _account.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '領路通',
-      locale: const Locale.fromSubtags(
-        languageCode: 'zh',
-        scriptCode: 'Hant',
-        countryCode: 'HK',
-      ),
-      supportedLocales: const <Locale>[
-        Locale.fromSubtags(
+    final app = AccountScope(
+      controller: _account,
+      child: MaterialApp(
+        title: '領路通',
+        locale: const Locale.fromSubtags(
           languageCode: 'zh',
           scriptCode: 'Hant',
           countryCode: 'HK',
         ),
-      ],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(),
-      home: AppShell(
-        initialSection: widget.initialSection,
-        initialVisionMode: widget.initialMode,
-        settings: _settings,
+        supportedLocales: const <Locale>[
+          Locale.fromSubtags(
+            languageCode: 'zh',
+            scriptCode: 'Hant',
+            countryCode: 'HK',
+          ),
+        ],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        debugShowCheckedModeBanner: false,
+        theme: widget.theme ?? buildAppTheme(),
+        home: AppShell(
+          initialSection: widget.initialSection,
+          initialVisionMode: widget.initialMode,
+          settings: _settings,
+        ),
       ),
     );
+    return widget.photos == null
+        ? app
+        : PhotoScope(controller: widget.photos!, child: app);
   }
 }

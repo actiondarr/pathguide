@@ -3,18 +3,27 @@ import 'dart:async';
 import 'package:flutter/foundation.dart'
     show kDebugMode, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/semantics.dart' show SemanticsService;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, rootBundle, MethodChannel;
 
 import '../overlay/box_painter.dart';
 import '../settings/app_settings.dart';
 import '../tts/announcer.dart';
 import '../tts/flutter_tts_speaker.dart';
+import '../tts/environment_speaker.dart';
 import '../vision/detection.dart';
 import '../vision/mock_vision_source.dart';
 import '../vision/platform_vision.dart';
 import '../vision/vision_preview.dart';
 import '../vision/vision_source.dart';
+import '../vision/result_summary.dart';
 import 'app_theme.dart';
+import '../account/account_ui.dart';
+import '../photos/photo_ui.dart';
+import '../photos/photo_controller.dart';
+import '../photos/firebase_photos.dart';
+import '../vision/model_manifest.dart';
 
 /// 界面可切换的检测来源种类。
 ///
@@ -30,21 +39,23 @@ enum SourceMode {
   mock,
 }
 
-/// M3 最小可见 Demo 的主界面。
-///
-/// 验收目标（见毕设设计 §9.1）：相机实时画面 + 检测框 + 中文标签 +
-/// FPS 与推理耗时 + 阈值滑条 + 粤语播报。
+/// Camera-first recognition page. Entry starts recognition and announcements;
+/// secondary controls live in a modal, with Pause always available.
 class DemoPage extends StatefulWidget {
   const DemoPage({
     super.key,
     this.initialMode = SourceMode.camera,
     required this.settings,
+    this.onBack,
+    this.onAccount,
   });
 
   /// Tests and demo tooling can start in mock mode without racing native setup.
   /// The shipped app keeps the camera default.
   final SourceMode initialMode;
   final AppSettings settings;
+  final VoidCallback? onBack;
+  final VoidCallback? onAccount;
 
   @override
   State<DemoPage> createState() => _DemoPageState();
@@ -52,6 +63,7 @@ class DemoPage extends StatefulWidget {
 
 class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   late final FlutterTtsSpeaker _speaker;
+  late final EnvironmentSpeaker _environmentSpeaker;
   late final Announcer _announcer;
 
   StreamSubscription<VisionFrame>? _sub;
@@ -63,10 +75,61 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   /// 相机与假数据都是 [VisionSource]，UI 不再需要知道用的是哪一个
   /// （只有渲染预览时按 [_mode] 决定显示相机视图还是网格背景）。
   VisionSource? _source;
+  PhotoController? _photos;
+  Timer? _photoTimer;
+  int _photoTick = 0;
+  void _setupPhotos() {
+    _photos = PhotoScope.maybeOf(context);
+    _photoTimer ??= Timer.periodic(const Duration(seconds: 30), (_) async {
+      final photos = _photos;
+      if (photos == null ||
+          !_active ||
+          !_sourceReady ||
+          !_requestedRunning ||
+          _controlsOpen ||
+          _mode != SourceMode.camera) {
+        return;
+      }
+      _photoTick++;
+      if (photos.autoCapture) {
+        await _capturePhoto(
+          _photoTick.isEven ? 'scene_sample' : 'low_confidence',
+        );
+      }
+      await photos.uploadPending();
+    });
+  }
+
+  Future<void> _capturePhoto(String trigger) async {
+    if (!_sourceReady ||
+        !_requestedRunning ||
+        _mode != SourceMode.camera ||
+        !_active) {
+      return;
+    }
+    final source = _source;
+    final key = source is PlatformVision ? source.modelManifestKey : null;
+    if (key == null) return;
+    final parsed = parseModelManifest(await rootBundle.loadString(key));
+    if (!parsed.ok || !identical(source, _source)) return;
+    final manifest = parsed.manifest!;
+    await _photos?.capture((requested) async {
+      final captured = await captureNativePhoto(
+        requested,
+        modelVersion: manifest.version,
+        classMapVersion:
+            '${manifest.version}:${manifest.modelClassIds.join(",")}',
+      );
+      return identical(source, _source) && _active && _requestedRunning
+          ? captured
+          : null;
+    }, trigger: trigger);
+  }
 
   double _threshold = 0.30;
   bool _speakEnabled = true;
   bool _showLabels = true;
+  bool _pilotModel = true;
 
   List<Detection> _detections = const <Detection>[];
 
@@ -74,7 +137,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   double _fps = 0;
   DateTime _lastFrameAt = DateTime.now();
 
-  String _status = '正在初始化…';
+  String _status = '尚未開始辨識';
   String? _statusError;
 
   /// 本次初始化是否成功。用于状态栏配色与错误面板显示。
@@ -87,6 +150,19 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   Future<void> _transition = Future<void>.value();
   Future<void>? _speechStop;
   bool _controlsOpen = false;
+  bool _requestedRunning = false;
+  bool _hasStarted = false;
+  bool _screenReader = false;
+  DateTime? _lastResultAt;
+  String _readback = '正在準備辨識…';
+  bool _resumeAfterInterruption = false;
+  bool _initializing = false;
+  Completer<void>? _foreground;
+  String? _pendingStatusAnnouncement;
+  final FocusNode _settingsFocus = FocusNode();
+  bool _reading = false;
+
+  bool get _canSpeak => _screenReader || _speechReady;
 
   bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
 
@@ -115,8 +191,13 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _speaker = FlutterTtsSpeaker(speechRate: widget.settings.speechSpeed.rate);
+    _environmentSpeaker = EnvironmentSpeaker(
+      tts: _speaker,
+      screenReaderActive: () => _screenReader,
+      announce: _announceWithScreenReader,
+    );
     _announcer = Announcer(
-      speaker: _speaker,
+      speaker: _environmentSpeaker,
       minSpeakScore: widget.settings.speakThreshold,
     );
     widget.settings.addListener(_applySettings);
@@ -130,6 +211,32 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _setupPhotos();
+    final reader = MediaQuery.accessibleNavigationOf(context);
+    if (reader != _screenReader) {
+      _screenReader = reader;
+      _stopSpeech();
+    }
+  }
+
+  Future<void> _announceWithScreenReader(String text) async {
+    if (!mounted || !_active || !_requestedRunning || _controlsOpen) return;
+    if (MediaQuery.supportsAnnounceOf(context)) {
+      await SemanticsService.sendAnnouncement(
+        View.of(context),
+        text,
+        Directionality.of(context),
+      );
+    } else {
+      // Accessible result remains available even when a platform cannot send
+      // explicit announcements. Do not fall back to simultaneous TTS.
+      setState(() => _readback = text);
+    }
+  }
+
   void _applySettings() {
     _announcer.minSpeakScore = widget.settings.speakThreshold;
     if (mounted) setState(() {});
@@ -141,9 +248,69 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   Future<void> _bootstrap() async {
     // 語音初始化獨立進行，語音服務不可用時仍可操作介面。
     unawaited(_initSpeaker());
-    if (!_active) return;
-    if (_isIOS || defaultTargetPlatform == TargetPlatform.android) {
-      await _switchSource(_mode);
+    await _startRecognition();
+  }
+
+  Future<void> _startRecognition({bool resuming = false}) async {
+    if (!_active || _requestedRunning) return;
+    setState(() {
+      _requestedRunning = true;
+      _hasStarted = true;
+      _resumeAfterInterruption = false;
+      _pendingStatusAnnouncement = resuming ? '辨識已恢復' : '辨識已開始';
+      _readback = '正在準備辨識…';
+      _lastResultAt = null;
+    });
+    await _switchSource(_mode);
+  }
+
+  void _pauseRecognition({bool interrupted = false}) {
+    if (!interrupted) _resumeAfterInterruption = false;
+    _initializing = false;
+    _pendingStatusAnnouncement = null;
+    _releaseForegroundWait();
+    ++_sourceGeneration;
+    _requestedRunning = false;
+    _stopSpeech();
+    _diagTimer?.cancel();
+    setState(() {
+      _sourceReady = false;
+      _detections = const <Detection>[];
+      _lastResultAt = null;
+      _diagnostics = null;
+      _status = '辨識已暫停';
+      _statusError = null;
+      _readback = '已暫停辨識及播報';
+    });
+    _transition = _transition.then((_) => _stopVision());
+  }
+
+  Future<void> _readCurrentResult() async {
+    if (!_sourceReady || !_active || _controlsOpen || _reading) return;
+    final generation = _sourceGeneration;
+    _reading = true;
+    try {
+      _stopSpeech();
+      await _speechStop;
+      if (!_isCurrent(generation) || _controlsOpen) return;
+      final time = _lastResultAt;
+      final text =
+          time == null ||
+              DateTime.now().difference(time) > const Duration(seconds: 3)
+          ? '暫時未有最新結果，請保持手機穩定再試。'
+          : resultSummary(
+              _detections,
+              minScore: widget.settings.speakThreshold,
+              simulated: _mode == SourceMode.mock,
+            );
+      setState(() => _readback = text);
+      await _environmentSpeaker.speak(text);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _ttsError = '未能讀出結果，請閱讀下方結果或稍後重試。');
+      }
+    } finally {
+      _reading = false;
     }
   }
 
@@ -156,6 +323,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         _speechReady = lang != null;
         _ttsError = lang == null ? '未找到可用語音，請檢查系統語音設定' : null;
       });
+      await _announcePendingStatus();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -172,7 +340,14 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   VisionSource _makeSource(SourceMode mode) {
     switch (mode) {
       case SourceMode.camera:
-        return PlatformVision();
+        return PlatformVision(
+          modelAssetKey: _pilotModel
+              ? defaultModelAssetKey
+              : legacyModelAssetKey,
+          modelManifestKey: _pilotModel
+              ? defaultModelManifestKey
+              : legacyModelManifestKey,
+        );
       case SourceMode.mock:
         // 假源的原始帧尺寸与旋转角与相机实现保持一致，
         // 这样「假数据下框画对了」才能推出「相机下也会画对」。
@@ -188,6 +363,10 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   /// 切换检测来源：停旧的、起新的、重接流与诊断轮询。
   Future<void> _switchSource(SourceMode mode) async {
     if (!mounted || !_active) return;
+    if (!_requestedRunning) {
+      setState(() => _mode = mode);
+      return;
+    }
     final generation = ++_sourceGeneration;
     setState(() => _mode = mode);
     _stopSpeech();
@@ -196,8 +375,10 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     await _transition;
   }
 
-  bool _isCurrent(int generation) =>
-      mounted && _active && generation == _sourceGeneration;
+  bool _isRequested(int generation) =>
+      mounted && _requestedRunning && generation == _sourceGeneration;
+
+  bool _isCurrent(int generation) => _active && _isRequested(generation);
 
   Future<void> _stopVision() async {
     _diagTimer?.cancel();
@@ -226,6 +407,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       setState(() {
         _detections = const <Detection>[];
         _diagnostics = null;
+        _lastResultAt = null;
         _status = '正在初始化（${source.displayName}）…';
         _statusError = null;
         _sourceReady = false;
@@ -236,11 +418,23 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         },
         onError: (Object e) {
           if (_isCurrent(generation)) {
-            setState(() => _status = '辨識資料流出錯：$e');
+            _pauseRecognition();
+            setState(() {
+              _status = '辨識資料流暫時不可用';
+              _statusError = '$e';
+            });
           }
         },
       );
+      _initializing = true;
       final status = await source.initialize();
+      // Permission dialogs briefly make iOS inactive. Finish this same startup
+      // when foreground returns instead of requesting a second camera session.
+      if (!_active && _isRequested(generation)) {
+        _foreground ??= Completer<void>();
+        await _foreground!.future;
+      }
+      if (generation == _sourceGeneration) _initializing = false;
       if (!_isCurrent(generation)) {
         await _stopVision();
         return;
@@ -250,8 +444,18 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       setState(() {
         _sourceReady = status.ok;
         _status = status.message;
-        _statusError = status.error;
+        _statusError = status.ok ? null : (status.error ?? status.message);
       });
+      if (!status.ok) {
+        _requestedRunning = false;
+        _pendingStatusAnnouncement = null;
+        setState(() => _readback = '未能開始辨識');
+        _stopSpeech();
+        await _stopVision();
+        return;
+      }
+      await _announcePendingStatus();
+      if (!_isCurrent(generation)) return;
       if (mode == SourceMode.camera) {
         _diagTimer = Timer.periodic(const Duration(milliseconds: 500), (
           _,
@@ -266,7 +470,11 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       await _stopVision();
       if (_isCurrent(generation)) {
         setState(() {
+          _initializing = false;
+          _pendingStatusAnnouncement = null;
+          _requestedRunning = false;
           _sourceReady = false;
+          _readback = '未能開始辨識';
           _status = '來源初始化失敗';
           _statusError = '$e';
         });
@@ -285,26 +493,65 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     );
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final active = state == AppLifecycleState.resumed;
-    if (active == _active) return;
-    _active = active;
-    if (active) {
-      unawaited(_switchSource(_mode));
+  void _releaseForegroundWait() {
+    final waiting = _foreground;
+    _foreground = null;
+    if (waiting != null && !waiting.isCompleted) waiting.complete();
+  }
+
+  Future<void> _announcePendingStatus() async {
+    if (_pendingStatusAnnouncement == null ||
+        !_sourceReady ||
+        !_canSpeak ||
+        !_active ||
+        !_requestedRunning ||
+        _controlsOpen ||
+        _reading) {
       return;
     }
-    ++_sourceGeneration;
-    _diagTimer?.cancel();
-    _stopSpeech();
-    setState(() {
-      _sourceReady = false;
-      _detections = const <Detection>[];
-      _diagnostics = null;
-      _status = '辨識已暫停';
-      _statusError = null;
-    });
-    _transition = _transition.then((_) => _stopVision());
+    final generation = _sourceGeneration;
+    _reading = true;
+    try {
+      await _speechStop;
+      if (!_isCurrent(generation) || _controlsOpen) return;
+      final text = _pendingStatusAnnouncement;
+      _pendingStatusAnnouncement = null;
+      if (text != null) await _environmentSpeaker.speak(text);
+    } catch (_) {
+      if (mounted) setState(() => _ttsError = '未能播放狀態提示，請檢查語音設定。');
+    } finally {
+      _reading = false;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _photos?.foreground(state == AppLifecycleState.resumed);
+    if (state != AppLifecycleState.resumed) {
+      unawaited(
+        const MethodChannel('hk.pathguide/vision')
+            .invokeMethod<void>('cancelCapture')
+            .catchError((Object _) {}),
+      );
+    }
+    if (state == AppLifecycleState.resumed) {
+      _active = true;
+      _releaseForegroundWait();
+      if (_resumeAfterInterruption) {
+        _resumeAfterInterruption = false;
+        unawaited(_startRecognition(resuming: true));
+      }
+      return;
+    }
+    _active = false;
+    if (state == AppLifecycleState.inactive && _initializing) {
+      _stopSpeech();
+      return;
+    }
+    if (_requestedRunning) {
+      _resumeAfterInterruption = true;
+      _pauseRecognition(interrupted: true);
+    }
   }
 
   /// 把 HUD 上的关键数字同步打一行到 logcat（仅 Debug 构建）。
@@ -368,7 +615,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   }
 
   void _onFrame(VisionFrame frame) {
-    if (!mounted || !_active || !_sourceReady) return;
+    if (!mounted || !_active || !_requestedRunning || !_sourceReady) return;
     final now = DateTime.now();
     final dt = now.difference(_lastFrameAt).inMicroseconds;
     _lastFrameAt = now;
@@ -376,8 +623,22 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     // **不再按阈值过滤**：阈值已在来源内部生效（原生侧丢弃低分框，
     // 假源同样按 threshold 过滤）。两处各过滤一次时，不一致的表现是
     // 「滑动条不生效」或「框数对不上」，且不报错。
-    _announcer.enabled = _speakEnabled && _speechReady && _speechStop == null;
-    if (_announcer.enabled && _announcer.onFrame(frame.detections) != null) {
+    _lastResultAt = now;
+    // Also retry after a delayed TTS setup or a screen-reader route change.
+    // The status helper serializes itself and reads only the active generation.
+    if (_pendingStatusAnnouncement != null) {
+      unawaited(_announcePendingStatus());
+    }
+    _announcer.enabled =
+        _speakEnabled &&
+        _canSpeak &&
+        _speechStop == null &&
+        !_controlsOpen &&
+        !_reading &&
+        _pendingStatusAnnouncement == null;
+    if (_announcer.enabled &&
+        !_announcer.isSpeaking &&
+        _announcer.onFrame(frame.detections) != null) {
       unawaited(
         _announcer.lastSpeech!.catchError((Object e) {
           if (!mounted) return;
@@ -392,6 +653,11 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
     setState(() {
       _detections = frame.detections;
+      _readback = resultSummary(
+        frame.detections,
+        minScore: widget.settings.speakThreshold,
+        simulated: _mode == SourceMode.mock,
+      );
       _inferenceMs = frame.inferenceMs;
       if (dt > 0) {
         // 指数平滑：瞬时值抖动太大，看不出真实帧率。
@@ -403,14 +669,24 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _photoTimer?.cancel();
     widget.settings.removeListener(_applySettings);
     WidgetsBinding.instance.removeObserver(this);
     _active = false;
+    _releaseForegroundWait();
     ++_sourceGeneration;
     _diagTimer?.cancel();
     _stopSpeech();
     _transition = _transition.then((_) => _stopVision());
+    _settingsFocus.dispose();
     super.dispose();
+  }
+
+  String get _statusLabel {
+    if (_statusError != null) return '辨識暫時不可用';
+    if (_sourceReady) return _mode == SourceMode.mock ? '模擬辨識中' : '辨識中';
+    if (_requestedRunning) return '準備中';
+    return _hasStarted ? '已暫停' : '尚未開始';
   }
 
   @override
@@ -418,26 +694,128 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Stack(
-          fit: StackFit.expand,
+        child: Column(
           children: <Widget>[
-            ColoredBox(color: Colors.black, child: _previewArea()),
-            Positioned(left: 12, top: 12, child: _statusPill()),
-            Positioned(
-              right: 16,
-              bottom: 18,
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Row(
+                children: <Widget>[
+                  IconButton(
+                    tooltip: '返回首頁',
+                    constraints: const BoxConstraints(
+                      minWidth: 56,
+                      minHeight: 56,
+                    ),
+                    onPressed: widget.onBack,
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        '即時辨識',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Semantics(
-                button: true,
-                label: '開啟辨識設定',
-                child: FloatingActionButton(
-                  key: const ValueKey<String>('vision-settings-button'),
-                  heroTag: 'vision-settings',
-                  tooltip: '開啟辨識設定',
-                  onPressed: _showControls,
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
-                  child: const Icon(Icons.tune_rounded, size: 28),
+                key: const ValueKey<String>('vision-status-pill'),
+                liveRegion: !_sourceReady,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '$_statusLabel · ${_speakEnabled ? "自動播報已開啟" : "自動播報已關閉"}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ),
+              ),
+            ),
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  ExcludeSemantics(child: _previewArea()),
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      width: double.infinity,
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * 0.28,
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      color: AppColors.background.withValues(alpha: 0.94),
+                      child: SingleChildScrollView(
+                        key: const ValueKey('vision-main-scroll'),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Semantics(
+                              liveRegion:
+                                  _screenReader &&
+                                  _speakEnabled &&
+                                  !_controlsOpen &&
+                                  !MediaQuery.supportsAnnounceOf(context),
+                              child: Text(
+                                _readback,
+                                key: const ValueKey('current-result'),
+                              ),
+                            ),
+                            if (_ttsError != null)
+                              Text(
+                                _ttsError!,
+                                style: const TextStyle(
+                                  color: AppColors.warning,
+                                ),
+                              ),
+                            if (_statusError != null)
+                              const Text(
+                                '未能開始辨識，請檢查相機權限後重試。',
+                                style: TextStyle(color: AppColors.warning),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: FilledButton(
+                      key: const ValueKey('recognition-start-pause'),
+                      onPressed: _requestedRunning
+                          ? _pauseRecognition
+                          : _startRecognition,
+                      child: Text(
+                        _requestedRunning
+                            ? '暫停辨識'
+                            : _statusError != null
+                            ? '重新嘗試'
+                            : '繼續辨識',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey<String>('vision-settings-button'),
+                      focusNode: _settingsFocus,
+                      onPressed: _showControls,
+                      icon: const Icon(Icons.tune_rounded),
+                      label: const Text('更多操作'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -446,91 +824,98 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _statusPill() {
-    final hasError = !_sourceReady && _statusError != null;
-    final paused = _status == '辨識已暫停';
-    final color = _sourceReady
-        ? AppColors.success
-        : (hasError ? AppColors.danger : AppColors.warning);
-    final label = _sourceReady
-        ? '辨識中'
-        : (hasError ? '需要處理' : (paused ? '已暫停' : '準備中'));
-
-    return Semantics(
-      key: const ValueKey<String>('vision-status-pill'),
-      button: hasError,
-      label: '辨識狀態：$label${hasError ? '，點擊查看詳情' : ''}',
-      child: Material(
-        color: AppColors.background.withValues(alpha: 0.78),
-        shape: StadiumBorder(
-          side: BorderSide(color: color.withValues(alpha: 0.78)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: hasError ? _showControls : null,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Icon(
-                    _sourceReady
-                        ? Icons.check_circle_rounded
-                        : (hasError
-                              ? Icons.error_rounded
-                              : (paused
-                                    ? Icons.pause_circle_rounded
-                                    : Icons.hourglass_top_rounded)),
-                    color: color,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _showControls() async {
     if (_controlsOpen || !mounted) return;
     _controlsOpen = true;
+    _stopSpeech();
+    bool replay = false;
+    bool openAccount = false;
     try {
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
-        backgroundColor: AppColors.surface,
-        barrierColor: Colors.black.withValues(alpha: 0.58),
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-        ),
-        builder: (sheetContext) => _LiveControlsSheet(
-          contentBuilder: (refresh) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              _statusBar(),
-              _metricStrip(),
-              _controlPanel(refresh: refresh),
-            ],
-          ),
-        ),
-      );
+      replay =
+          await showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            useSafeArea: true,
+            showDragHandle: true,
+            backgroundColor: AppColors.surface,
+            barrierColor: Colors.black.withValues(alpha: 0.58),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+            ),
+            builder: (sheetContext) => _LiveControlsSheet(
+              contentBuilder: (refresh) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        FilledButton.tonalIcon(
+                          key: const ValueKey('read-current-result'),
+                          onPressed: _sourceReady
+                              ? () => Navigator.of(sheetContext).pop(true)
+                              : null,
+                          icon: const Icon(Icons.replay_rounded),
+                          label: const Text('重播目前結果'),
+                        ),
+                        if (_photos != null) ...[
+                          const SizedBox(height: 12),
+                          FilledButton.tonalIcon(
+                            onPressed:
+                                _photos!.canCapture &&
+                                    _sourceReady &&
+                                    _mode == SourceMode.camera
+                                ? () async {
+                                    await _capturePhoto('manual_report');
+                                    refresh();
+                                  }
+                                : null,
+                            icon: const Icon(Icons.add_a_photo_outlined),
+                            label: const Text('回報辨識問題並擷取照片'),
+                          ),
+                          if (_photos!.message != null)
+                            Semantics(
+                              liveRegion: true,
+                              child: Text(_photos!.message!),
+                            ),
+                          const PhotoEntry(),
+                        ],
+                        if (widget.onAccount != null) ...[
+                          const SizedBox(height: 12),
+                          AccountEntry(
+                            onManage: () {
+                              openAccount = true;
+                              Navigator.of(sheetContext).pop(false);
+                            },
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        const Text('後置相機朝向要辨識的環境，保持手機穩定。沒有結果不代表前方安全。'),
+                      ],
+                    ),
+                  ),
+                  _statusBar(),
+                  _metricStrip(),
+                  _controlPanel(refresh: refresh),
+                ],
+              ),
+            ),
+          ) ??
+          false;
     } finally {
       _controlsOpen = false;
+      _announcer.reset();
+      if (mounted) _settingsFocus.requestFocus();
+    }
+    if (openAccount && mounted) {
+      widget.onAccount?.call();
+      return;
+    }
+    if (replay && mounted) {
+      await _readCurrentResult();
+    } else {
+      await _announcePendingStatus();
     }
   }
 
@@ -538,6 +923,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   Widget _previewArea() {
     return LayoutBuilder(
+      key: const ValueKey('recognition-preview'),
       builder: (context, constraints) {
         final viewSize = Size(constraints.maxWidth, constraints.maxHeight);
         // [VisionSource.frameSize] 与检测框坐标同属一个**已转正**的坐标系
@@ -552,7 +938,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         return Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            if (_mode == SourceMode.camera)
+            if (_mode == SourceMode.camera && _requestedRunning)
               const VisionPreview()
             else
               _mockScene(),
@@ -562,6 +948,11 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                 painter: DetectionBoxPainter(
                   mapped: mapped,
                   showLabels: _showLabels,
+                  fontFamily: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.fontFamily,
+                  textScaler: MediaQuery.textScalerOf(context),
                 ),
               ),
             ),
@@ -580,7 +971,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      if (_statusError == null)
+                      if (_requestedRunning && _statusError == null)
                         const SizedBox(
                           width: 18,
                           height: 18,
@@ -593,7 +984,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                           size: 20,
                         ),
                       const SizedBox(width: 10),
-                      Text(_statusError == null ? '正在準備辨識' : '辨識暫時不可用'),
+                      Flexible(child: Text(_statusLabel)),
                     ],
                   ),
                 ),
@@ -1107,6 +1498,26 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
+          const Text('辨識模型'),
+          const SizedBox(height: 8),
+          SegmentedButton<bool>(
+            key: const ValueKey('recognition-model'),
+            segments: const <ButtonSegment<bool>>[
+              ButtonSegment(value: true, label: Text('十類試用')),
+              ButtonSegment(value: false, label: Text('原版九類')),
+            ],
+            selected: <bool>{_pilotModel},
+            onSelectionChanged: (selection) {
+              setState(() => _pilotModel = selection.single);
+              if (_mode == SourceMode.camera) _switchSource(_mode);
+              refresh?.call();
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _pilotModel ? '試用版新增門及圍欄，合併上落樓梯；這三類仍需改善。' : '原版保留上樓梯及落樓梯，可作辨識比較。',
+          ),
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
             decoration: BoxDecoration(
@@ -1249,7 +1660,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
               Expanded(
                 child: _controlToggle(
                   tooltip: _speakEnabled ? '關閉播報' : '開啟播報',
-                  label: '粵語播報',
+                  label: '自動播報',
                   icon: _speakEnabled
                       ? Icons.volume_up_rounded
                       : Icons.volume_off_rounded,
@@ -1286,7 +1697,9 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                 style: const TextStyle(color: AppColors.warning, fontSize: 12),
               ),
             )
-          else if (_ttsLanguage != null && !_speaker.isCantonese)
+          else if (_ttsLanguage != null &&
+              !_speaker.isCantonese &&
+              !_screenReader)
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Text(
@@ -1294,7 +1707,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                 style: const TextStyle(color: AppColors.warning, fontSize: 12),
               ),
             ),
-          if (_announcer.history.isNotEmpty) _announceLog(),
+
           const SizedBox(height: 8),
           Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -1330,6 +1743,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
               ),
               children: <Widget>[
                 _perfPanel(),
+                if (_announcer.history.isNotEmpty) _announceLog(),
                 if (!_isIOS)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -1376,7 +1790,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
           child: InkWell(
             onTap: onTap,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 54),
+              constraints: const BoxConstraints(minHeight: 56),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(
@@ -1490,7 +1904,7 @@ class _LiveControlsSheetState extends State<_LiveControlsSheet> {
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
-                    '辨識控制',
+                    '更多操作',
                     style: TextStyle(
                       color: AppColors.text,
                       fontSize: 20,
@@ -1499,7 +1913,11 @@ class _LiveControlsSheetState extends State<_LiveControlsSheet> {
                   ),
                 ),
                 IconButton(
-                  tooltip: '關閉辨識設定',
+                  tooltip: '關閉更多操作',
+                  constraints: const BoxConstraints(
+                    minWidth: 56,
+                    minHeight: 56,
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close_rounded),
                 ),

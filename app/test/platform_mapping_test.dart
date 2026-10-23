@@ -11,7 +11,7 @@ void main() {
   const codec = StandardMethodCodec();
   final binding = TestDefaultBinaryMessengerBinding.instance;
 
-  for (final nativeClasses in [9, 3]) {
+  for (final nativeClasses in [9, 3, 10]) {
     test(
       'startup gates frames and validates native classes=$nativeClasses',
       () async {
@@ -41,7 +41,12 @@ void main() {
           const MethodChannel(kFrameChannel),
           (_) async => null,
         );
-        final source = PlatformVision();
+        final source = nativeClasses == 10
+            ? PlatformVision()
+            : PlatformVision(
+                modelAssetKey: legacyModelAssetKey,
+                modelManifestKey: legacyModelManifestKey,
+              );
         final frames = <VisionFrame>[];
         final subscription = source.frames.listen(frames.add);
         Future<void> emit() async {
@@ -77,7 +82,9 @@ void main() {
             reason: 'Unvalidated local IDs must never reach labels or speech',
           );
           expect(loadMaps, [
-            [11, 7, 8, 50, 49, 6, 9, 51, 24],
+            nativeClasses == 10
+                ? [6, 11, 7, 8, 9, 24, 1, 49, 26, 18]
+                : [11, 7, 8, 50, 49, 6, 9, 51, 24],
           ]);
           loaded.complete({
             'loaded': true,
@@ -85,7 +92,7 @@ void main() {
             'inputSize': 640,
           });
           final status = await initializing;
-          expect(status.ok, nativeClasses == 9);
+          expect(status.ok, nativeClasses != 3);
           expect(source.isReady, status.ok);
           await emit();
           if (status.ok) {
