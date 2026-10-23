@@ -12,6 +12,12 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PathGuideNavigationPlugin") {
+      NavigationPlugin.register(with: registrar)
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PathGuideMenuPlugin") {
+      MenuPlugin.register(with: registrar)
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PathGuideVisionPlugin") {
       VisionPlugin.register(with: registrar)
     }

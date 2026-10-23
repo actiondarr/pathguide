@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 import '../settings/app_settings.dart';
+import '../vision/model_manifest.dart';
+import '../vision/platform_vision.dart' show defaultModelManifestKey;
 import 'app_theme.dart';
 import 'demo_page.dart';
+import 'task_home_page.dart';
+import 'usage_guide.dart';
+import '../account/account_ui.dart';
+import '../menu/menu_page.dart';
+import '../navigation/navigation_page.dart';
 
-enum AppSection { explore, navigation, settings }
+enum AppSection { home, explore, navigation, settings }
 
 /// Main product shell. Camera resources only exist while Explore is visible.
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
-    this.initialSection = AppSection.navigation,
+    this.initialSection = AppSection.home,
     this.initialVisionMode = SourceMode.camera,
     required this.settings,
   });
@@ -26,20 +34,66 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   late AppSection _section = widget.initialSection;
 
-  void _select(AppSection section) {
-    if (_section == section) return;
-    setState(() => _section = section);
+  bool _accountVisible = false;
+  bool _menuVisible = false;
+  bool _navigationTask = false, _confirmingNavigationExit = false;
+  Future<void> _select(AppSection section) async {
+    if (_section == section && !_accountVisible && !_menuVisible) return;
+    if (_section == AppSection.navigation &&
+        _navigationTask &&
+        section != _section) {
+      if (_confirmingNavigationExit) return;
+      _confirmingNavigationExit = true;
+      final leave = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('結束導航並離開？'),
+          actions: [
+            TextButton(
+              autofocus: true,
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('繼續導航'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('確認結束'),
+            ),
+          ],
+        ),
+      );
+      _confirmingNavigationExit = false;
+      if (leave != true || !mounted) return;
+    }
+    _navigationTask = false;
+    setState(() {
+      _section = section;
+      _accountVisible = false;
+      _menuVisible = false;
+    });
   }
 
+  void _openAccount() => setState(() => _accountVisible = true);
+
   Widget _page() => switch (_section) {
+    AppSection.home => TaskHomePage(
+      onExplore: () => _select(AppSection.explore),
+      onNavigation: () => _select(AppSection.navigation),
+      onSettings: () => _select(AppSection.settings),
+      onAccount: _openAccount,
+      onMenu: () => setState(() => _menuVisible = true),
+    ),
     AppSection.explore => DemoPage(
       initialMode: widget.initialVisionMode,
       settings: widget.settings,
+      onBack: () => _select(AppSection.home),
+      onAccount: _openAccount,
     ),
-    AppSection.navigation => NavigationHomePage(
-      onOpenExplore: () => _select(AppSection.explore),
+    AppSection.navigation => NavigationPage(
+      settings: widget.settings,
+      onTaskChanged: (active) => _navigationTask = active,
     ),
     AppSection.settings => SettingsPage(
+      onAccount: _openAccount,
       onOpenExplore: () => _select(AppSection.explore),
       settings: widget.settings,
     ),
@@ -48,9 +102,24 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        child: KeyedSubtree(key: ValueKey(_section), child: _page()),
+      // Dispose the outgoing camera immediately. An AnimatedSwitcher would
+      // keep it alive (and potentially speaking) during its exit animation.
+      body: KeyedSubtree(
+        key: ValueKey(
+          _menuVisible
+              ? 'menu'
+              : _accountVisible
+              ? 'account'
+              : _section,
+        ),
+        child: _menuVisible
+            ? MenuPage(
+                settings: widget.settings,
+                onBack: () => setState(() => _menuVisible = false),
+              )
+            : _accountVisible
+            ? AccountPage(onBack: () => setState(() => _accountVisible = false))
+            : _page(),
       ),
       bottomNavigationBar: _AppNavigationBar(
         selected: _section,
@@ -60,191 +129,9 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-class NavigationHomePage extends StatelessWidget {
-  const NavigationHomePage({super.key, required this.onOpenExplore});
-
-  final VoidCallback onOpenExplore;
-
-  void _showComingSoon(
-    BuildContext context, {
-    required String title,
-    required String description,
-    required IconData icon,
-    required Color color,
-  }) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: color.withValues(alpha: 0.16),
-                child: Icon(icon, color: color, size: 32),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                description,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge
-                    ?.copyWith(color: AppColors.textMuted),
-              ),
-              const SizedBox(height: 12),
-              const _DevelopmentBadge(),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  onOpenExplore();
-                },
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(54),
-                ),
-                icon: const Icon(Icons.visibility_rounded),
-                label: const Text('先使用即時辨識'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: CustomScrollView(
-        key: const ValueKey('navigation-home'),
-        slivers: <Widget>[
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-            sliver: SliverList.list(
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        Icons.assistant_navigation,
-                        color: AppColors.primary,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            '領路通',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          Text(
-                            '你的無障礙步行助手',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const _DevelopmentBadge(compact: true),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                Text(
-                  '想去哪裡？',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '選擇導航方式；路線功能將在未來版本提供。',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 18),
-                _FeatureCard(
-                  color: AppColors.destination,
-                  icon: Icons.travel_explore_rounded,
-                  title: '搜尋目的地',
-                  subtitle: '輸入地址，自動規劃步行路線',
-                  onTap: () => _showComingSoon(
-                    context,
-                    title: '搜尋目的地',
-                    description: '未來可輸入地址，並結合無障礙路況規劃步行路線。',
-                    icon: Icons.travel_explore_rounded,
-                    color: AppColors.destination,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _FeatureCard(
-                  color: AppColors.routes,
-                  icon: Icons.map_rounded,
-                  title: '我的路線',
-                  subtitle: '選擇已儲存路線開始導航',
-                  onTap: () => _showComingSoon(
-                    context,
-                    title: '我的路線',
-                    description: '未來可儲存常用路線，快速開始語音導航。',
-                    icon: Icons.map_rounded,
-                    color: AppColors.routes,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _FeatureCard(
-                  color: AppColors.record,
-                  icon: Icons.radio_button_checked_rounded,
-                  title: '錄製新路線',
-                  subtitle: '錄製 GPS 軌跡並加入路標',
-                  onTap: () => _showComingSoon(
-                    context,
-                    title: '錄製新路線',
-                    description: '未來可記錄 GPS 軌跡，並在重要位置加入語音路標。',
-                    icon: Icons.radio_button_checked_rounded,
-                    color: AppColors.record,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                OutlinedButton.icon(
-                  onPressed: onOpenExplore,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                    side: const BorderSide(color: AppColors.border),
-                    foregroundColor: AppColors.text,
-                  ),
-                  icon: const Icon(
-                    Icons.visibility_rounded,
-                    color: AppColors.primary,
-                  ),
-                  label: const Text('開啟即時環境辨識'),
-                ),
-                const SizedBox(height: 18),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({
+    this.onAccount,
     super.key,
     required this.onOpenExplore,
     required this.settings,
@@ -252,6 +139,25 @@ class SettingsPage extends StatelessWidget {
 
   final VoidCallback onOpenExplore;
   final AppSettings settings;
+  final VoidCallback? onAccount;
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  AppSettings get settings => widget.settings;
+  VoidCallback get onOpenExplore => widget.onOpenExplore;
+  late final Future<ManifestParseResult> _manifest;
+
+  @override
+  void initState() {
+    super.initState();
+    _manifest = rootBundle
+        .loadString(defaultModelManifestKey, cache: false)
+        .then(parseModelManifest)
+        .catchError((Object error) => ManifestParseResult.fail('$error'));
+  }
 
   Future<void> _showSpeechSpeedPicker(BuildContext context) async {
     await showModalBottomSheet<void>(
@@ -260,33 +166,39 @@ class SettingsPage extends StatelessWidget {
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         top: false,
-        child: AnimatedBuilder(
-          animation: settings,
-          builder: (context, _) => Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Text('播報速度', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 6),
-                Text(
-                  '只會調整粵語播報的速度；不會改變音量或音調。',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 12),
-                for (final speed in SpeechSpeed.values)
-                  _SpeechSpeedChoice(
-                    speed: speed,
-                    selected: settings.speechSpeed == speed,
-                    onTap: () async {
-                      await settings.setSpeechSpeed(speed);
-                      if (sheetContext.mounted) {
-                        Navigator.of(sheetContext).pop();
-                      }
-                    },
+        child: SingleChildScrollView(
+          child: AnimatedBuilder(
+            animation: settings,
+            builder: (context, _) => Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text('播報速度', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 6),
+                  Text(
+                    '只會調整粵語播報的速度；不會改變音量或音調。',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-              ],
+                  const SizedBox(height: 12),
+                  for (final speed in SpeechSpeed.values)
+                    _SpeechSpeedChoice(
+                      speed: speed,
+                      selected: settings.speechSpeed == speed,
+                      onTap: () async {
+                        await settings.setSpeechSpeed(speed);
+                        if (sheetContext.mounted) {
+                          Navigator.of(sheetContext).pop();
+                        }
+                      },
+                    ),
+                  TextButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    child: const Text('關閉'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -358,6 +270,16 @@ class SettingsPage extends StatelessWidget {
             Text('設定', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 6),
             Text('管理播報及即時辨識功能。', style: Theme.of(context).textTheme.bodyMedium),
+            if (widget.onAccount != null) ...[
+              const SizedBox(height: 16),
+              AccountEntry(onManage: widget.onAccount!),
+            ],
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => showUsageGuide(context),
+              icon: const Icon(Icons.help_outline),
+              label: const Text('使用教學'),
+            ),
             const SizedBox(height: 24),
             _NativeSettingsSection(
               title: '語音及即時辨識',
@@ -425,11 +347,29 @@ class SettingsPage extends StatelessWidget {
             _NativeSettingsSection(
               title: '模型與下載',
               children: <Widget>[
-                const _NativeSettingsRow(
-                  icon: Icons.memory_rounded,
-                  title: '即時物件辨識模型',
-                  value: '已安裝 · 2.87 MB',
-                  semanticLabel: '即時物件辨識模型，已安裝，大小 2.87 MB',
+                FutureBuilder<ManifestParseResult>(
+                  future: _manifest,
+                  builder: (context, snapshot) {
+                    final manifest = snapshot.data?.manifest;
+                    final size = manifest?.bytes;
+                    final value = manifest == null
+                        ? (snapshot.connectionState == ConnectionState.done
+                              ? '清單暫時不可用'
+                              : '正在讀取清單')
+                        : '${manifest.modelClassCount} 類'
+                              '${size == null ? '' : ' · ${(size / 1000000).toStringAsFixed(2)} MB'}';
+                    return _NativeSettingsRow(
+                      icon: Icons.memory_rounded,
+                      title: '即時物件辨識模型',
+                      value: value,
+                      detail: manifest == null
+                          ? null
+                          : '版本 ${manifest.version}',
+                      semanticLabel:
+                          '即時物件辨識模型，$value'
+                          '${manifest == null ? '' : '，版本 ${manifest.version}'}',
+                    );
+                  },
                 ),
                 _NativeSettingsRow(
                   icon: Icons.auto_awesome_outlined,
@@ -451,9 +391,9 @@ class SettingsPage extends StatelessWidget {
                 _NativeSettingsRow(
                   icon: Icons.shield_outlined,
                   title: '私隱保障',
-                  value: '僅限裝置端',
-                  semanticLabel: '私隱保障，相機畫面只在裝置上處理，不錄影、不儲存、不上傳',
-                  detail: '相機畫面只在裝置上處理，不錄影、不儲存、不上傳。',
+                  value: '辨識在裝置處理',
+                  semanticLabel: '私隱保障，相機畫面在裝置處理；登入與聯絡資料由 Firebase 保存',
+                  detail: '基本辨識不儲存或上傳畫面。個人模型照片須另行配置及同意；聯絡資料不加入訓練。',
                 ),
               ],
             ),
@@ -480,88 +420,6 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({
-    required this.color,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final Color color;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: '$title，$subtitle，功能開發中',
-      child: Material(
-        color: color,
-        borderRadius: BorderRadius.circular(24),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 154),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
-              child: Row(
-                children: <Widget>[
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: Icon(icon, color: Colors.white, size: 42),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 7),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.88),
-                            fontSize: 15,
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SpeechSpeedChoice extends StatelessWidget {
   const _SpeechSpeedChoice({
     required this.speed,
@@ -579,6 +437,8 @@ class _SpeechSpeedChoice extends StatelessWidget {
       button: true,
       selected: selected,
       label: '播報速度 ${speed.label}${selected ? '，已選取' : ''}',
+      excludeSemantics: true,
+      onTap: onTap,
       child: Material(
         color: selected
             ? AppColors.primary.withValues(alpha: 0.13)
@@ -690,6 +550,8 @@ class _NativeSettingsRow extends StatelessWidget {
     return Semantics(
       button: interactive,
       label: semanticLabel,
+      excludeSemantics: true,
+      onTap: onTap,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -765,17 +627,12 @@ class _NativeSettingsRow extends StatelessWidget {
 }
 
 class _DevelopmentBadge extends StatelessWidget {
-  const _DevelopmentBadge({this.compact = false});
-
-  final bool compact;
+  const _DevelopmentBadge();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 9 : 12,
-        vertical: compact ? 5 : 7,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         color: AppColors.warning.withValues(alpha: 0.12),
         border: Border.all(color: AppColors.warning.withValues(alpha: 0.6)),
@@ -786,7 +643,7 @@ class _DevelopmentBadge extends StatelessWidget {
         textAlign: TextAlign.center,
         style: TextStyle(
           color: AppColors.warning,
-          fontSize: compact ? 11 : 13,
+          fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -830,10 +687,17 @@ class _AppNavigationBar extends StatelessWidget {
           child: Row(
             children: <Widget>[
               _NavItem(
+                section: AppSection.home,
+                selected: selected,
+                icon: Icons.home_outlined,
+                label: '首頁',
+                onSelected: onSelected,
+              ),
+              _NavItem(
                 section: AppSection.explore,
                 selected: selected,
                 icon: Icons.visibility_rounded,
-                label: '探索',
+                label: '辨識',
                 onSelected: onSelected,
               ),
               _NavItem(
@@ -881,6 +745,8 @@ class _NavItem extends StatelessWidget {
         selected: active,
         button: true,
         label: label,
+        excludeSemantics: true,
+        onTap: () => onSelected(section),
         child: InkWell(
           onTap: () => onSelected(section),
           borderRadius: BorderRadius.circular(23),

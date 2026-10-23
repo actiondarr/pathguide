@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreVideo
+import CoreImage
 import Flutter
 import TensorFlowLiteC
 import UIKit
@@ -33,6 +34,12 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private var classIds: [Int] = []
   private var threshold: Float = 0.30
   private var busy = false
+  private let photoQueue = DispatchQueue(label: "hk.pathguide.vision.photos")
+  private let photoContext = CIContext(options: [.cacheIntermediates: false])
+  private var pendingPhoto: (id: UUID, result: FlutterResult, trigger: String, deadline: CFAbsoluteTime)?
+  private var lowCandidate: IOSDetection?
+  private var lowSince: CFAbsoluteTime?
+
 
   // Diagnostics mirror Android so the existing Flutter HUD can inspect either platform.
   private var analyzedFrames: Int64 = 0
@@ -75,6 +82,36 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    case "captureFrame":
+      guard let args = call.arguments as? [String: Any],
+        let trigger = args["trigger"] as? String,
+        ["manual_report", "low_confidence", "scene_sample"].contains(trigger) else {
+        result(FlutterError(code: "bad_args", message: "擷取來源無效", details: nil)); return
+      }
+      let id = UUID()
+      inferenceQueue.async { [weak self] in
+        guard let self, self.interpreter != nil, self.captureSession.isRunning else {
+          DispatchQueue.main.async { result(FlutterError(code: "not_running", message: "請先開始即時辨識", details: nil)) }; return
+        }
+        guard self.pendingPhoto == nil else {
+          DispatchQueue.main.async { result(FlutterError(code: "busy", message: "正在擷取照片", details: nil)) }; return
+        }
+        self.lowSince = nil; self.lowCandidate = nil
+        self.pendingPhoto = (id, result, trigger, CFAbsoluteTimeGetCurrent() + 4)
+        self.inferenceQueue.asyncAfter(deadline: .now() + 4.1) { [weak self] in
+          guard let self, let pending = self.pendingPhoto, pending.id == id else { return }
+          self.pendingPhoto = nil
+          DispatchQueue.main.async { pending.result(nil) }
+        }
+      }
+    case "cancelCapture":
+      inferenceQueue.async { [weak self] in
+        if let pending = self?.pendingPhoto {
+          self?.pendingPhoto = nil
+          DispatchQueue.main.async { pending.result(nil) }
+        }
+        DispatchQueue.main.async { result(nil) }
+      }
     case "startPreview":
       requestPermissionAndStart(result)
     case "loadModel":
@@ -214,6 +251,10 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     }
     group.enter()
     inferenceQueue.async { [weak self] in
+      if let pending = self?.pendingPhoto {
+        self?.pendingPhoto = nil
+        DispatchQueue.main.async { pending.result(nil) }
+      }
       self?.interpreter = nil
       self?.modelPath = nil
       self?.busy = false
@@ -353,7 +394,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
         anchors: anchorCount,
         classes: modelClassCount,
         transposed: transposed,
-        threshold: threshold,
+        threshold: pendingPhoto == nil ? threshold : min(threshold, 0.20),
         inputSize: inputSize,
         sourceWidth: prepared.uprightWidth,
         sourceHeight: prepared.uprightHeight,
@@ -363,11 +404,66 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
         padY: prepared.padY,
         classIds: classIds
       )
-      let detections = IOSYoloDecoder.nonMaximumSuppression(
+      let candidates = IOSYoloDecoder.nonMaximumSuppression(
         decoded.detections,
         iouThreshold: 0.45,
         maximum: 100
       )
+
+      let detections = candidates.filter { $0.score >= threshold }
+      if let pending = pendingPhoto {
+        let now = CFAbsoluteTimeGetCurrent()
+        var ready = pending.trigger != "low_confidence"
+        if pending.trigger == "low_confidence" {
+          if let low = candidates.first(where: { $0.score >= 0.20 && $0.score <= 0.60 }) {
+            if let previous = lowCandidate, previous.id == low.id,
+              abs(previous.cx - low.cx) < 0.1, abs(previous.cy - low.cy) < 0.1 {
+              if let start = lowSince { ready = now - start >= 1 }
+            } else { lowSince = now }
+            lowCandidate = low
+          } else { lowCandidate = nil; lowSince = nil }
+        }
+        if now > pending.deadline {
+          pendingPhoto = nil
+          DispatchQueue.main.async { pending.result(nil) }
+        } else if ready {
+          pendingPhoto = nil
+          // Rotate the full camera frame clockwise exactly as the inference's
+          // sourcePoint transform. Re-encode a CGImage; no camera EXIF/GPS is copied.
+          let capturedAt = ISO8601DateFormatter().string(from: Date())
+          photoQueue.async { [weak self] in
+            guard let self else { DispatchQueue.main.async { pending.result(nil) }; return }
+            let image = CIImage(cvPixelBuffer: pixelBuffer).oriented(.right)
+            if let cg = self.photoContext.createCGImage(image, from: image.extent),
+              let data = UIImage(cgImage: cg).jpegData(compressionQuality: 0.85), data.count <= 2 * 1024 * 1024 {
+              var gray = [UInt8](repeating: 0, count: 72)
+              gray.withUnsafeMutableBytes { buffer in
+                if let ctx = CGContext(data: buffer.baseAddress, width: 9, height: 8, bitsPerComponent: 8,
+                  bytesPerRow: 9, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) {
+                  ctx.draw(cg, in: CGRect(x: 0, y: 0, width: 9, height: 8))
+                }
+              }
+              let mean = gray.reduce(0) { $0 + Int($1) } / 72
+              if pending.trigger != "manual_report" && (mean < 8 || mean > 247) {
+                DispatchQueue.main.async { pending.result(nil) }; return
+              }
+              var fingerprint: UInt64 = 0
+              for y in 0..<8 { for x in 0..<8 {
+                fingerprint = (fingerprint << 1) | (gray[y * 9 + x] > gray[y * 9 + x + 1] ? 1 : 0)
+              } }
+              let payload: [String: Any] = ["jpeg": FlutterStandardTypedData(bytes: data),
+                "width": cg.width, "height": cg.height, "capturedAtClient": capturedAt,
+                "perceptualHash": String(format: "%016llx", fingerprint),
+                "predictions": candidates.map { d in ["projectClassId": d.id,
+                  "score": Double(d.score), "cx": Double(d.cx), "cy": Double(d.cy),
+                  "w": Double(d.width), "h": Double(d.height)] as [String: Any] }]
+              DispatchQueue.main.async { pending.result(payload) }
+            } else {
+              DispatchQueue.main.async { pending.result(FlutterError(code: "jpeg_failed", message: "未能編碼照片", details: nil)) }
+            }
+          }
+        }
+      }
 
       frameWidth = prepared.rawWidth
       frameHeight = prepared.rawHeight

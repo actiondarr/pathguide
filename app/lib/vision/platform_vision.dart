@@ -29,6 +29,8 @@ const String defaultModelAssetKey = 'assets/models/detector.tflite';
 
 /// 模型清单的资源 key。清单与模型**一起**下发，缺一不可。
 const String defaultModelManifestKey = 'assets/models/detector.json';
+const String legacyModelAssetKey = 'assets/models/detector-hk9.tflite';
+const String legacyModelManifestKey = 'assets/models/detector-hk9.json';
 
 /// 平台原生视觉能力（Android CameraX + LiteRT）。
 ///
@@ -51,11 +53,15 @@ class PlatformVision implements VisionSource {
     MethodChannel? method,
     EventChannel? events,
     this.rotationDegrees = 90,
+    this.modelAssetKey = defaultModelAssetKey,
+    this.modelManifestKey = defaultModelManifestKey,
   }) : _method = method ?? const MethodChannel(kVisionChannel),
        _events = events ?? const EventChannel(kFrameChannel);
 
   final MethodChannel _method;
   final EventChannel _events;
+  final String modelAssetKey;
+  final String modelManifestKey;
 
   /// 把原始帧转正所需的顺时针角度。
   ///
@@ -147,6 +153,13 @@ class PlatformVision implements VisionSource {
 
     // 2) 请求权限并启动原生相机预览
     final started = await _startPreview();
+    if (!started) {
+      return VisionSourceStatus(
+        ok: false,
+        message: '相機未啟動',
+        error: _startError ?? '請檢查相機權限或其他程式是否正在使用相機。',
+      );
+    }
 
     // 3) 读**模型清单**。清单与模型同源下发，里面写着「本地索引 -> 真实 id」。
     //
@@ -154,7 +167,7 @@ class PlatformVision implements VisionSource {
     //    服务端一旦换类别集而 App 不知道，就会把每个框标成别的类且不报错。
     //    所以这份信息必须跟着模型走，App 只负责校验，不猜。
     final parsed = parseModelManifest(
-      await rootBundle.loadString(defaultModelManifestKey),
+      await rootBundle.loadString(modelManifestKey),
     );
     if (!parsed.ok) {
       return VisionSourceStatus(
@@ -310,7 +323,7 @@ class PlatformVision implements VisionSource {
     // 用非空类型把这个不可能状态从类型上排除掉。
     final String filePath;
     try {
-      filePath = await _materializeModelToDisk(defaultModelAssetKey);
+      filePath = await _materializeModelToDisk(modelAssetKey);
     } catch (e) {
       _loaded = false;
       _loadError = '把模型寫入應用目錄失敗：${e.runtimeType}: $e';
@@ -352,7 +365,7 @@ class PlatformVision implements VisionSource {
       data.lengthInBytes,
     );
 
-    final target = '$dir/detector.tflite';
+    final target = '$dir/${assetKey.split('/').last}';
     // 已存在且大小一致就跳过写盘：模型约 10 MB，每次启动都写没必要。
     //
     // 注意类型：原生返回 kotlin Long，平台通道映射成 Dart int。

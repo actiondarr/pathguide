@@ -36,6 +36,13 @@ class FlutterTtsSpeaker implements Speaker {
   double _speechRate;
   bool _ready = false;
   String? _resolved;
+  Completer<void>? _pendingSpeech;
+
+  void _finishSpeech() {
+    final pending = _pendingSpeech;
+    _pendingSpeech = null;
+    if (pending != null && !pending.isCompleted) pending.complete();
+  }
 
   /// 实际生效的语言标签。null 表示尚未初始化。
   String? get resolvedLanguage => _resolved;
@@ -66,6 +73,17 @@ class FlutterTtsSpeaker implements Speaker {
     await _tts.setSpeechRate(_speechRate);
     await _tts.setPitch(1.0);
     await _tts.setVolume(1.0);
+    // iOS flutter_tts does not complete its awaitSpeakCompletion result on
+    // cancellation. Track completion here so Pause always releases the caller.
+    _tts.setCompletionHandler(_finishSpeech);
+    _tts.setCancelHandler(_finishSpeech);
+    _tts.setErrorHandler((message) {
+      final pending = _pendingSpeech;
+      _pendingSpeech = null;
+      if (pending != null && !pending.isCompleted) {
+        pending.completeError(StateError(message));
+      }
+    });
     if (defaultTargetPlatform == TargetPlatform.android) {
       // Android 上队列模式会让后一句等前一句读完，冷却逻辑已保证不拥挤，
       // 用 QUEUE_FLUSH 让插队的 P0 能立刻打断。
@@ -120,11 +138,35 @@ class FlutterTtsSpeaker implements Speaker {
   Future<void> speak(String text) async {
     if (!_ready) await initialize();
     if (_resolved == null) return;
-    await _tts.speak(text);
+    // Recording temporarily changes the shared iOS audio session. Restore it on
+    // every utterance, including when language initialization was cached.
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      await _tts.setSharedInstance(true);
+      await _tts.setIosAudioCategory(
+        IosTextToSpeechAudioCategory.playback,
+        <IosTextToSpeechAudioCategoryOptions>[
+          IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+        ],
+      );
+    }
+    _finishSpeech();
+    final pending = Completer<void>();
+    _pendingSpeech = pending;
+    try {
+      await Future.wait<void>([
+        _tts.speak(text).then((result) {
+          if (result == 0) throw StateError('語音服務未接受播報');
+        }),
+        pending.future,
+      ], eagerError: true);
+    } finally {
+      if (identical(_pendingSpeech, pending)) _pendingSpeech = null;
+    }
   }
 
   @override
   Future<void> stop() async {
+    _finishSpeech();
     try {
       await _tts.stop();
     } catch (_) {
