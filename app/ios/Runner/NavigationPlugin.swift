@@ -29,7 +29,6 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
     manager.desiredAccuracy = kCLLocationAccuracyBest
     manager.distanceFilter = 2
     manager.activityType = .fitness
-    channel.setMethodCallHandler { [weak self] call, result in self?.handle(call, result) }
     events.setStreamHandler(self)
     NotificationCenter.default.addObserver(self, selector: #selector(background), name: UIApplication.didEnterBackgroundNotification, object: nil)
   }
@@ -60,7 +59,7 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
     let reply = fixReply; fixReply = nil; reply?(error("cancelled", "已停止定位。")); awake(false)
   }
   @objc private func background() { stop(); cancelSearch(); cancelRoute(); geocoder.cancelGeocode() }
-  private func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     let args = call.arguments as? [String: Any] ?? [:]
     switch call.method {
     case "searchPlaces":

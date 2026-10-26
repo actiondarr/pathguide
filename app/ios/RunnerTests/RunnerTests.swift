@@ -5,6 +5,29 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
+  func testNavigationPluginAcceptsFlutterDelegateCalls() {
+    let plugin: FlutterPlugin = NavigationPlugin(messenger: NavigationTestMessenger())
+    // Flutter's registrar dispatches this Objective-C selector, rather than a
+    // Swift-only helper. A missing implementation aborts the app on first use.
+    guard plugin.responds(to: NSSelectorFromString("handleMethodCall:result:")) else {
+      XCTFail("NavigationPlugin must implement FlutterPlugin's method-call selector")
+      return
+    }
+    for method in ["cancelRoute", "cancelSearch"] {
+      var replied = false
+      plugin.handle?(FlutterMethodCall(methodName: method, arguments: nil), result: { value in
+        replied = true
+        XCTAssertNil(value)
+      })
+      XCTAssertTrue(replied, "\(method) must reply through FlutterPlugin dispatch")
+    }
+    var failure: FlutterError?
+    plugin.handle?(FlutterMethodCall(methodName: "searchPlaces", arguments: ["query": ""]), result: { value in
+      failure = value as? FlutterError
+    })
+    XCTAssertEqual(failure?.code, "invalid_argument")
+  }
+
   func testPlanarModelReceivesSeparateRGBChannels() throws {
     let layout = try IOSModelInputLayout(shape: [1, 3, 2, 2])
     XCTAssertEqual(layout.side, 2)
@@ -68,4 +91,13 @@ class RunnerTests: XCTestCase {
     XCTAssertTrue(output.dropFirst(4 * 8400).allSatisfy { $0 >= 0 && $0 <= 1 })
   }
 
+}
+
+private final class NavigationTestMessenger: NSObject, FlutterBinaryMessenger {
+  func send(onChannel channel: String, message: Data?) {}
+  func send(onChannel channel: String, message: Data?, binaryReply callback: FlutterBinaryReply?) {}
+  func setMessageHandlerOnChannel(
+    _ channel: String, binaryMessageHandler handler: FlutterBinaryMessageHandler?
+  ) -> FlutterBinaryMessengerConnection { 1 }
+  func cleanUpConnection(_ connection: FlutterBinaryMessengerConnection) {}
 }
