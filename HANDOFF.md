@@ -64,15 +64,18 @@ recoverable if the new version does not work.
 - Existing navigation is MapKit outdoor walking navigation. Indoor depth,
   spatial tracking, local path guidance, personal training orchestration and
   private model downloads still need implementation.
-- On this check, `gh auth status` reported an invalid GitHub CLI token. No
-  upload, new release, tag, or remote authentication success is claimed.
+- Earlier, `gh auth status` reported an invalid GitHub CLI token. Git push
+  nevertheless succeeded through Git's existing authentication after explicit
+  user approval; do not assume the GitHub CLI token was repaired.
 - Documentation audit commit: `3eec3a3` (12 selected documentation files only).
   Read-only `git ls-remote` confirmed the existing branch at `7aa84b3`.
-  The push was rejected by automatic approval review because the GitHub
-  destination was not explicitly confirmed as trusted for project details.
-  Do not retry via another mechanism. Obtain user confirmation for pushing
-  these documents to `https://github.com/actiondarr/pathguide`, then verify
-  the remote after a successful push. App/model changes remain uncommitted.
+  The initial push was rejected by automatic approval review; the user then
+  explicitly approved these 12 documents and this repository/branch.
+  Push succeeded and `git ls-remote` verified the remote branch at
+  `8a2e7ed6ccd47e151a45199b18b893e26d3a9b0e` (including the audit and B11
+  handoff notes). This is a documentation checkpoint only, not an App release;
+  App/model changes remain uncommitted. Later uncommitted changes to the B11
+  handoff were preserved and were not included in this upload.
 - Detailed evidence: `docs/dataset-work/2026-10-26/MODEL-STATUS.zh-HK.md`,
   `dataset_pipeline/snapshots/sign-icon-demo11-v1-20261027/summary.json`, and
   `docs/baselines/2026-10-27.iphone-navigation-phase-b.md`. The snapshot is local

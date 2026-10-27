@@ -69,5 +69,5 @@ App 版本完成後：測試 → 提交程式與共用模型／映射 → 推送
 
 - 本輪 Flutter 回歸重新執行：238項全部通過，原始輸出保留本機 `/private/tmp/pathguide-doc-audit-flutter-20261027.log`。沒有重跑原生XCTest、建置安裝或進行實走，不把既有紀錄算成本輪結果。
 - 12份本輪文件共100個本機連結均存在；模型SHA與manifest相符；Git差異空白檢查通過。這些不等於模型品質驗收。
-- 文件已獨立提交為 `3eec3a3`，共12份。GitHub推送被自動審批拒絕：審批要求使用者明確確認目的地 `actiondarr/pathguide` 可接收這批包含專案設計與評估結果的文件；本輪尚未上傳，等待確認後才可推送。
+- 12份文件已獨立提交；使用者明確批准目的地後，已成功推送至 `actiondarr/pathguide` 的 `feature/cross-platform-navigation`。遠端已核對為 `8a2e7ed6ccd47e151a45199b18b893e26d3a9b0e`，包含文件主提交 `3eec3a3` 及後續狀態補充。可讀取 [GitHub文件快照](https://github.com/actiondarr/pathguide/blob/8a2e7ed6ccd47e151a45199b18b893e26d3a9b0e/docs/APP-PLAN-REVIEW.zh-HK.md)；該較早快照內的待批准文字由本次成功紀錄取代。
 - 本輪不建立App版本tag、不宣稱App已完成新版本；程式與模型仍保持本輪開始時的未提交狀態。
