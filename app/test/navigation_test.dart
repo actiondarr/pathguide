@@ -187,7 +187,8 @@ void main() {
         );
         if (u.message != null) messages.add(u.message!);
       }
-      expect(messages.length, 2);
+      expect(messages.where((text) => text.startsWith('約 ')), hasLength(2));
+      expect(messages.last, '左轉進入測試路');
       expect(p.stepIndex, 1);
     });
     test(
@@ -344,7 +345,7 @@ void main() {
       id: 'short',
       polyline: [point(0), point(20)],
       steps: [
-        RouteStep(instructions: '', polyline: [point(0), point(20)]),
+        RouteStep(instructions: ' \n ', polyline: [point(0), point(20)]),
       ],
       distance: 20,
       duration: 20,
@@ -352,6 +353,68 @@ void main() {
     final p = RouteProgress(r, point(20));
     expect(p.instruction, '沿目前路線前進。');
     expect(p.route.steps.first.maneuver, 'unknown');
+  });
+  test('empty departure marker does not hide the first real instruction', () {
+    final original = route();
+    final p = RouteProgress(
+      WalkingRoute(
+        provider: MapProvider.apple,
+        id: 'departure',
+        polyline: original.polyline,
+        steps: [
+          RouteStep(instructions: '', polyline: [point(0)]),
+          ...original.steps,
+        ],
+        distance: original.distance,
+        duration: original.duration,
+      ),
+      point(200),
+    );
+    expect(p.instruction, '沿測試街前進');
+  });
+  test(
+    'a single point beyond a turn cannot be confirmed by a point before it',
+    () {
+      final p = RouteProgress(route(), point(200));
+      var seconds = 0;
+      for (final east in [0, 20, 40, 60, 80, 95, 107, 96]) {
+        seconds += 10;
+        p.update(
+          fix(east.toDouble(), seconds: seconds),
+          Duration(seconds: seconds),
+        );
+      }
+      expect(p.stepIndex, 0);
+      p.update(fix(108, seconds: 90), const Duration(seconds: 90));
+      final confirmed = p.update(
+        fix(110, seconds: 100),
+        const Duration(seconds: 100),
+      );
+      expect(p.stepIndex, 1);
+      expect(confirmed.message, '左轉進入測試路');
+    },
+  );
+  test('a short leg omits the fifty metre advance notice', () {
+    final p = RouteProgress(
+      WalkingRoute(
+        provider: MapProvider.apple,
+        id: 'short-leg',
+        polyline: [point(0), point(30), point(100)],
+        steps: [
+          RouteStep(instructions: '前進', polyline: [point(0), point(30)]),
+          RouteStep(instructions: '右轉', polyline: [point(30), point(100)]),
+        ],
+        distance: 100,
+        duration: 100,
+      ),
+      point(100),
+    );
+    expect(p.update(fix(0), Duration.zero).message, isNull);
+    p.update(fix(18, seconds: 10), const Duration(seconds: 10));
+    expect(
+      p.update(fix(20, seconds: 20), const Duration(seconds: 20)).message,
+      contains('右轉'),
+    );
   });
   group('navigation session lifecycle', () {
     late Services services;
@@ -441,6 +504,24 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(services.calculations, count);
     });
+    test(
+      'usable location resumes guidance once after poor positioning',
+      () async {
+        await nav.select(place());
+        await nav.start();
+        services.now = const Duration(seconds: 1);
+        services.emit(0, accuracy: 80);
+        expect(nav.state, NavigationState.locationPoor);
+        services.now = const Duration(seconds: 2);
+        services.emit(0);
+        expect(nav.state, NavigationState.navigating);
+        expect(nav.announcement, contains('已恢復路線指示'));
+        final spoken = nav.announcementId;
+        services.now = const Duration(seconds: 3);
+        services.emit(1);
+        expect(nav.announcementId, spoken);
+      },
+    );
     test(
       'nearby requires explicit End; address failure preserves useful position',
       () async {

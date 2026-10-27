@@ -75,6 +75,13 @@ class RouteProgress {
       starts.add(start);
       previous = start;
     }
+    // Providers may prepend an empty, zero-length departure marker.
+    while (stepIndex + 1 < route.steps.length &&
+        route.steps[stepIndex].instructions.trim().isEmpty &&
+        route.steps[stepIndex].notice.trim().isEmpty &&
+        starts[stepIndex + 1] - starts[stepIndex] < 1) {
+      stepIndex++;
+    }
   }
   final WalkingRoute route;
   final Coordinate destination;
@@ -97,7 +104,8 @@ class RouteProgress {
   );
   String _text(int index) {
     final step = route.steps[index];
-    return '${step.instructions.isEmpty ? '沿目前路線前進。' : step.instructions}${step.notice.isEmpty ? '' : ' ${step.notice}'}';
+    final text = step.instructions.trim(), notice = step.notice.trim();
+    return '${text.isEmpty ? '沿目前路線前進。' : text}${notice.isEmpty ? '' : ' $notice'}';
   }
 
   String get instruction => _text(stepIndex);
@@ -155,11 +163,13 @@ class RouteProgress {
     }
     _lastAt = now;
     along = math.max(along, selected.along);
+    String? advancedInstruction;
     if (stepIndex + 1 < starts.length &&
-        along >= starts[stepIndex + 1] + rules.advanceMetres) {
+        selected.along >= starts[stepIndex + 1] + rules.advanceMetres) {
       if (++_nextEvidence >= 2) {
         stepIndex++;
         _nextEvidence = _nearEvidence = 0;
+        advancedInstruction = instruction;
       }
     } else {
       _nextEvidence = 0;
@@ -171,6 +181,9 @@ class RouteProgress {
       }
     } else {
       _arrivalEvidence = 0;
+    }
+    if (advancedInstruction != null) {
+      return ProgressUpdate(message: advancedInstruction);
     }
     final next = stepIndex + 1;
     if (next < starts.length) {
@@ -186,6 +199,7 @@ class RouteProgress {
       }
       if (nextDistance > rules.nearNotice &&
           nextDistance <= rules.advanceNotice &&
+          starts[next] - starts[stepIndex] > rules.advanceNotice &&
           _announced.add('$next:advance')) {
         return ProgressUpdate(
           message: '約 ${nextDistance.round()} 米後，${_text(next)}',

@@ -6,7 +6,8 @@ import CoreLocation
 final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLLocationManagerDelegate {
   private let channel: FlutterMethodChannel
   private let events: FlutterEventChannel
-  private let manager = CLLocationManager()
+  private let manager: CLLocationManager
+  private let locationServicesEnabled: () -> Bool
   private let geocoder = CLGeocoder()
   private var sink: FlutterEventSink?
   private var search: MKLocalSearch?
@@ -21,7 +22,11 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
   private var positionPin: MKPointAnnotation?
   private var lastLocation: CLLocation?
 
-  init(messenger: FlutterBinaryMessenger) {
+  init(messenger: FlutterBinaryMessenger,
+       locationManager: CLLocationManager = CLLocationManager(),
+       locationServicesEnabled: @escaping () -> Bool = { CLLocationManager.locationServicesEnabled() }) {
+    manager = locationManager
+    self.locationServicesEnabled = locationServicesEnabled
     channel = FlutterMethodChannel(name: "hk.pathguide/navigation", binaryMessenger: messenger)
     events = FlutterEventChannel(name: "hk.pathguide/navigation/location", binaryMessenger: messenger)
     super.init()
@@ -71,12 +76,7 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
       operation.start { [weak self, weak operation] response, failure in
         guard let self, let operation, self.search === operation else { return }
         self.search = nil; let reply = self.searchReply; self.searchReply = nil
-        guard let response, failure == nil else { reply?(self.error("unavailable", "搜尋服務暫時不可用，請檢查網絡後重試。")); return }
-        let items = response.mapItems.filter { $0.placemark.isoCountryCode == "HK" }.prefix(10)
-        reply?(items.map { item -> [String: Any] in
-          let c = item.placemark.coordinate
-          return ["provider": "apple", "id": "\(c.latitude),\(c.longitude):\(item.name ?? "")", "name": item.name ?? "目的地", "address": item.placemark.title ?? "", "coordinate": self.point(c)]
-        })
+        reply?(Self.placesResult(response?.mapItems, failure: failure))
       }
     case "cancelSearch": cancelSearch(); result(nil)
     case "calculateRoute":
@@ -97,7 +97,7 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
     case "cancelRoute": cancelRoute(); result(nil)
     case "currentLocation":
       guard fixReply == nil else { result(error("busy", "正在定位，請稍候。")); return }
-      guard CLLocationManager.locationServicesEnabled() else { result(error("location_disabled", "請先在系統設定開啟定位服務。")); return }
+      guard locationServicesEnabled() else { result(error("location_disabled", "請先在系統設定開啟定位服務。")); return }
       fixReply = result
       let timeout = DispatchWorkItem { [weak self] in self?.finishFix(nil, failure: self?.error("location_poor", "未能取得精確位置，請到開揚位置重試。")) }
       fixTimeout = timeout; DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
@@ -114,6 +114,25 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
     default: result(FlutterMethodNotImplemented)
     }
   }
+  static func placesResult(_ items: [MKMapItem]?, failure: Error?) -> Any {
+    if let failure {
+      let code = (failure as? MKError)?.code
+      if code == .placemarkNotFound { return [[String: Any]]() }
+      if code == .loadingThrottled {
+        return FlutterError(code: "quota", message: "搜尋次數暫時過多，請稍後重試。", details: nil)
+      }
+      return FlutterError(code: "unavailable", message: "搜尋服務暫時不可用，請檢查網絡後重試。", details: nil)
+    }
+    guard let items else {
+      return FlutterError(code: "unavailable", message: "搜尋服務暫時不可用，請稍後重試。", details: nil)
+    }
+    return items.filter { $0.placemark.isoCountryCode == "HK" }.prefix(10).map { item -> [String: Any] in
+      let c = item.placemark.coordinate
+      return ["provider": "apple", "id": "\(c.latitude),\(c.longitude):\(item.name ?? "")",
+              "name": item.name ?? "目的地", "address": item.placemark.title ?? "",
+              "coordinate": ["latitude": c.latitude, "longitude": c.longitude]]
+    }
+  }
   private var authorized: Bool { manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways }
   private func requestFix() {
     guard fixReply != nil else { return }
@@ -123,7 +142,10 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
   }
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
     if fixReply != nil && manager.authorizationStatus != .notDetermined { requestFix() }
-    if !authorized && tracking { sink?(error("location_denied", "定位權限已變更，導航暫停。")); stop() }
+    if tracking && (!authorized || manager.accuracyAuthorization != .fullAccuracy) {
+      sink?(error(authorized ? "location_poor" : "location_denied", "定位權限已變更，請重新開啟精確定位後繼續。"))
+      stop()
+    }
   }
   private func data(_ location: CLLocation) -> [String: Any] {
     var value: [String: Any] = ["coordinate": point(location.coordinate), "accuracy": location.horizontalAccuracy, "ageSeconds": max(0, -location.timestamp.timeIntervalSinceNow)]
@@ -138,7 +160,8 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
   private func finishFix(_ location: CLLocation?, failure: FlutterError? = nil) {
     fixTimeout?.cancel(); fixTimeout = nil; let reply = fixReply; fixReply = nil
     if !tracking { manager.stopUpdatingLocation() }
-    reply?(location.map { data($0) } ?? failure ?? error("location_poor", "定位暫時不足。"))
+    if let location { reply?(data(location)) }
+    else { reply?(failure ?? error("location_poor", "定位暫時不足。")) }
   }
   func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
     guard let latest = locations.last else { return }

@@ -1,4 +1,6 @@
 import Flutter
+import CoreLocation
+import MapKit
 @testable import Runner
 import UIKit
 import XCTest
@@ -26,6 +28,80 @@ class RunnerTests: XCTestCase {
       failure = value as? FlutterError
     })
     XCTAssertEqual(failure?.code, "invalid_argument")
+  }
+
+  func testNavigationCurrentLocationRejectsStaleFixAndEncodesFreshFix() throws {
+    let manager = NavigationTestLocationManager()
+    let plugin = NavigationPlugin(messenger: NavigationTestMessenger(), locationManager: manager,
+                                  locationServicesEnabled: { true })
+    var reply: Any?
+    plugin.handle(FlutterMethodCall(methodName: "currentLocation", arguments: nil), result: { reply = $0 })
+    XCTAssertEqual(manager.starts, 1)
+    let stale = CLLocation(coordinate: CLLocationCoordinate2D(latitude: 22.3, longitude: 114.2),
+                          altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+                          timestamp: Date(timeIntervalSinceNow: -20))
+    plugin.locationManager(manager, didUpdateLocations: [stale])
+    XCTAssertNil(reply)
+    let fresh = CLLocation(coordinate: stale.coordinate, altitude: 0,
+                          horizontalAccuracy: 5, verticalAccuracy: 5, timestamp: Date())
+    plugin.locationManager(manager, didUpdateLocations: [fresh])
+    let value = try XCTUnwrap(reply as? [String: Any])
+    XCTAssertEqual(value["accuracy"] as? Double, 5)
+    XCTAssertNotNil(FlutterStandardMethodCodec.sharedInstance().encodeSuccessEnvelope(value))
+    XCTAssertGreaterThan(manager.stops, 0)
+  }
+
+  func testNavigationPermissionsRejectDeniedAndApproximateLocation() {
+    let manager = NavigationTestLocationManager()
+    let plugin = NavigationPlugin(messenger: NavigationTestMessenger(), locationManager: manager,
+                                  locationServicesEnabled: { true })
+    manager.status = .denied
+    var failure: FlutterError?
+    plugin.handle(FlutterMethodCall(methodName: "currentLocation", arguments: nil), result: { failure = $0 as? FlutterError })
+    XCTAssertEqual(failure?.code, "location_denied")
+    manager.status = .authorizedWhenInUse
+    manager.accuracy = .reducedAccuracy
+    plugin.handle(FlutterMethodCall(methodName: "startLocation", arguments: nil), result: { failure = $0 as? FlutterError })
+    XCTAssertEqual(failure?.code, "location_denied")
+    XCTAssertEqual(manager.starts, 0)
+  }
+
+  func testNavigationAccuracyDowngradeStopsTrackingAndRestoresWakeState() {
+    let manager = NavigationTestLocationManager()
+    let plugin = NavigationPlugin(messenger: NavigationTestMessenger(), locationManager: manager)
+    let idleBefore = UIApplication.shared.isIdleTimerDisabled
+    var events: [Any] = []
+    _ = plugin.onListen(withArguments: nil, eventSink: { if let event = $0 { events.append(event) } })
+    plugin.handle(FlutterMethodCall(methodName: "startLocation", arguments: nil), result: { XCTAssertNil($0) })
+    plugin.handle(FlutterMethodCall(methodName: "keepAwake", arguments: ["enabled": true]), result: { _ in })
+    manager.accuracy = .reducedAccuracy
+    plugin.locationManagerDidChangeAuthorization(manager)
+    XCTAssertEqual((events.last as? FlutterError)?.code, "location_poor")
+    XCTAssertGreaterThan(manager.stops, 0)
+    XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleBefore)
+    _ = plugin.onCancel(withArguments: nil)
+  }
+
+  func testNavigationBackgroundCancelsPendingLocation() {
+    let manager = NavigationTestLocationManager()
+    let plugin = NavigationPlugin(messenger: NavigationTestMessenger(), locationManager: manager,
+                                  locationServicesEnabled: { true })
+    var failure: FlutterError?
+    plugin.handle(FlutterMethodCall(methodName: "currentLocation", arguments: nil), result: { failure = $0 as? FlutterError })
+    NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: nil)
+    XCTAssertEqual(failure?.code, "cancelled")
+    XCTAssertGreaterThan(manager.stops, 0)
+  }
+
+  func testNavigationEmptySearchAndThrottlingAreDistinct() {
+    let empty = NSError(domain: MKErrorDomain, code: Int(MKError.Code.placemarkNotFound.rawValue))
+    let result = NavigationPlugin.placesResult(nil, failure: empty)
+    XCTAssertEqual((result as? [[String: Any]])?.count, 0)
+    XCTAssertNotNil(FlutterStandardMethodCodec.sharedInstance().encodeSuccessEnvelope(result))
+    let throttled = NSError(domain: MKErrorDomain, code: Int(MKError.Code.loadingThrottled.rawValue))
+    XCTAssertEqual((NavigationPlugin.placesResult(nil, failure: throttled) as? FlutterError)?.code, "quota")
+    let offline = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)
+    XCTAssertEqual((NavigationPlugin.placesResult(nil, failure: offline) as? FlutterError)?.code, "unavailable")
   }
 
   func testPlanarModelReceivesSeparateRGBChannels() throws {
@@ -100,4 +176,14 @@ private final class NavigationTestMessenger: NSObject, FlutterBinaryMessenger {
     _ channel: String, binaryMessageHandler handler: FlutterBinaryMessageHandler?
   ) -> FlutterBinaryMessengerConnection { 1 }
   func cleanUpConnection(_ connection: FlutterBinaryMessengerConnection) {}
+}
+
+private final class NavigationTestLocationManager: CLLocationManager {
+  var status: CLAuthorizationStatus = .authorizedWhenInUse
+  var accuracy: CLAccuracyAuthorization = .fullAccuracy
+  var starts = 0, stops = 0
+  override var authorizationStatus: CLAuthorizationStatus { status }
+  override var accuracyAuthorization: CLAccuracyAuthorization { accuracy }
+  override func startUpdatingLocation() { starts += 1 }
+  override func stopUpdatingLocation() { stops += 1 }
 }

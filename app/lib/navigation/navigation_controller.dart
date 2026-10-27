@@ -52,6 +52,18 @@ class NavigationController extends ChangeNotifier {
     NavigationState.calculating,
     NavigationState.rerouting,
   ].contains(state);
+  String get locationStatus {
+    if (state == NavigationState.paused || state == NavigationState.failed) {
+      return '定位已停止。';
+    }
+    if (state == NavigationState.locating) return '正在取得精確定位。';
+    final current = fix;
+    if (current == null || !current.usable(clock(), rules)) {
+      return '定位暫時不足，請到較開揚位置。';
+    }
+    return '定位誤差約 ${current.accuracy.round()} 米。';
+  }
+
   void _changed() {
     if (!_disposed) notifyListeners();
   }
@@ -142,6 +154,13 @@ class NavigationController extends ChangeNotifier {
     route = null;
     progress = null;
     session = null;
+    await _calculate(false);
+  }
+
+  Future<void> retryPreview() async {
+    if (hasTask || busy) return;
+    route = null;
+    progress = null;
     await _calculate(false);
   }
 
@@ -238,13 +257,15 @@ class NavigationController extends ChangeNotifier {
     await _subscription?.cancel();
     _subscription = location.updates.listen(
       (value) {
-        if (!_valid(generation) ||
-            session?.id != generation ||
-            state == NavigationState.nearby) {
+        if (!_valid(generation) || session?.id != generation) {
           return;
         }
         fix = value;
-        _update(value);
+        if (state == NavigationState.nearby) {
+          _changed();
+        } else {
+          _update(value);
+        }
       },
       onError: (Object e) {
         if (_valid(generation)) {
@@ -267,11 +288,12 @@ class NavigationController extends ChangeNotifier {
     }
     _staleTimer?.cancel();
     _staleTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_valid(generation) &&
-          fix != null &&
-          !fix!.usable(clock(), rules) &&
-          state != NavigationState.nearby) {
-        _poor();
+      if (_valid(generation) && fix != null && !fix!.usable(clock(), rules)) {
+        if (state == NavigationState.nearby) {
+          _changed();
+        } else {
+          _poor();
+        }
       }
     });
   }
@@ -305,9 +327,14 @@ class NavigationController extends ChangeNotifier {
       _poor(resetEvidence: false);
       return;
     }
+    final recovering = state == NavigationState.locationPoor;
     state = update.nearby ? NavigationState.nearby : NavigationState.navigating;
     message = update.nearby ? '已接近目的地，請確認入口。' : '導航中。';
-    if (update.message != null) _say(update.message!);
+    if (update.message != null) {
+      _say(update.message!);
+    } else if (recovering) {
+      _say('已恢復路線指示。${nextInstruction()}');
+    }
     _changed();
   }
 
@@ -329,6 +356,7 @@ class NavigationController extends ChangeNotifier {
   }
 
   String nextInstruction() {
+    if (state == NavigationState.nearby) return '已接近目的地，請確認入口。確認入口後可結束導航。';
     if (state != NavigationState.navigating ||
         fix == null ||
         !fix!.usable(clock(), rules)) {
@@ -339,17 +367,26 @@ class NavigationController extends ChangeNotifier {
   }
 
   Future<String> currentPosition() async {
+    final generation = _generation;
     final current = fix;
     if (current == null || !current.usable(clock(), rules)) {
       return '定位暫時不足，無法確認目前位置。';
     }
     String? address;
     try {
-      address = await location.address(current.coordinate);
+      address = await location
+          .address(current.coordinate)
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
     } catch (_) {
       /* Position remains useful without geocoding. */
     }
-    return '${address ?? '已取得目前位置'}。定位誤差約 ${current.accuracy.round()} 米。${progress == null ? '' : '路線剩餘約 ${progress!.remaining.round()} 米。'}';
+    if (!_valid(generation) ||
+        state == NavigationState.paused ||
+        state == NavigationState.failed ||
+        !current.usable(clock(), rules)) {
+      return '定位已變更或導航已暫停，請重新查詢目前位置。';
+    }
+    return '${address == null || address.trim().isEmpty ? '已取得目前位置' : address}。定位誤差約 ${current.accuracy.round()} 米。${progress == null ? '' : '路線剩餘約 ${progress!.remaining.round()} 米。'}';
   }
 
   Future<void> pause({bool background = false}) async {
@@ -371,6 +408,7 @@ class NavigationController extends ChangeNotifier {
       routeService.cancelRoute(),
       searchService.cancelSearch(),
     ]).then((_) {});
+    _changed();
     await _shutdown;
     _changed();
   }
