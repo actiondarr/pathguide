@@ -1,44 +1,22 @@
-# 領路通 PathGuide 方案文件索引
+# 領路通 PathGuide 文件索引
 
-更新日期：2026 年 10 月 23 日
+更新日期：2026年10月27日。
 
-最新 Dataset／Backend 對齊討論：[類別整理及字典討論稿](CLASS-DICTIONARY-DISCUSSION.zh-HK.md)，包含 COCO 選用、自訂類別、sign-icon-v1 及合併驗證方法。[候選 JSON](class_dictionary.proposal.json) 供核對，不能直接覆蓋正式字典；最新 OneDrive schema 與正式 ID 尚待組員確認。
-
-最新開發入口：[新版階段安排](IMPLEMENTATION-ROADMAP.zh-HK.md)、[第三階段實作與接入](PHASE3-IMPLEMENTATION.zh-HK.md)。Google 登入優先，緊急聯絡人可選填及主動撥號。
-
-方案已按前端、Dataset 與後端分檔；本頁只提供閱讀入口及交接關係，不再集中存放各部分的詳細規格。
-
-## 1. 三份主要方案
+**先讀 [目前App與原計劃對照](APP-PLAN-REVIEW.zh-HK.md)**：包含實作現況、證據限制、差距與下一輪優先次序。
 
 | 文件 | 閱讀內容 |
 |---|---|
-| [前端與裝置端方案](FRONTEND-DESIGN.zh-HK.md) | 使用者操作、VoiceOver／TalkBack、相機與候選擷取、照片同意、本機佇列、扶手電梯方向分析及粵語回饋 |
-| [Dataset 與模型訓練方案](DATASET-TRAINING.zh-HK.md) | 現用九類與候選 20 類、類別合併及防重疊規則、按需圖示／離線 OCR、場景切分、私人微調、方向短片及模型評估發佈 |
-| [後端與雲端資料流程方案](BACKEND-DESIGN.zh-HK.md) | Firebase 接口、認證、Storage／Firestore、配額與保留、事件去重、覆核狀態及資料匯出 |
+| [前端與裝置端](FRONTEND-DESIGN.zh-HK.md) | 學習進度、照片回報、私人更新、室內鳥瞰與短路徑 |
+| [後端與雲端](BACKEND-DESIGN.zh-HK.md) | 活動callable、覆核、worker、registry、預算與刪除 |
+| [Dataset覆核與改善](DATASET-REVIEW.zh-HK.md) | 十類A／十一類B、人工答案、分組、品質門檻與版本報告 |
+| [Dataset訓練方案](DATASET-TRAINING.zh-HK.md) | 模型分工、歷史候選、覆核／訓練及方向研究 |
+| [類別來源審核](DATASET-CLASS-REVIEW.zh-HK.md) | 52個登記項目的來源及去留；不是52類已訓練能力 |
+| [階段安排](IMPLEMENTATION-ROADMAP.zh-HK.md) | 交付優先次序、現況與完成條件 |
+| [資料契約](DATA-CONTRACT.v1.zh-HK.md) | 歷史v1、現行照片附錄與新接口待實作邊界 |
+| [交接與GitHub規則](../HANDOFF.md) | 每版先備份再安裝，保留共用及私人模型的不同回退方式 |
 
-新增專題：[帳號註冊與個人模型流程](ACCOUNT-REGISTRATION.zh-HK.md)，定義 Google 優先登入、選填緊急聯絡人、登入時機、UID 歸屬、個人訓練及帳號管理；實作責任仍分到上述三份方案。
+核心流程：同意收集 → 候選照片 → 管理員覆核 → UID快照 → 批次訓練 → 獨立比較 → 合格才更新 → 保留回退。收費GPU在預算設定前不提交；私人照片／權重不進共用GitHub。
 
-Dataset 附錄：[類別來源與刪減審核](DATASET-CLASS-REVIEW.zh-HK.md)，核對原始工作表、FYP、兩套字典，逐項記錄 52 個舊 ID 的保留、合併、延後及任務分流理由。
+目前有十類試驗與九類備援、Google帳號、照片程式、戶外導航及菜單OCR；室內感知、私人訓練／下載仍待實作。程式存在不等於雲端接通、真機驗收或已證明更準。
 
-扶手電梯方向亦按責任拆分：使用者如何查詢及手機如何分析放在前端；短片如何收集、標註及評估放在 Dataset；雲端只處理已同意的照片，不接收方向查詢的連續畫面。
-
-## 2. 共通交接與開發次序
-
-```text
-前端：訪客基本辨識，Google 登入後另行選擇照片用途同意
-  → 綁定 Firebase UID 的候選照片
-後端：驗證、儲存、去重與覆核進度
-  → 已核准影像、標註及來源版本
-Dataset：按 UID 切分、批次微調與評估
-  → 私人模型、清單及標籤經授權下載；內置基礎模型隨 App 提供
-```
-
-先完成現有辨識的無障礙操作與 Google 登入，再接 UID 照片歸屬、覆核、每人批次微調及私人模型下載；扶手電梯方向另作受控研究原型。導航與菜單按後續任務另行實作，模型不在背景自動切換。
-
-新設計尚未實作或通過使用者驗收，低信心門檻、配額與方向觀察窗口均屬待校準預設。階段 1／2 及第三階段帳號程式已加入；Firebase 正式接通及真機驗收待完成。照片、訓練及模型下載尚未接入，現有模型未改。
-
-## 3. 背景與詳細參考
-
-- [專案背景與現況](PROJECT-OVERVIEW.zh-HK.md)：FYP 動機、目前 App 功能及現況限制。
-- [無障礙研究與操作設計](ACCESSIBILITY-RESEARCH.zh-HK.md)：公開研究來源、導航／菜單文字線框及完整讀屏驗收。
-- [模型說明](MODELS.md)：目前九類模型及歷史版本記錄。
+操作與實作證據另見 [照片第四階段](PHASE4-IMPLEMENTATION.zh-HK.md)、[導航](NAVIGATION.zh-HK.md)、[菜單](MENU-READING.zh-HK.md)、[帳號](ACCOUNT-REGISTRATION.zh-HK.md)。舊Word及日期化驗收紀錄保留原快照，本輪未更新Word。

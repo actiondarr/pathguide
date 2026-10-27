@@ -1,94 +1,78 @@
 # 領路通 PathGuide 後端與雲端資料流程方案
 
-文件日期：2026 年 10 月 23 日
+更新日期：2026 年 10 月 27 日。閱讀入口：[App 與原計劃對照](APP-PLAN-REVIEW.zh-HK.md)。
 
-第三階段已新增獨立 `backend/firestore.rules` 及本機 Emulator 測試，程式使用 Firestore SDK 與規則驗證 UID。Firebase 正式設定及規則部署待組員完成。照片上傳及清理程式已加入獨立 Functions，部署及契約調整見 [第四階段交接](PHASE4-IMPLEMENTATION.zh-HK.md)；覆核與訓練仍為後續規格，未部署。詳見 [接入指引](PHASE3-IMPLEMENTATION.zh-HK.md)。
+**後端把已同意的錯誤場景，經覆核、訓練與評估，轉成可回退的私人模型。** 上傳成功只代表收到照片，不代表已學會、變準或可以更新。
 
-本文件專門說明 Firebase 上傳、使用者與路徑認證、Storage／Firestore 記錄、覆核流程、資料保留及訓練資料交接。Google 登入、UID、緊急聯絡人、每人獨立模型與刪除帳號見 [帳號註冊與個人模型流程](ACCOUNT-REGISTRATION.zh-HK.md)。手機介面與擷取條件見 [前端方案](FRONTEND-DESIGN.zh-HK.md)，人工標註與訓練評估見 [Dataset 方案](DATASET-TRAINING.zh-HK.md)。
+## 1. 已有程式與缺口
 
-現有工作區包含 Firebase Functions 與登入、上傳相關片段，尚未確認部署及完整流程可用，也未整合至目前 App。以下屬後續設計，不代表雲端已開始收集照片或訓練。
-
-## 1. 後端責任與現有起點
-
-現有 `getUploadUrl`、`uploadPhotoMeta`、Firestore 覆核欄位可作起點，但尚未與 App 串接。新照片路徑使用 `unconfirmed_photos/{uid}/{photoId}.jpg`，不按未確認的預測類別分資料夾；一張照片可有多個物件或沒有候選類別。
-
-Firebase 負責認證、檔案及記錄、覆核進度與資料匯出協調；Colab 負責組員啟動的批次訓練。照片上傳成功不等於已完成標註、已訓練或模型已發佈。
-
-接口實作需先修正 `uploadPhotoMeta` 缺少 `path` 匯入、把 `0` 分數誤當缺參數，以及 `classIndex` 未清楚區分 Firebase COCO ID、模型本地索引與 App 專案 ID 的問題。新資料以專案 ID 為基準，外部字典明確映射；舊資料沒有版本證據時標為待核對，不能猜測轉換。
-
-第三階段帳號使用 Firebase Google Auth，電話短訊及 Apple 登入延後；Firestore Rules 由驗證 token 取得 UID，首次透過交易可重試地初始化 `users/{uid}`，不再自管密碼、另產生帳號 UUID、預設手機已驗證或建立假照片。新註冊預設收集關閉，只有帳號可用及用途同意有效後才能簽發上傳權限。
-
-目前原型仍要求 `classIndex`，擴充接口時需支援無預測類別與多候選，並記錄版本，不能把低信心推測直接寫成最終類別。部署設定、套件、規則及測試需在工程實作時一併補齊；不在 App 放管理員憑證。
-
-## 2. 上傳流程與共同資料
-
-```text
-手機已同意收集，產生本機候選
-  → 認證並取得伺服器綁定的照片識別碼、路徑與限時上傳網址
-  → Wi-Fi 上傳 JPEG
-  → 檔案完成及中繼資料齊備後驗證
-  → 去重與覆核佇列
-  → 人工核准後交 Dataset 匯出
-```
-
-中繼資料記錄照片及使用者識別碼、拍攝時間與工作階段、模型及類別映射版本、觸發原因、候選框與分數、影像雜湊、儲存位置、覆核及資料集狀態。未知預測允許空值，模型預測與最終標註分開。
-
-資料與影像未到齊時保持待完成，只有確認屬於同一使用者、同一上傳及有效檔案後才進入覆核。手機斷線或工作重送須重用已分配識別碼；首次請求重試亦需可對應同一個本機候選，不能重建多筆照片。具體請求版本與欄位命名在接口實作時統一定義，不以舊的單一 `classIndex` 猜測新資料。
-
-伺服器綁定使用者及路徑，驗證實際影像解碼、大小、配額、認證及 App Check。成功建立物件後可用 Storage finalized 事件啟動處理，並以照片識別碼及物件版本去重，避免事件重送或檔案覆寫重複入列。[Firebase Storage 事件](https://firebase.google.com/docs/functions/gcp-storage-events)、[App Check 後端驗證](https://firebase.google.com/docs/app-check/custom-resource-backend)
-
-限時網址不取代伺服器的路徑及使用者綁定。`uploadPhotoMeta` 不可依客戶端傳入的任意路徑讀取或刪除其他使用者檔案；上傳紀錄、內容驗證及事件去重需對應同一物件版本。
-
-## 3. Storage、Firestore 與覆核狀態
-
-| 資料 | 放置位置／責任 |
+| 項目 | 現況 |
 |---|---|
-| 未確認 JPEG | Storage 私有路徑 `unconfirmed_photos/{uid}/{photoId}.jpg` |
-| 使用者進度 | 沿用使用者照片子集合，僅提供自身照片進度 |
-| 研究覆核記錄 | 沿用 `yolo_active_learning` 作起點，限定研究／覆核角色存取 |
-| 模型預測 | 保留候選框、分數及來源版本，不覆寫成人工答案 |
-| 最終標註 | 保存覆核人員、時間、標註版本及核准／拒絕結果 |
-| 訓練與匯出關係 | 以 `ownerUid`、資料集及基礎模型版本追蹤私人用途，不只用 `is_trained` 表達全部歷史 |
-| 個人模型 | 私有 `personal_models/{uid}/{modelVersion}/`，只授權擁有者取得核准且相容的版本 |
+| 帳號 | Google Auth、本人 profile、選填聯絡人及規則已有程式；聯絡資料不加入訓練 |
+| 照片 | getPhotoConsent、setPhotoConsent、submitPhoto、listPhotoProgress 已實作；本機照片開關關閉 |
+| 清理 | deletePhotoAccountData、expirePhotoCandidates、removeLatePhotoObjects 已實作；既有文件記錄未部署，本輪未查詢雲端部署清單 |
+| 導航 | computeWalkingRoute 已有 Google Routes 代理程式，與照片同意獨立；iPhone MapKit不依賴它 |
+| 私人學習 | 管理員覆核、快照匯出、排程、GPU worker、registry及下載授權未接通 |
 
-流程狀態需能區分上傳未完成、檔案已驗證、待覆核、已核准、已拒絕及已匯出。現有 `human_review.status` 可作覆核起點，但單一 pending 狀態不足以代表全部上傳及訓練流程。
+活動程式來源為 [Functions](../backend/functions/index.js)、[照片政策](../backend/functions/photo_policy.js)、[規則](../backend/firestore.rules)及[第四階段接入](PHASE4-IMPLEMENTATION.zh-HK.md)。舊firebaseCode-2的signed URL原型只作歷史參考，不是目前App接口。
 
-同一批預標註或 Storage 事件重送不能重複建工作；人工已確認的結果不可被延遲的 AI 預標註覆蓋。使用者進度與研究記錄應以一致的更新機制維持同步，失敗可重試並保留原因。
+## 2. 現行照片流程與資料
 
-## 4. 配額、保留與用途
+獨立照片同意 → 同幀JPEG與預測 → 綁定project／UID／consent epoch的加密待傳 → Wi-Fi callable提交 → 伺服器驗證與重編碼 → 私人儲存與待覆核進度。
 
-初始上限為本機五十張或 50 MB，七日到期清除，滿額停止新增而不影響辨識。照片去除 EXIF，不附 GPS；未覆核雲端照片預設保留三十日，核准資料另以資料集版本追蹤。這些屬設計預設，實作時須提供到期清理，並在同意說明列清楚。
+- 單張JPEG最多2 MiB，沒有signed URL分配。相同UID＋photoId＋來源雜湊與epoch重試不重複扣額，物件禁止覆寫。
+- 驗證Google身分、App Check、帳號狀態、同意epoch、解碼／大小及配額。移除EXIF／GPS／XMP；sourceSha256與最終雲端sha256分開。
+- 配額以UTC計日：總候選100、自動50、場景10；自動至少相隔30秒、場景至少60秒。香港時間的訓練排程不更改UTC配額日界。
+- 本機最多50張／50 MB、七日到期；未覆核雲端圖預設三十日，按小時每批最多200張清理。須監察錯誤與積壓。
+- 本人只讀進度，不能寫核准標註、訓練或發佈狀態。預測可空、零分合法，不假造未知class。
 
-手機自動收集合計每日五十張，其中場景抽樣每日十張；這些是前端預設，後端亦需執行對應額度與檔案大小檢查，不能只依賴客戶端。數值仍待真機及候選有效率校準。
+| 資料 | 位置／狀態 |
+|---|---|
+| 照片同意 | 現行 users/{uid}/private/photoConsent |
+| 照片／配額 | 現行 users/{uid}/photos/{photoId}、photoQuotas/{UTC日期} |
+| 未確認JPEG | 現行私人 unconfirmed_photos/{uid}/{photoId}.jpg |
+| 覆核／快照 | 規劃受權覆核服務寫入的版本化核准記錄 |
+| 工作／registry | 規劃以ownerUid綁定，App只讀本人進度 |
+| 私人模型 | 規劃 personal_models/{uid}/{modelVersion}/，僅授權相符UID |
 
-雲端三十日規則適用於未覆核照片；核准資料以明確的資料集用途與版本管理，拒絕資料不進入訓練。檔案及中繼資料的清理須一致，保留必要的清理狀態以避免重試重新入列。關閉收集停止待傳上傳，但不自動聲稱已清除雲端、標註工具或已建立的訓練資料集。
+## 3. 管理員覆核與自動批次（待實作）
 
-第一版只接收已同意的候選照片。扶手電梯方向查詢在手機記憶體分析，後端不接收其連續畫面或自動錄影；研究短片由 Dataset 方案另外取得授權管理，不以照片同意擴大影片用途。
+管理員透過受權限保護的工具補漏修框；原始預測與人工答案分開。保存覆核者、時間、定義、授權及影像／標註雜湊。只有核准且用途仍有效的資料可進快照；流程依 [Dataset覆核](DATASET-REVIEW.zh-HK.md)。
 
-## 5. Dataset 交接與模型發佈
+每天香港時間03:00檢查：每UID至少50張新增核准圖、三個場景及獨立驗證資料；滿足才建立不可變快照及工作。資料不足、未同意或預算未設定時不提交GPU。
 
-覆核者在 Roboflow 完成整張圖標註後，只有核准影像及相符標註可進入該 `ownerUid` 的版本化資料集，不把其他帳號照片加入私人訓練或自動併入共用基礎模型。後端提供照片來源、收集工作階段、核准版本及儲存位置，讓 Dataset 依場景分組切分及去重。
+採Firebase記錄／排程、私人Cloud Storage及GCP Batch容器GPU worker。首版私人微調限相容十類A與獲授權基礎資料回放，不混別人的私人照片；B保持獨立共用模型。
 
-第一版由組員確認每個 UID 的資料後手動啟動 Colab，不在每張上傳時啟動 GPU 訓練。共用基礎模型由新版 App 提供；核准個人模型經本人認證下載，後端檢查帳號、`ownerUid`、版本、雜湊及 App 相容資訊，不因訓練完成自動切換。註冊只初始化狀態，未有資料時私人模型為空。
+工作保存jobId、ownerUid、快照、基礎權重、設定／容器版本、run ID、checkpoint、心跳、取消旗標、評估及錯誤。以UID＋快照＋設定去重，交易取得lease；同UID不得同時訓練兩份。恢復使用同一快照，資料改動另建run。
 
-刪除帳號需先重新驗證並標記刪除中，停止簽發新上傳／下載權限及啟動訓練，再清理照片、標註、Roboflow／Colab 匯出副本與私人模型，最後刪除身分及 profile。既有限時網址可能仍有效，完成事件須重驗帳號狀態，在網址到期後再清理；工作可重試，延遲回應不可恢復已刪資料，詳見帳號文件。
+狀態區分資料不足、待覆核、queued、running、evaluating、ready、failed、cancelled；評估不合格不能寫ready。門檻見Dataset覆核，不憑訓練成功自動發佈。現用十類gate=false只屬試驗，不自動升格為已核准基礎模型。
 
-## 6. 後端驗收與實作起點
+**GPU預算待定，付費提交預設關閉。** 先完成模擬worker的成功、失敗、重試與取消。部署前設定專案、可用區域／GPU、單次時限、每日額度、併發及預算；缺設定即拒絕提交，不能用告警冒充停止計費。
 
-- [ ] 無效認證、App Check、越權路徑、超額與無效影像會被拒絕。
-- [ ] 零分數、無類別、多候選及不同類別字典版本可正確處理。
-- [ ] 網址過期、斷線及重試不建立重複照片或覆核工作。
-- [ ] 檔案先到或中繼資料先到均能恢復；未驗證檔案不入覆核佇列。
-- [ ] Storage 事件重送、物件覆寫與 AI 回寫不破壞已核准資料。
-- [ ] 使用者只能查詢自身進度與下載自身私人模型，覆核及匯出需相應角色。
-- [ ] 帳號初始化重試不重置同意或另建 UID；刪除中會阻止新上傳、訓練及模型發佈。
-- [ ] 未覆核及拒絕資料不能進入訓練；匯出可追溯資料集及標註版本。
-- [ ] 到期清理同步處理檔案與記錄，照片同意不會觸發影片上傳。
+## 4. 私人發佈、自動更新與回退（待實作）
 
-實作起點：[上傳網址](../../firebaseCode-2/functions/getUploadUrl.js)、[照片中繼資料](../../firebaseCode-2/functions/uploadPhotoMeta.js)及 [Functions 入口](../../firebaseCode-2/functions/index.js)。本輪只拆分設計文件，未修正、部署或呼叫以上服務。
+訓練 → validation比較 → 凍結候選／獨立驗收 → 格式及映射檢查 → 核准registry → 本人授權下載。不合格保留原版本，報告同時寫改善與退化。
 
-## 第三階段私人聯絡資料
+發佈記錄含ownerUid、jobId、snapshot、模型與manifest雜湊／大小、taxonomy、相容App及評估版本。私人發佈envelope與現行內置format:1分開，不假稱目前parser已支援新欄位的完整驗證。
 
-緊急聯絡人放在 `users/{uid}/private/emergencyContact`，不與照片、覆核、匯出或訓練記錄混用。一般照片覆核角色不因此取得權限。App 使用同 UID 安全快取並停用 Firestore 磁碟持久快取。聯絡資料規則及刪除保護見 [帳號方案](ACCOUNT-REGISTRATION.zh-HK.md)。
+使用者可另行預先同意自動更新；未同意則手動選擇。僅App前景且辨識／導航等相機任務停止時下載至暫存，驗UID／雜湊／映射／相容性，試載入後原子切換。保留上一個私人版本與內置備援，失敗回退。此決定取代「每次都必須手動啟用」。
 
-本階段刪除以重新驗證、最小不可變保護記錄、profile／聯絡清理及 Firebase Auth 刪除完成；第四階段開放上傳前，必須替換為完整後端資料清理工作。第三階段不需要部署 Cloud Functions，照片儲存與正式後端部署再配置 Blaze。
+App／共用模型完成後先推GitHub commit、tag／Release並核對，再安裝交付。私人照片、權重及含私人資訊報告留在受權限保護的儲存，不進共用repo；私人registry保留歷史版本供本人回退。詳見 [交接](../HANDOFF.md)。
+
+## 5. 撤回、刪除與失效
+
+- 關閉收集停止本機擷取／待傳；另提供個人訓練及自動更新控制，worker在排隊、取資料、續跑與發佈前重驗授權。
+- 刪除先建保護、停止新工作／下載，取消並等待或隔離worker，再清理照片、標註、快照、第三方匯出及私人權重，最後移除身分。遲到事件不得重建資料。
+- 現有deletePhotoAccountData只涵蓋第四階段；加入worker／registry後必須擴充，不能假稱已涵蓋未有資源。
+- 室內深度、姿態、網格留本機；照片同意不擴大為持續影片、GPS或軌跡上傳。方向短片另行授權。
+
+## 6. 後端驗收
+
+- [ ] 身分／App Check、跨UID、舊epoch、影像及額度會拒絕；重送不重複照片或工作。
+- [ ] AI不能覆寫人工答案；未核准／拒絕／授權不明的資料不入快照。
+- [ ] 缺預算不提交；lease、逾時、心跳失效、checkpoint續跑及取消有測試。
+- [ ] 不合格不發佈；本人下載、閒置切換、損壞回退與切帳號正確。
+- [ ] 刪除與訓練／下載競爭不復活舊資料；私人產物不進GitHub。
+- [ ] 共用版本遠端備份完成才交付，舊tag與對應模型可重建。
+
+本輪只更新文件，沒有部署、開啟照片收集、提交GPU或改App功能。

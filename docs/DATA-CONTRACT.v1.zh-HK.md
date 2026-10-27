@@ -1,6 +1,6 @@
 # 領路通第一版資料契約
 
-日期：2026 年 10 月 23 日。版本：1，新增第三階段實作附錄。供前端、Dataset 及後端實作交接使用。
+原契約日期：2026年10月23日，版本1；2026年10月27日新增第10節決策對齊。第1節是當時九類基線，第9節為現行照片實作；私人學習新接口仍待實作，不能把文件當成已支援wire格式。
 
 本文件凍結第一輪共用欄位及責任。第 1 節為已存在的模型格式；照片及訓練雲端記錄仍屬後續接口規格。Google 帳號、緊急聯絡人及對應規則已加入程式；Firebase 專案接通及真機待完成，沒有收集照片。欄位名稱在正式接入時以契約版本管理，不能無聲改義。
 
@@ -57,7 +57,7 @@
 
 `datasetSnapshotId` 固定 `ownerUid`、核准照片／標註版本、來源與授權、taxonomy、類別映射及 train／validation／test 的場景群組。相同實物、連拍或影片不能跨集合。訓練開始後不把新上傳直接加入快照。
 
-訓練工作保存 `jobId`、`ownerUid`、`datasetSnapshotId`、`baseModelVersion`、`trainingConfigVersion`、輸出版本、評估來源及失敗原因。狀態為 `queued` → `running` → `evaluating` → `approved`／`failed`／`cancelled`。組員確認後批次啟動；上傳成功及完成註冊都不自動觸發 GPU 訓練。
+訓練工作保存 `jobId`、`ownerUid`、`datasetSnapshotId`、`baseModelVersion`、`trainingConfigVersion`、輸出版本、評估來源及失敗原因。狀態為 `queued` → `running` → `evaluating` → `approved`／`failed`／`cancelled`。舊規格採組員手動批次；第10節改為覆核後排程，預算未設定不提交。單張上傳及註冊仍不直接觸發GPU。
 
 首輪私人微調只使用獲授權基礎資料及該 UID 的核准照片，不混入其他人的私人資料。來源 PyTorch 評估、匯出一致性及手機實測分開保存；模型是否有改善由獨立評估決定，不能因為訓練成功就宣稱更準確。
 
@@ -65,7 +65,7 @@
 
 個人模型放在 `personal_models/{uid}/{modelVersion}/`。後續發佈記錄另包 `ownerUid`、`jobId`、`datasetSnapshotId`、狀態、檔案及 manifest 的 SHA256／大小、`classMapVersion`、App 相容版本和評估摘要；不把這些欄位假裝已存在於目前 `format: 1` 清單。
 
-只有已核准、相容、屬目前帳號的模型才可授權下載。App 暫存、檢查完整性及映射，使用者在辨識暫停時選擇啟用；第一版不背景自動切換。下載或驗證失敗保留原模型。登出／切換 UID 清除私人快取及待傳工作，回到內置基礎模型。
+只有已核准、相容、屬目前帳號的模型才可授權下載。App 暫存、檢查完整性及映射，未預先同意自動更新者手動啟用；已同意者依第10節在前景、任務停止時原子切換。下載或驗證失敗保留原模型。登出／切換 UID 清除私人快取及待傳工作，回到內置基礎模型。
 
 刪除先重新驗證並標記 `deleting`，拒絕新上傳、下載授權及訓練，清理 Firebase 與 Roboflow／Colab 私人副本及產物，最後移除身分與 profile。已連結 Apple 時一併協調授權撤銷。重試及延遲事件不得重新建立已刪資料；已簽發網址及離線裝置快取有失效延遲，不能承諾立即遠端抹除。
 
@@ -92,3 +92,13 @@ account_deletions/{uid} 為僅含 schemaVersion 及 createdAt 的不可變刪除
 目前 callable 小圖直接提交取代 signed URL 分配，單張 2 MiB。照片唯一鍵為 UID＋三十二位十六進制 photoId，clientCandidateId 相同；重試來源雜湊及 epoch 必須一致。原始提交 JPEG 的 sourceSha256 與伺服器去除 EXIF 重編碼後的 sha256 分開記錄；尺寸／框座標保持不變。photoConsent 增加遞增 epoch，撤回使舊候選失效。沒有前端可寫的審批、配額或訓練狀態。
 
 只有 Admin callable 寫入照片及同意。帳號一旦存在 photoConsent，舊第三階段純客戶端刪除會被規則拒絕，須經 deletePhotoAccountData 完整清理後再刪 Auth。用途、路徑、部署及限制以 [第四階段交接](PHASE4-IMPLEMENTATION.zh-HK.md) 為準；本機測試不代表雲端已啟用。
+
+
+## 10 2026-10-27決策對齊（新接口待實作）
+
+- 目前預設A為十類試驗版，映射[6,11,7,8,9,24,1,49,26,18]，九類另作備援；format:1內置格式不在本次文件更新中改動。
+- 私人發佈需另有版本化envelope：ownerUid、job／snapshot、基礎模型、taxonomy、相容App、模型／manifest雜湊及評估。現有parser不等於已實作這些驗證。
+- 管理員核准後按條件排程，狀態含資料不足、queued、running、evaluating、ready、failed、cancelled。付費worker預算未定即關閉，門檻依[Dataset覆核](DATASET-REVIEW.zh-HK.md)。
+- 自動更新另行同意，只在App前景且辨識／導航任務停止時下載、驗證、試載入及原子切換，保留上一版；未同意仍手動選擇。
+- 新IndoorSceneFrame規格應包含schemaVersion、session、單調時間、追蹤狀態、明確座標系、物件／障礙、地面摘要與候選路徑；深度／網格留原生端。本輪未新增平台通道或修改既有Detection回包。
+- App／共用模型版本先備份GitHub再安裝；私人照片／權重留受UID授權的儲存。依[交接](../HANDOFF.md)保留不可變版本與回退方法。
