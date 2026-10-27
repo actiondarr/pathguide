@@ -1,6 +1,6 @@
 # 路線導航：實作與接入
 
-最新狀態：2026-10-27，B 階段 iPhone 功能補強完成，238 項 Flutter 測試、6 項 iOS 原生測試及程式分析通過。使用者已回報既有版本基本步行導航正常；補強版待接機回歸。逐項範圍與結果見 [B 階段紀錄](baselines/2026-10-27.iphone-navigation-phase-b.md)。Android 配置、建置與雙平台實走仍待後續階段；首輪紀錄見 [2026-10-23 驗證結果](baselines/2026-10-23.navigation-verification.json)。
+最新狀態：2026-10-27，B 階段 iPhone 功能補強完成，238 項 Flutter 測試、6 項 iOS 原生測試及程式分析通過。補強版已安裝並在測試 iPhone 啟動，逐項真機回歸進行中；使用者亦已回報既有版本基本步行導航正常。逐項範圍與結果見 [B 階段紀錄](baselines/2026-10-27.iphone-navigation-phase-b.md)。Android 配置、建置與雙平台實走仍待後續階段；首輪紀錄見 [2026-10-23 驗證結果](baselines/2026-10-23.navigation-verification.json)。
 
 2026-10-26：修正 iPhone 按「搜尋」即閃退的原生插件接口，新增 iOS 原生回歸測試。原因、測試及手機重測步驟見 [搜尋閃退修正紀錄](baselines/2026-10-26.navigation-search-crash.md)。
 
