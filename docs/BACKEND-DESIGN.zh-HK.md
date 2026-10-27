@@ -38,7 +38,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B09 本人下載、自動更新與回退／S3 | 未接通 | 新增本人模型offer與限時下載授權；發票前重驗身分／用途／刪除狀態，URL只指向核准物件且不記完整URL日誌。App下載暫存、核對offer、SHA與映射後在任務停止時切換；保留上一版／內置版 | Frontend F08；逾時重取授權，跨UID／不相容／損壞拒絕。已簽網址有有效期，撤回後仍須處理過期窗口與物件清理 |
 | B10 撤回、取消、帳號刪除與到期／S2–S3 | 第四階段清理已有；訓練資源未覆蓋 | 沿用tombstone／deleting，先禁止新上傳／job／下載，取消並等待或隔離worker，再按清單刪照片、annotations、snapshot、外部副本及私人模型，最後Auth；每步可重試並拒絕遲到重建 | 擴充現有deletePhotoAccountData；基礎共用資料不因單UID刪除而誤刪，處理中狀態可理解 |
 | B11 Android搜尋／步行代理／S1 | computeWalkingRoute已有，未部署／驗證 | App Check驗應用，訪客可用；固定Google Routes WALK、HK／繁中與回傳欄位，Secret Manager供金鑰，逾時／配額分類；不接受任意網址代理、不持久保存軌跡 | Google配置、預算、簽署限制及真機；iPhoneMapKit不改走此代理 |
-| B12 發佈、診斷與預算／S0–S6 | 1.1.0+2程式核對通過；分支／tag／prerelease保存，未安裝交付 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依第7節先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
+| B12 發佈、診斷與預算／S0–S6 | 1.1.0+2程式核對通過；分支／tag／prerelease保存後已安裝／啟動；場測待補 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依第7節先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
 | B13 室內即時資料邊界／S4 | 未有深度服務，規劃本機處理 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
 | B14 拓撲graph、觀察序列與場地版本／S7 | 概念討論，未實作 | 先手動node／edge驗證；永久地圖、node內容與行程觀察分開版本化，圖片只產生候選對照。不吻合先保留未知與待覆核，核准後才更新地圖；量測座標／幾何校準及樓層連接後續加入 | F14／D09；不用GPS猜樓層，無場地資料不提供指定課室；場地更新不破壞舊App |
 | B15 路線錄製／場景摘要同步／S7 | 後續構想 | 先本機功能；自願同步才新增UID版本化路標序列與刪除。場景摘要預設本機有效證據，不自動新增雲端影像描述或追蹤紀錄 | F17；另行確認用途與授權，不能因訓練照片同意便錄影／上傳路線 |
@@ -203,3 +203,5 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 2026-10-27整合版：App語言只在本機SharedPreferences保存；導航中的辨識不建立照片／observations／深度上傳或新增Cloud API。照片上傳仍關閉，付費GPU仍停用。1.1.0+2包含已核對共用模型；以正常Git備份分支／tag、GitHub網頁建立prerelease，未安裝交付；工程驗證不代表真機／模型精度已通過。
 
 2026-10-27發佈核對：App源碼commit `687d40188c117e7764cd71b063e834b23763682d` 已推至既有分支；以 `git ls-remote` 核對分支及兩個tag的實際commit。[1.1.0+2試用Release](https://github.com/actiondarr/pathguide/releases/tag/v1.1.0%2B2)及[整合前還原點](https://github.com/actiondarr/pathguide/releases/tag/v1.0.0%2B1-baseline)均經正常GitHub網頁建立並核對，沒有抽取憑證。產物含相符源碼／模型與manifest；無簽署IPA，未安裝手機。機器收據：verification/release-receipts/app-1.1.0+2.json。後續文件核對提交不移動App tag。
+
+同日交付核對：GitHub核對後才簽署，包內1.1.0+2、模型SHA與manifest相符；正常系統信任服務簽章驗證、CoreDevice安裝及啟動成功。無IPA公開下載；裝置ID、安裝路徑及簽署資料不寫入公開收據。見verification/release-receipts/app-1.1.0+2.json；App tag與權重沒有變動。

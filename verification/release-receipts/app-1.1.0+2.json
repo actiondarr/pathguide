@@ -20,7 +20,14 @@
     "Normal Git push and git ls-remote: branch and peeled tags match",
     "GitHub normal web UI: published pre-release headings, tags and commits verified"
   ],
-  "deviceInstalled": false,
+  "deviceInstalled": true,
   "signedIPAProvided": false,
-  "date": "2026-10-27"
+  "date": "2026-10-27",
+  "deviceLaunch": "passed",
+  "deviceModel": "iPhone 15 Pro Max",
+  "signedBuild": "passed",
+  "signatureVerification": "codesign --verify --deep --strict passed with normal system trust services",
+  "installedBundleVersion": "1.1.0+2",
+  "installedModelSha256": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0",
+  "fieldAcceptance": "pending"
 }
