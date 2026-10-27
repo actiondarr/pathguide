@@ -66,6 +66,13 @@ recoverable if the new version does not work.
   private model downloads still need implementation.
 - On this check, `gh auth status` reported an invalid GitHub CLI token. No
   upload, new release, tag, or remote authentication success is claimed.
+- Documentation audit commit: `3eec3a3` (12 selected documentation files only).
+  Read-only `git ls-remote` confirmed the existing branch at `7aa84b3`.
+  The push was rejected by automatic approval review because the GitHub
+  destination was not explicitly confirmed as trusted for project details.
+  Do not retry via another mechanism. Obtain user confirmation for pushing
+  these documents to `https://github.com/actiondarr/pathguide`, then verify
+  the remote after a successful push. App/model changes remain uncommitted.
 - Detailed evidence: `docs/dataset-work/2026-10-26/MODEL-STATUS.zh-HK.md`,
   `dataset_pipeline/snapshots/sign-icon-demo11-v1-20261027/summary.json`, and
   `docs/baselines/2026-10-27.iphone-navigation-phase-b.md`. The snapshot is local
