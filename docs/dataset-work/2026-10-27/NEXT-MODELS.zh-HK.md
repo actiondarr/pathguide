@@ -8,6 +8,7 @@
 - B活動實驗設定已改sign-icon-demo11-v1，一般toilet_symbol延後，原12類路線圖保留。
 - 已有本地實驗snapshot：3,327圖，2,301 train／469 val／557 test，來源含插圖與增強，抽樣篩查不等於完整人工覆核；exit train僅13框。
 - 已有Colab訓練套件與入口，尚未核實完成B訓練或App整合。下方「缺快照／未下載」描述為早上歷史狀態，不再代表最新進度；不由舊GPU限制推斷目前額度。
+- 13:52同期交接回報12項本機測試、11圖CPU流程試跑，以及T4連線／Drive掛載完成，launcher進入驗證／短試跑；本輪未直接讀取新run的checkpoint，不能聲稱正式訓練完成，不重跑健康作業。私人帳戶與Notebook識別留在本機交接。
 - 私人學習、評估、更新及GitHub回退規則依 [Dataset覆核](../../DATASET-REVIEW.zh-HK.md)與[總對照](../../APP-PLAN-REVIEW.zh-HK.md)。
 
 ## 原定分工

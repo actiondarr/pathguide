@@ -16,7 +16,7 @@
 
 A 十類順序為 person、bicycle、bin、bollard、traffic_cone、caution_slippery、stairs、escalator、fence、door，專案 ID 為 `[6,11,7,8,9,24,1,49,26,18]`。私人首版不自行擴 class。
 
-B 一般 toilet_symbol 延後，活動11類與原12類路線圖分開保存。現有 snapshot 只准實驗訓練；含插圖與來源增強，抽樣篩查不能寫成全量人工覆核。
+B 一般 toilet_symbol 延後，活動11類與原12類路線圖分開保存。現有 snapshot 只准實驗訓練；含插圖與來源增強，抽樣篩查不能寫成全量人工覆核。13:52同期交接另回報12項本機測試、11圖CPU流程試跑及T4／Drive接通，launcher進入套件驗證／短試跑；本輪未直接讀取新run checkpoint，不能據此宣稱正式模型已完成。
 
 ## 2. 覆核工作流程
 
