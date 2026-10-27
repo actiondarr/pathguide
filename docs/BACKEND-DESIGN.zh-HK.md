@@ -40,7 +40,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B11 Android搜尋／步行代理／S1 | computeWalkingRoute已有，未部署／驗證 | App Check驗應用，訪客可用；固定Google Routes WALK、HK／繁中與回傳欄位，Secret Manager供金鑰，逾時／配額分類；不接受任意網址代理、不持久保存軌跡 | Google配置、預算、簽署限制及真機；iPhoneMapKit不改走此代理 |
 | B12 發佈、診斷與預算／S0–S6 | Git提交已有；完整App版本checkpoint未齊 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依第7節先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
 | B13 室內即時資料邊界／S4 | 未有深度服務，規劃本機處理 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
-| B14 場地圖、樓層與地標版本／S7 | 未實作 | 新增經場地授權的building／floor／graph／anchor版本，房間／走廊／升降機連接分開；App取得相容地圖，標記校準後在本機路由。地圖記入口／可用性證據與有效期，未知不默認通行 | F14／D09；不用GPS猜樓層，無場地資料不提供指定課室；場地更新不破壞舊App |
+| B14 拓撲graph、觀察序列與場地版本／S7 | 概念討論，未實作 | 先手動node／edge驗證；永久地圖、node內容與行程觀察分開版本化，圖片只產生候選對照。不吻合先保留未知與待覆核，核准後才更新地圖；量測座標／幾何校準及樓層連接後續加入 | F14／D09；不用GPS猜樓層，無場地資料不提供指定課室；場地更新不破壞舊App |
 | B15 路線錄製／場景摘要同步／S7 | 後續構想 | 先本機功能；自願同步才新增UID版本化路標序列與刪除。場景摘要預設本機有效證據，不自動新增雲端影像描述或追蹤紀錄 | F17；另行確認用途與授權，不能因訓練照片同意便錄影／上傳路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
 
@@ -76,6 +76,32 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | 覆核／快照 | 規劃受權覆核服務寫入的版本化核准記錄 |
 | 工作／registry | 規劃以ownerUid綁定，App只讀本人進度 |
 | 私人模型 | 規劃 personal_models/{uid}/{modelVersion}/，僅授權相符UID |
+
+## 室內graph與照片序列資料設計（討論方案，待驗證）
+
+先做手動graph＋模擬observation的原型，再接AI；不需要先完成大型VPS或向量資料庫。以下是設計分層，不是現有API／Firestore已支援的格式：
+
+| 資料層 | 保存內容 | 更新規則 |
+|---|---|---|
+| graph | building／floor、mapVersion、node ID、實際通路edge及限制 | 只有核准的地點／連通性變更才發新版本 |
+| node內容 | 同位置的objects、店名／別名、參考圖片、特徵版本、有效時間與證據 | 改店名不換位置ID；動態物件只作觀察，不當永久錨點 |
+| 觀察queue | session、seq、capturedAt、圖片／特徵及候選node／可信度 | 是行程序列，按拍攝順序，不按Server回覆先後或預測node排序 |
+| 配對結果 | matched／uncertain、候選、證據、mapVersion、觀察時間 | 低信心保留未知；不存在的精準位置／朝向不填假值 |
+| 地圖變更候選 | 新地標、店名疑似改變、封閉或不吻合證據 | 覆核後才升格；模型自己猜的結果不直接變地圖真值 |
+
+最小node示例（尚未量測的位置保留null）：
+
+```json
+{"id":"L1_N03","floor":"L1","position":null,"objects":[{"type":"shop","name":"店面A"}],"referenceImages":[],"contentVersion":1}
+```
+
+渲染用的示意layout與真實公尺座標分開；若加入x,y，必須同時記原點、座標系、單位及量測來源。edge先驗實際連通，同層雙向用無向邊；單向、封閉、樓梯與升降機後續獨立屬性，不一律當雙向。
+
+定位處理流程：觀察入queue → 用最後可信node／樓層／路線選graph鄰域 → 比較最近多筆候選與允許轉移 → matched或uncertain → 需要時擴大搜尋。保留停留、跳node、倒行和分岔，遲到回應不能覆蓋新位置；不確定時不強制選「預測的下一個node」。
+
+每5秒上傳屬新增的定位用途，不能直接套私人訓練照片API：現有自動照片冷卻30秒、場景60秒且有日額。後續若採Server定位，須獨立同意／session／限流／短保留策略；定位圖片預設不加入私人訓練或共用地圖，地圖建庫與私人模型亦非同一批資料。
+
+後續AI可加入全局檢索、局部特徵及OCR；純圖片鄰近node只能支持拓撲候選，精確PnP仍要已知3D點與相機內參，不能由node ID直接求得公尺級pose。[OpenCV PnP](https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html)；完整3D建圖／匹配路線可參考 [hloc](https://github.com/cvg/Hierarchical-Localization)。iPhone沒有通用Wi-Fi掃描API，因此初版粗篩先用使用者選定場地／樓層與可信起點，不把任意SSID指紋當既有能力。[Apple Wi-Fi API說明](https://developer.apple.com/documentation/technotes/tn3111-ios-wifi-api-overview)
 
 ## 3. 管理員覆核與自動批次（待實作）
 
@@ -156,3 +182,5 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 
 
 2026-10-27階段化補充：加入S0–S7分工及B01–B16實現路線，標示現有callable與待新增的覆核／快照／worker／registry／場地服務，列明輸入、輸出、依賴與驗收。下一輪先S2權限／部署與覆核，再用mock完成S3；預算未定不提交付費GPU。本次沒有部署或改接口程式。
+
+2026-10-27 graph討論補充：為B14定義graph、node內容、observations queue及覆核變更的分層；5秒Server定位需另立用途與配額，不能冒充既有照片服務。新增schema僅供概念驗證，本輪未實作／部署。
