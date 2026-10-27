@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../tts/announcer.dart' show kMinSpeakScore;
 
+enum AppLanguage { chinese, english }
+
 /// The three user-facing speech rates map to the values expected by
 /// `flutter_tts`. The labels deliberately describe relative speed rather than
 /// exposing implementation-specific decimal values.
@@ -32,11 +34,23 @@ class AppSettings extends ChangeNotifier {
     required this._preferences,
     SpeechSpeed? speed,
     double? speakThreshold,
+    AppLanguage language = AppLanguage.chinese,
   }) : _speechSpeed = speed ?? SpeechSpeed.normal,
+       // ignore: prefer_initializing_formals
+       _language = language,
        _speakThreshold = speakThreshold ?? kMinSpeakScore;
 
   static const String speechRateKey = 'speech_rate';
   static const String speakThresholdKey = 'speak_threshold';
+  static const String languageKey = 'app_language';
+  AppLanguage _language;
+  AppLanguage get language => _language;
+  Future<void> setLanguage(AppLanguage value) async {
+    if (_language == value) return;
+    _language = value;
+    notifyListeners();
+    await _preferences?.setString(languageKey, value.name);
+  }
 
   final SharedPreferences? _preferences;
   SpeechSpeed _speechSpeed;
@@ -54,13 +68,18 @@ class AppSettings extends ChangeNotifier {
   }
 
   /// Test and preview fallback. Production uses [load], which persists values.
-  factory AppSettings.memory({SpeechSpeed speed = SpeechSpeed.normal}) =>
-      AppSettings._(preferences: null, speed: speed);
+  factory AppSettings.memory({
+    SpeechSpeed speed = SpeechSpeed.normal,
+    AppLanguage language = AppLanguage.chinese,
+  }) => AppSettings._(preferences: null, speed: speed, language: language);
 
   static Future<AppSettings> load() async {
     final preferences = await SharedPreferences.getInstance();
     return AppSettings._(
       preferences: preferences,
+      language: preferences.getString(languageKey) == 'english'
+          ? AppLanguage.english
+          : AppLanguage.chinese,
       speed: SpeechSpeed.fromStoredRate(preferences.getDouble(speechRateKey)),
       speakThreshold: _restoreSpeakThreshold(
         preferences.getDouble(speakThresholdKey),

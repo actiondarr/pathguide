@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart'
@@ -190,11 +192,15 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _speaker = FlutterTtsSpeaker(speechRate: widget.settings.speechSpeed.rate);
+    _speaker = FlutterTtsSpeaker(
+      speechRate: widget.settings.speechSpeed.rate,
+      language: widget.settings.language,
+    );
     _environmentSpeaker = EnvironmentSpeaker(
       tts: _speaker,
       screenReaderActive: () => _screenReader,
       announce: _announceWithScreenReader,
+      translate: (text) => appText(text, widget.settings.language),
     );
     _announcer = Announcer(
       speaker: _environmentSpeaker,
@@ -701,7 +707,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
               child: Row(
                 children: <Widget>[
                   IconButton(
-                    tooltip: '返回首頁',
+                    tooltip: context.tr('返回首頁'),
                     constraints: const BoxConstraints(
                       minWidth: 56,
                       minHeight: 56,
@@ -712,7 +718,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                   Expanded(
                     child: Semantics(
                       header: true,
-                      child: Text(
+                      child: AppText(
                         '即時辨識',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
@@ -728,7 +734,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                 liveRegion: !_sourceReady,
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(
+                  child: AppText(
                     '$_statusLabel · ${_speakEnabled ? "自動播報已開啟" : "自動播報已關閉"}',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -761,20 +767,20 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                                   _speakEnabled &&
                                   !_controlsOpen &&
                                   !MediaQuery.supportsAnnounceOf(context),
-                              child: Text(
+                              child: AppText(
                                 _readback,
                                 key: const ValueKey('current-result'),
                               ),
                             ),
                             if (_ttsError != null)
-                              Text(
+                              AppText(
                                 _ttsError!,
                                 style: const TextStyle(
                                   color: AppColors.warning,
                                 ),
                               ),
                             if (_statusError != null)
-                              const Text(
+                              const AppText(
                                 '未能開始辨識，請檢查相機權限後重試。',
                                 style: TextStyle(color: AppColors.warning),
                               ),
@@ -796,7 +802,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                       onPressed: _requestedRunning
                           ? _pauseRecognition
                           : _startRecognition,
-                      child: Text(
+                      child: AppText(
                         _requestedRunning
                             ? '暫停辨識'
                             : _statusError != null
@@ -812,7 +818,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                       focusNode: _settingsFocus,
                       onPressed: _showControls,
                       icon: const Icon(Icons.tune_rounded),
-                      label: const Text('更多操作'),
+                      label: const AppText('更多操作'),
                     ),
                   ),
                 ],
@@ -857,7 +863,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                               ? () => Navigator.of(sheetContext).pop(true)
                               : null,
                           icon: const Icon(Icons.replay_rounded),
-                          label: const Text('重播目前結果'),
+                          label: const AppText('重播目前結果'),
                         ),
                         if (_photos != null) ...[
                           const SizedBox(height: 12),
@@ -872,12 +878,12 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                                   }
                                 : null,
                             icon: const Icon(Icons.add_a_photo_outlined),
-                            label: const Text('回報辨識問題並擷取照片'),
+                            label: const AppText('回報辨識問題並擷取照片'),
                           ),
                           if (_photos!.message != null)
                             Semantics(
                               liveRegion: true,
-                              child: Text(_photos!.message!),
+                              child: AppText(_photos!.message!),
                             ),
                           const PhotoEntry(),
                         ],
@@ -891,7 +897,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                           ),
                         ],
                         const SizedBox(height: 12),
-                        const Text('後置相機朝向要辨識的環境，保持手機穩定。沒有結果不代表前方安全。'),
+                        const AppText('後置相機朝向要辨識的環境，保持手機穩定。沒有結果不代表前方安全。'),
                       ],
                     ),
                   ),
@@ -948,6 +954,8 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                 painter: DetectionBoxPainter(
                   mapped: mapped,
                   showLabels: _showLabels,
+                  englishLabels:
+                      widget.settings.language == AppLanguage.english,
                   fontFamily: Theme.of(context)
                       .textTheme
                       .bodyMedium
@@ -984,7 +992,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                           size: 20,
                         ),
                       const SizedBox(width: 10),
-                      Flexible(child: Text(_statusLabel)),
+                      Flexible(child: AppText(_statusLabel)),
                     ],
                   ),
                 ),
@@ -1050,7 +1058,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
               Icon(icon, size: 16, color: AppColors.primary),
               const SizedBox(width: 5),
               Flexible(
-                child: Text(
+                child: AppText(
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.fade,
@@ -1066,7 +1074,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
             ],
           ),
           const SizedBox(height: 3),
-          Text(
+          AppText(
             label,
             maxLines: 1,
             style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
@@ -1116,15 +1124,15 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(
+          AppText(
             '${_mode == SourceMode.mock ? "模擬更新率" : "更新率"}  ${_fps.toStringAsFixed(1)} FPS',
             style: style,
           ),
-          Text(
+          AppText(
             '${_mode == SourceMode.mock ? "模擬耗時" : "推理耗時"}  ${_inferenceMs.toStringAsFixed(1)} ms',
             style: style,
           ),
-          Text('檢測框   ${_detections.length}', style: style),
+          AppText('檢測框   ${_detections.length}', style: style),
           if (geo != null)
             Padding(
               padding: const EdgeInsets.only(top: 2),
@@ -1141,7 +1149,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
           // 「最高分」低于阈值（橙色）说明模型没给出高分，问题在模型或输入；
           // 「跳过」非空则直接写出被跳过的原因。
           if (_diagnostics != null) ...<Widget>[
-            Text(
+            AppText(
               '分析幀   ${_diagnostics!.analyzedFrames}',
               style: style.copyWith(
                 color: _diagnostics!.analyzedFrames == 0
@@ -1150,11 +1158,11 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
               ),
             ),
             if (_diagnostics!.analyzeErrors > 0)
-              Text(
+              AppText(
                 '分析錯誤 ${_diagnostics!.analyzeErrors}',
                 style: style.copyWith(color: Colors.redAccent),
               ),
-            Text(
+            AppText(
               '分數     ${_diagnostics!.frameMinScore.toStringAsFixed(2)}'
               '~${_diagnostics!.frameMaxScore.toStringAsFixed(2)}',
               style: style.copyWith(
@@ -1265,7 +1273,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                 ),
               ),
           ],
-          Text(
+          AppText(
             '語音     ${_ttsLanguage ?? "尚未就緒"}',
             style: style.copyWith(
               color: _speaker.isCantonese
@@ -1276,7 +1284,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
           // 两个阈值分开展示，因为它们管的事不同：
           // 上面那根滑条决定**画不画**，这一行是**说不说**的下限。
           // 不写出来，用户会以为「滑条拉低了怎么还不念」是坏了。
-          Text(
+          AppText(
             '播報門檻 ≥ ${_announcer.minSpeakScore.toStringAsFixed(2)}（低分只畫框）',
             style: style.copyWith(color: Colors.white70),
           ),
@@ -1294,13 +1302,13 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(
+          AppText(
             '幀 ${_frameSize.width.toInt()}x${_frameSize.height.toInt()}',
             style: style,
           ),
-          Text('旋轉 $_rotationDegrees°', style: style),
-          Text('scale ${fit.scale.toStringAsFixed(3)}', style: style),
-          Text(
+          AppText('旋轉 $_rotationDegrees°', style: style),
+          AppText('scale ${fit.scale.toStringAsFixed(3)}', style: style),
+          AppText(
             '留邊 ${fit.dx.toStringAsFixed(0)},${fit.dy.toStringAsFixed(0)}',
             style: style,
           ),
@@ -1363,7 +1371,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    const Text(
+                    const AppText(
                       '即時環境辨識',
                       style: TextStyle(
                         color: AppColors.text,
@@ -1372,7 +1380,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
+                    AppText(
                       _mode == SourceMode.camera ? '後置相機・裝置端 AI' : '模擬資料・介面測試',
                       style: const TextStyle(
                         color: AppColors.textMuted,
@@ -1406,7 +1414,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                       color: color,
                     ),
                     const SizedBox(width: 5),
-                    Text(
+                    AppText(
                       _sourceReady ? '辨識中' : (hasError ? '需要處理' : '準備中'),
                       style: TextStyle(
                         color: color,
@@ -1422,7 +1430,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
           if (!_sourceReady)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
+              child: AppText(
                 _status,
                 style: TextStyle(color: color, fontSize: 12),
                 softWrap: true,
@@ -1440,7 +1448,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('錯誤詳情已複製'),
+                      content: AppText('錯誤詳情已複製'),
                       duration: Duration(seconds: 2),
                     ),
                   );
@@ -1459,7 +1467,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                       Row(
                         children: <Widget>[
                           Expanded(
-                            child: Text(
+                            child: AppText(
                               '${_source?.displayName ?? "來源"}初始化失敗（長按複製）',
                               style: TextStyle(
                                 color: color,
@@ -1498,13 +1506,13 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const Text('辨識模型'),
+          const AppText('辨識模型'),
           const SizedBox(height: 8),
           SegmentedButton<bool>(
             key: const ValueKey('recognition-model'),
             segments: const <ButtonSegment<bool>>[
-              ButtonSegment(value: true, label: Text('十類試用')),
-              ButtonSegment(value: false, label: Text('原版九類')),
+              ButtonSegment(value: true, label: AppText('新版十類')),
+              ButtonSegment(value: false, label: AppText('原版九類')),
             ],
             selected: <bool>{_pilotModel},
             onSelectionChanged: (selection) {
@@ -1514,8 +1522,10 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
             },
           ),
           const SizedBox(height: 8),
-          Text(
-            _pilotModel ? '試用版新增門及圍欄，合併上落樓梯；這三類仍需改善。' : '原版保留上樓梯及落樓梯，可作辨識比較。',
+          AppText(
+            _pilotModel
+                ? '10月27日試用版：門辨識仍偏弱，圍欄未有獨立驗證；可切換原版比較。'
+                : '原版保留上樓梯及落樓梯，可作辨識比較。',
           ),
           const SizedBox(height: 16),
           Container(
@@ -1536,7 +1546,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(width: 8),
                     const Expanded(
-                      child: Text(
+                      child: AppText(
                         '辨識信心門檻',
                         style: TextStyle(
                           color: AppColors.text,
@@ -1554,7 +1564,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                         color: AppColors.primary.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text(
+                      child: AppText(
                         _threshold.toStringAsFixed(2),
                         style: const TextStyle(
                           color: AppColors.primary,
@@ -1569,7 +1579,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                   ],
                 ),
                 Semantics(
-                  label: '辨識信心門檻',
+                  label: context.tr('辨識信心門檻'),
                   value: _threshold.toStringAsFixed(2),
                   child: Slider(
                     key: const ValueKey<String>('detection-threshold'),
@@ -1593,7 +1603,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
+                AppText(
                   '語音播報門檻 · ${widget.settings.speakThreshold.toStringAsFixed(2)}',
                   style: const TextStyle(
                     color: AppColors.text,
@@ -1601,7 +1611,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                const AppText(
                   '較低會播報更多物件；較高會減少播報。物件亦須達到上方辨識門檻。',
                   style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                 ),
@@ -1632,12 +1642,12 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                   segments: <ButtonSegment<SourceMode>>[
                     ButtonSegment<SourceMode>(
                       value: SourceMode.camera,
-                      label: Text('相機'),
+                      label: AppText('相機'),
                       icon: Icon(Icons.photo_camera, size: 16),
                     ),
                     ButtonSegment<SourceMode>(
                       value: SourceMode.mock,
-                      label: Text('模擬資料'),
+                      label: AppText('模擬資料'),
                       icon: Icon(Icons.grid_on, size: 16),
                     ),
                   ],
@@ -1692,7 +1702,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
           if (_ttsError != null)
             Padding(
               padding: const EdgeInsets.only(top: 10),
-              child: Text(
+              child: AppText(
                 _ttsError!,
                 style: const TextStyle(color: AppColors.warning, fontSize: 12),
               ),
@@ -1702,7 +1712,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
               !_screenReader)
             Padding(
               padding: const EdgeInsets.only(top: 10),
-              child: Text(
+              child: AppText(
                 '目前使用 $_ttsLanguage，並非粵語',
                 style: const TextStyle(color: AppColors.warning, fontSize: 12),
               ),
@@ -1729,7 +1739,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                 Icons.developer_mode_rounded,
                 color: AppColors.textMuted,
               ),
-              title: const Text(
+              title: const AppText(
                 '技術資料',
                 style: TextStyle(
                   color: AppColors.text,
@@ -1737,7 +1747,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              subtitle: const Text(
+              subtitle: const AppText(
                 '答辯及問題診斷使用',
                 style: TextStyle(color: AppColors.textMuted, fontSize: 11),
               ),
@@ -1773,7 +1783,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     return Semantics(
       button: true,
       toggled: enabled,
-      label: label,
+      label: context.tr(label),
       child: Tooltip(
         message: tooltip,
         child: Material(
@@ -1803,7 +1813,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(width: 8),
                     Flexible(
-                      child: Text(
+                      child: AppText(
                         label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1836,7 +1846,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           for (final a in recent)
-            Text(
+            AppText(
               '${a.at.hour.toString().padLeft(2, '0')}:'
               '${a.at.minute.toString().padLeft(2, '0')}:'
               '${a.at.second.toString().padLeft(2, '0')}  '
@@ -1903,7 +1913,7 @@ class _LiveControlsSheetState extends State<_LiveControlsSheet> {
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
-                  child: Text(
+                  child: AppText(
                     '更多操作',
                     style: TextStyle(
                       color: AppColors.text,
@@ -1913,7 +1923,7 @@ class _LiveControlsSheetState extends State<_LiveControlsSheet> {
                   ),
                 ),
                 IconButton(
-                  tooltip: '關閉更多操作',
+                  tooltip: context.tr('關閉更多操作'),
                   constraints: const BoxConstraints(
                     minWidth: 56,
                     minHeight: 56,

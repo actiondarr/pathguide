@@ -1,9 +1,9 @@
 {
   "format": 1,
-  "version": "2026-10-23.hkdi10.pilot.1",
+  "version": "2026-10-27.mixed10.experimental.1",
   "file": "detector.tflite",
-  "bytes": 10695168,
-  "sha256": "e5f581cc805656d73c7393303db7dc8ff973deef9a74fd3d377aed5f4cb2c7df",
+  "bytes": 10695172,
+  "sha256": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0",
   "inputSize": 640,
   "modelClassCount": 10,
   "modelClassIds": [
@@ -18,8 +18,13 @@
     26,
     18
   ],
-  "trainedAt": "2026-10-23",
+  "trainedAt": "2026-10-26",
   "experimental": true,
-  "datasetProfile": "agent-reviewed pilot: 110 train / 29 val / 23 test",
-  "trainingScope": "head layers only; feature backbone and neck frozen"
+  "map50": 0.7825363278727946,
+  "validationGatePassed": false,
+  "userRequestedTrial": true,
+  "limitations": [
+    "Door precision 28.6%, recall 11.1% at conf0.30 on small foreign validation set.",
+    "No independent fence validation; not an HKDI field benchmark."
+  ]
 }

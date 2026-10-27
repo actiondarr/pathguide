@@ -369,7 +369,7 @@ void main() {
       51,
       24,
     ]);
-    await tester.tap(find.text('十類試用'));
+    await tester.tap(find.text('新版十類'));
     await tester.pump();
     await flushAsync(tester);
     expect(loadedModels.last['model'].toString(), endsWith('/detector.tflite'));
@@ -731,7 +731,14 @@ void main() {
       greaterThan(400),
     );
     expect(
-      tester.widget<Text>(find.byKey(const ValueKey('current-result'))).data,
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey('current-result')),
+              matching: find.byType(Text),
+            ),
+          )
+          .data,
       startsWith('模擬結果：辨識到：'),
     );
     await capture(tester, 'recognition');

@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+
 import 'package:flutter/material.dart';
 
 import 'usage_guide.dart';
@@ -27,10 +29,13 @@ class TaskHomePage extends StatelessWidget {
       children: <Widget>[
         Semantics(
           header: true,
-          child: Text('領路通', style: Theme.of(context).textTheme.headlineMedium),
+          child: AppText(
+            '領路通',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
         ),
         const SizedBox(height: 12),
-        const Text('先選擇任務。基本辨識毋須登入，也不會儲存或上傳相片。'),
+        const AppText('先選擇任務。基本辨識毋須登入，也不會儲存或上傳相片。'),
         const SizedBox(height: 24),
         _task('即時辨識', Icons.visibility_rounded, onExplore),
         _task('路線導航', Icons.navigation_outlined, onNavigation),
@@ -40,7 +45,7 @@ class TaskHomePage extends StatelessWidget {
         const SizedBox(height: 8),
         TextButton(
           onPressed: () => showUsageGuide(context),
-          child: const Text('閱讀首次使用教學'),
+          child: const AppText('閱讀首次使用教學'),
         ),
       ],
     ),
@@ -56,7 +61,7 @@ class TaskHomePage extends StatelessWidget {
       ),
       onPressed: onPressed,
       icon: ExcludeSemantics(child: Icon(icon)),
-      label: Text(title),
+      label: AppText(title),
     ),
   );
 }

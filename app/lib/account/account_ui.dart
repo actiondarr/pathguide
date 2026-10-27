@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -27,7 +29,7 @@ class AccountEntry extends StatelessWidget {
       children: [
         if (contact != null && !account.deletionPending) ...[
           Semantics(
-            label: '聯絡 ${contact.name}，電話 ${contact.phone}，開啟系統撥號',
+            label: context.tr('聯絡 ${contact.name}，電話 ${contact.phone}，開啟系統撥號'),
             button: true,
             enabled: account.canCallContact,
             excludeSemantics: true,
@@ -36,18 +38,18 @@ class AccountEntry extends StatelessWidget {
               key: const ValueKey('call-emergency-contact'),
               onPressed: account.canCallContact ? account.callContact : null,
               icon: const Icon(Icons.phone_outlined),
-              label: Text('聯絡 ${contact.name}'),
+              label: AppText('聯絡 ${contact.name}'),
             ),
           ),
           const SizedBox(height: 8),
           if (account.message?.contains('撥號') ?? false)
-            Semantics(liveRegion: true, child: Text(account.message!)),
+            Semantics(liveRegion: true, child: AppText(account.message!)),
         ],
         OutlinedButton.icon(
           key: const ValueKey('manage-account'),
           onPressed: onManage,
           icon: const Icon(Icons.person_outline),
-          label: Text(
+          label: AppText(
             account.identity == null ? 'Google 登入與緊急聯絡人' : '帳號與緊急聯絡人',
           ),
         ),
@@ -74,16 +76,16 @@ class _AccountPageState extends State<AccountPage> {
         context: context,
         builder: (context) => AlertDialog(
           scrollable: true,
-          title: Text(title),
-          content: Text(message),
+          title: AppText(title),
+          content: AppText(message),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
+              child: const AppText('取消'),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('確認刪除'),
+              child: const AppText('確認刪除'),
             ),
           ],
         ),
@@ -96,9 +98,9 @@ class _AccountPageState extends State<AccountPage> {
     final contact = account.contact;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('帳號與緊急聯絡人'),
+        title: const AppText('帳號與緊急聯絡人'),
         leading: IconButton(
-          tooltip: '返回原任務',
+          tooltip: context.tr('返回原任務'),
           constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back),
@@ -114,27 +116,27 @@ class _AccountPageState extends State<AccountPage> {
               padding: const EdgeInsets.only(bottom: 16),
               child: Semantics(
                 liveRegion: true,
-                child: Text(
+                child: AppText(
                   account.message!,
                   key: const ValueKey('account-message'),
                 ),
               ),
             ),
           if (!account.configured) ...[
-            Text(account.auth.configurationMessage),
+            AppText(account.auth.configurationMessage),
             const SizedBox(height: 16),
           ],
           if (user == null ||
               (!account.profileReady && !account.deletionPending)) ...[
-            const Text('基本辨識毋須登入。Google 帳號用於保存你的設定與緊急聯絡人，以及日後的私人資料歸屬。'),
+            const AppText('基本辨識毋須登入。Google 帳號用於保存你的設定與緊急聯絡人，以及日後的私人資料歸屬。'),
             const SizedBox(height: 12),
-            const Text(
+            const AppText(
               '登入會使用 Google／Firebase 處理帳號識別資料。緊急聯絡人另存於私人資料，不加入模型訓練。照片收集須另外配置及同意，亦不會因登入而啟用。',
             ),
             CheckboxListTile(
               key: const ValueKey('account-terms'),
               contentPadding: EdgeInsets.zero,
-              title: const Text('我已閱讀並同意上述帳號用途說明'),
+              title: const AppText('我已閱讀並同意上述帳號用途說明'),
               value: _terms,
               onChanged: account.busy
                   ? null
@@ -146,39 +148,39 @@ class _AccountPageState extends State<AccountPage> {
                 onPressed: account.busy || !account.configured
                     ? null
                     : () => account.signIn(acceptTerms: _terms),
-                child: const Text('使用 Google 登入'),
+                child: const AppText('使用 Google 登入'),
               )
             else
               FilledButton(
                 onPressed: account.busy
                     ? null
                     : () => account.retryProfile(acceptTerms: _terms),
-                child: const Text('重試／完成帳號設定'),
+                child: const AppText('重試／完成帳號設定'),
               ),
           ],
           if (user != null) ...[
             const SizedBox(height: 16),
             Semantics(
               header: true,
-              child: Text(
+              child: AppText(
                 user.name ?? 'Google 帳號',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            if (user.email != null) Text(user.email!),
+            if (user.email != null) AppText(user.email!),
             if (account.deletionPending)
-              const Text('帳號刪除待完成，聯絡資料及新寫入已停用。請重試刪除。'),
+              const AppText('帳號刪除待完成，聯絡資料及新寫入已停用。請重試刪除。'),
             if (account.profileReady && !account.deletionPending) ...[
               const SizedBox(height: 24),
               Semantics(
                 header: true,
-                child: Text(
+                child: AppText(
                   '緊急聯絡人（選填）',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
+              AppText(
                 contact == null
                     ? '尚未設定，可以稍後再填。'
                     : '${contact.name}\n${contact.phone}${contact.relationship.isEmpty ? '' : '\n${contact.relationship}'}',
@@ -187,20 +189,22 @@ class _AccountPageState extends State<AccountPage> {
               FilledButton(
                 key: const ValueKey('edit-contact'),
                 onPressed: account.busy ? null : () => _edit(account),
-                child: Text(contact == null ? '新增緊急聯絡人' : '修改緊急聯絡人'),
+                child: AppText(contact == null ? '新增緊急聯絡人' : '修改緊急聯絡人'),
               ),
               if (contact != null) ...[
                 const SizedBox(height: 8),
                 Semantics(
                   button: true,
                   excludeSemantics: true,
-                  label: '聯絡 ${contact.name}，電話 ${contact.phone}，開啟系統撥號',
+                  label: context.tr(
+                    '聯絡 ${contact.name}，電話 ${contact.phone}，開啟系統撥號',
+                  ),
                   onTap: account.canCallContact ? account.callContact : null,
                   child: OutlinedButton(
                     onPressed: account.canCallContact
                         ? account.callContact
                         : null,
-                    child: Text('聯絡 ${contact.name}'),
+                    child: AppText('聯絡 ${contact.name}'),
                   ),
                 ),
                 TextButton(
@@ -215,7 +219,7 @@ class _AccountPageState extends State<AccountPage> {
                             await account.removeContact();
                           }
                         },
-                  child: const Text('刪除緊急聯絡人'),
+                  child: const AppText('刪除緊急聯絡人'),
                 ),
               ],
               if (account.offerContactSetup)
@@ -225,18 +229,18 @@ class _AccountPageState extends State<AccountPage> {
                     account.skipContactSetup();
                     widget.onBack();
                   },
-                  child: const Text('稍後設定，返回原任務'),
+                  child: const AppText('稍後設定，返回原任務'),
                 ),
               const SizedBox(height: 16),
-              const Text('聯絡按鈕只開啟系統撥號，不會自動發送短訊或位置，亦不代表對方已接聽。'),
+              const AppText('聯絡按鈕只開啟系統撥號，不會自動發送短訊或位置，亦不代表對方已接聽。'),
               const SizedBox(height: 16),
               const PhotoEntry(),
-              const Text('目前使用內置模型；照片須另行同意及配置雲端服務。私人訓練及個人模型下載尚未接入。'),
+              const AppText('目前使用內置模型；照片須另行同意及配置雲端服務。私人訓練及個人模型下載尚未接入。'),
             ],
             const SizedBox(height: 24),
             OutlinedButton(
               onPressed: account.busy ? null : account.signOut,
-              child: const Text('登出'),
+              child: const AppText('登出'),
             ),
             TextButton(
               key: const ValueKey('delete-account'),
@@ -251,13 +255,13 @@ class _AccountPageState extends State<AccountPage> {
                         await account.deleteAccount();
                       }
                     },
-              child: Text(account.deletionPending ? '重試刪除帳號' : '刪除帳號'),
+              child: AppText(account.deletionPending ? '重試刪除帳號' : '刪除帳號'),
             ),
           ],
           const SizedBox(height: 16),
           TextButton(
             onPressed: widget.onBack,
-            child: const Text('返回原任務，使用基本辨識'),
+            child: const AppText('返回原任務，使用基本辨識'),
           ),
         ],
       ),
@@ -294,9 +298,9 @@ class _ContactEditorState extends State<ContactEditor> {
   Widget _field(String label, TextField field) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      ExcludeSemantics(child: Text(label)),
+      ExcludeSemantics(child: AppText(label)),
       const SizedBox(height: 8),
-      Semantics(label: label, child: field),
+      Semantics(label: context.tr(label), child: field),
       const SizedBox(height: 16),
     ],
   );
@@ -308,19 +312,19 @@ class _ContactEditorState extends State<ContactEditor> {
       final current = widget.account.identity?.uid == _owner && _owner != null;
       if (!current) {
         return Scaffold(
-          appBar: AppBar(title: const Text('帳號已變更')),
+          appBar: AppBar(title: const AppText('帳號已變更')),
           body: const Padding(
             padding: EdgeInsets.all(20),
-            child: Text('請返回原任務，再使用目前帳號設定聯絡人。'),
+            child: AppText('請返回原任務，再使用目前帳號設定聯絡人。'),
           ),
         );
       }
       return Scaffold(
-        appBar: AppBar(title: const Text('設定緊急聯絡人')),
+        appBar: AppBar(title: const AppText('設定緊急聯絡人')),
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text('只需一位聯絡人。請先取得對方同意；資料只供你的聯絡功能使用，不加入訓練資料。'),
+            const AppText('只需一位聯絡人。請先取得對方同意；資料只供你的聯絡功能使用，不加入訓練資料。'),
             const SizedBox(height: 16),
             _field(
               '聯絡人稱呼（必填）',
@@ -330,7 +334,7 @@ class _ContactEditorState extends State<ContactEditor> {
                 maxLength: 60,
                 enabled: !widget.account.busy,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
+                decoration: InputDecoration(border: OutlineInputBorder()),
               ),
             ),
             _field(
@@ -341,7 +345,7 @@ class _ContactEditorState extends State<ContactEditor> {
                 enabled: !widget.account.busy,
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   border: OutlineInputBorder(),
                   helperText: '香港八位數，或附國際區號，例如 +852',
                   helperMaxLines: 3,
@@ -355,7 +359,7 @@ class _ContactEditorState extends State<ContactEditor> {
                 controller: _relationship,
                 maxLength: 30,
                 enabled: !widget.account.busy,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
+                decoration: InputDecoration(border: OutlineInputBorder()),
               ),
             ),
             if (_error != null ||
@@ -363,7 +367,7 @@ class _ContactEditorState extends State<ContactEditor> {
                     widget.account.message != _initialMessage))
               Semantics(
                 liveRegion: true,
-                child: Text(_error ?? widget.account.message!),
+                child: AppText(_error ?? widget.account.message!),
               ),
             const SizedBox(height: 16),
             FilledButton(
@@ -387,11 +391,11 @@ class _ContactEditorState extends State<ContactEditor> {
                         setState(() => _error = error.message);
                       }
                     },
-              child: const Text('儲存聯絡人'),
+              child: const AppText('儲存聯絡人'),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('取消，不儲存'),
+              child: const AppText('取消，不儲存'),
             ),
           ],
         ),

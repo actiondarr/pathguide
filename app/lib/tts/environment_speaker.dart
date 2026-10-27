@@ -7,15 +7,19 @@ class EnvironmentSpeaker implements Speaker {
     required this.tts,
     required this.screenReaderActive,
     required this.announce,
+    this.translate,
   });
 
   final Speaker tts;
   final bool Function() screenReaderActive;
   final Future<void> Function(String) announce;
+  final String Function(String)? translate;
 
   @override
-  Future<void> speak(String text) =>
-      screenReaderActive() ? announce(text) : tts.speak(text);
+  Future<void> speak(String text) {
+    text = translate?.call(text) ?? text;
+    return screenReaderActive() ? announce(text) : tts.speak(text);
+  }
 
   @override
   Future<void> stop() => tts.stop();

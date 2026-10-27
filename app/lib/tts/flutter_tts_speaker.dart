@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 import 'announcer.dart';
+import '../settings/app_settings.dart';
 
 /// 基于 `flutter_tts` 的粤语扬声器。
 ///
@@ -19,9 +20,14 @@ import 'announcer.dart';
 /// **一定要让 [resolvedLanguage] 暴露出来**：若最终落到 `zh-CN`，
 /// 播报会是普通话，这必须在演示界面上写清楚，不能让人以为在念粤语。
 class FlutterTtsSpeaker implements Speaker {
-  FlutterTtsSpeaker({FlutterTts? tts, double speechRate = defaultSpeechRate})
-    : _tts = tts ?? FlutterTts(),
-      _speechRate = speechRate.clamp(0.0, 1.0).toDouble();
+  FlutterTtsSpeaker({
+    FlutterTts? tts,
+    double speechRate = defaultSpeechRate,
+    AppLanguage language = AppLanguage.chinese,
+  }) : _tts = tts ?? FlutterTts(),
+       // ignore: prefer_initializing_formals
+       _language = language,
+       _speechRate = speechRate.clamp(0.0, 1.0).toDouble();
 
   static const double defaultSpeechRate = 0.45;
 
@@ -35,6 +41,15 @@ class FlutterTtsSpeaker implements Speaker {
   final FlutterTts _tts;
   double _speechRate;
   bool _ready = false;
+  AppLanguage _language;
+  Future<void> setAppLanguage(AppLanguage value) async {
+    if (_language == value) return;
+    _language = value;
+    await stop();
+    _resolved = null;
+    _ready = false;
+  }
+
   String? _resolved;
   Completer<void>? _pendingSpeech;
 
@@ -109,7 +124,9 @@ class FlutterTtsSpeaker implements Speaker {
       // 拿不到语言列表时仍尝试直接设置，某些 ROM 不实现该查询。
     }
 
-    final ordered = defaultTargetPlatform == TargetPlatform.iOS
+    final ordered = _language == AppLanguage.english
+        ? const <String>['en-HK', 'en-GB', 'en-US']
+        : defaultTargetPlatform == TargetPlatform.iOS
         ? const <String>['zh-HK', 'yue-HK', 'zh-TW', 'zh-CN']
         : candidates;
     for (final c in ordered) {

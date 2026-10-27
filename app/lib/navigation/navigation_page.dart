@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -8,6 +10,14 @@ import '../menu/menu_reader.dart';
 import '../settings/app_settings.dart';
 import '../tts/announcer.dart';
 import '../tts/flutter_tts_speaker.dart';
+import '../tts/speech_coordinator.dart';
+import '../vision/recognition_session.dart';
+import '../vision/vision_source.dart';
+import '../vision/platform_vision.dart';
+import '../vision/vision_preview.dart';
+import '../vision/result_summary.dart';
+import '../overlay/box_painter.dart';
+import '../vision/detection.dart';
 import 'destination_store.dart';
 import 'navigation_controller.dart';
 import 'navigation_models.dart';
@@ -23,6 +33,8 @@ class NavigationPage extends StatefulWidget {
     this.speaker,
     this.mapBuilder,
     this.onTaskChanged,
+    this.visionFactory,
+    this.speechSuspended = false,
   });
   final AppSettings settings;
   final NavigationController? controller;
@@ -30,6 +42,8 @@ class NavigationPage extends StatefulWidget {
   final Speaker? speaker;
   final Widget Function(WalkingRoute?, Place?)? mapBuilder;
   final ValueChanged<bool>? onTaskChanged;
+  final VisionSource Function()? visionFactory;
+  final bool speechSuspended;
   @override
   State<NavigationPage> createState() => _NavigationPageState();
 }
@@ -52,31 +66,74 @@ class _NavigationPageState extends State<NavigationPage>
       FlutterTtsSpeaker(speechRate: widget.settings.speechSpeed.rate);
   final _query = TextEditingController();
   int _outputGeneration = 0, _voiceGeneration = 0, _lastAnnouncement = 0;
+  int _backendGeneration = 0;
   bool _foreground = true, _listening = false;
   bool _confirmingEnd = false;
+  bool _recognize = false;
+  late final SpeechCoordinator _voiceOutput;
+  late final RecognitionSession _recognition;
   String? _speechStatus, _pending;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _voiceOutput = SpeechCoordinator(_NavigationOutput(this));
+    _recognition = RecognitionSession(
+      createSource: widget.visionFactory ?? () => PlatformVision(),
+      announcer: Announcer(
+        speaker: _voiceOutput.channel(SpeechChannel.environment),
+        minSpeakScore: widget.settings.speakThreshold,
+      ),
+    )..addListener(_visionChanged);
     _nav.addListener(_changed);
     unawaited(_nav.initialize());
+  }
+
+  void _visionChanged() {
+    if (!mounted) return;
+    if (!_recognition.ready || _recognition.frame == null) {
+      unawaited(_voiceOutput.stop(SpeechChannel.environment));
+    }
+    setState(() {});
+  }
+
+  bool get _blocked =>
+      !_foreground || _listening || _confirmingEnd || widget.speechSuspended;
+  void _syncRecognition() {
+    unawaited(_voiceOutput.suspend(_blocked));
+    final running =
+        _recognize &&
+        !_blocked &&
+        (_nav.state == NavigationState.navigating ||
+            _nav.state == NavigationState.nearby);
+    if (!running) unawaited(_voiceOutput.stop(SpeechChannel.environment));
+    unawaited(_recognition.setRunning(running));
+  }
+
+  @override
+  void didUpdateWidget(covariant NavigationPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.speechSuspended != widget.speechSuspended) {
+      ++_outputGeneration;
+      _syncRecognition();
+    }
   }
 
   void _changed() {
     if (!mounted) return;
     widget.onTaskChanged?.call(_nav.hasTask);
+    _syncRecognition();
     if (_lastAnnouncement != _nav.announcementId) {
       _lastAnnouncement = _nav.announcementId;
       final text = _nav.announcement;
-      if (text != null && !_listening && !_confirmingEnd) unawaited(_say(text));
+      if (text != null && !_blocked) unawaited(_say(text));
     }
     setState(() {});
   }
 
   Future<void> _stop() async {
     ++_outputGeneration;
-    await _speaker.stop();
+    await _voiceOutput.stop();
   }
 
   Future<void> _say(String text) async {
@@ -88,6 +145,13 @@ class _NavigationPageState extends State<NavigationPage>
       _pending = text;
       return;
     }
+    await _voiceOutput.channel(SpeechChannel.navigation).speak(text);
+  }
+
+  Future<void> _outputSpeak(String text) async {
+    if (!mounted || _blocked) return;
+    final generation = _backendGeneration;
+    text = context.tr(text);
     try {
       if (MediaQuery.accessibleNavigationOf(context)) {
         await SemanticsService.sendAnnouncement(
@@ -99,12 +163,14 @@ class _NavigationPageState extends State<NavigationPage>
         final tts = _speaker;
         if (tts is FlutterTtsSpeaker) {
           await tts.setSpeechRate(widget.settings.speechSpeed.rate);
+          await tts.setAppLanguage(widget.settings.language);
           await tts.initialize();
-          if (!mounted || generation != _outputGeneration || !_foreground) {
+          if (!mounted || generation != _backendGeneration || _blocked) {
             return;
           }
           if (tts.resolvedLanguage == null) throw StateError('tts unavailable');
-          if (!tts.isCantonese) {
+          if (widget.settings.language == AppLanguage.chinese &&
+              !tts.isCantonese) {
             setState(() => _speechStatus = '此裝置未提供粵語，正使用其他中文語音。');
           }
         }
@@ -118,6 +184,7 @@ class _NavigationPageState extends State<NavigationPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    _syncRecognition();
     if (state == AppLifecycleState.resumed) {
       _nav.foreground();
       final text = _pending;
@@ -145,6 +212,7 @@ class _NavigationPageState extends State<NavigationPage>
       _listening = true;
       _speechStatus = '正在準備咪高峰，震動後請講出目的地。';
     });
+    _syncRecognition();
     try {
       final result = await _speech.listen(
         allowNetwork: allowNetwork,
@@ -167,6 +235,7 @@ class _NavigationPageState extends State<NavigationPage>
       );
       if (!mounted || generation != _voiceGeneration) return;
       setState(() => _listening = false);
+      _syncRecognition();
       if (result.outcome == MenuSpeechOutcome.cancelled) return;
       if (result.text.trim().isEmpty) {
         await _say('未聽清楚，請重試或輸入目的地。');
@@ -180,28 +249,33 @@ class _NavigationPageState extends State<NavigationPage>
         _listening = false;
         _speechStatus = e.message;
       });
+      // Keep recognition silent while the online-speech consent is shown.
       if (e.code == 'offline_speech_unavailable') {
         final agreed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('使用線上語音辨識？'),
-            content: const Text('此裝置未提供可確認的離線粵語收音。系統語音服務可能經網絡處理你的聲音；也可以用文字搜尋。'),
+            title: const AppText('使用線上語音辨識？'),
+            content: const AppText(
+              '此裝置未提供可確認的離線粵語收音。系統語音服務可能經網絡處理你的聲音；也可以用文字搜尋。',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('使用文字'),
+                child: const AppText('使用文字'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('同意這次使用'),
+                child: const AppText('同意這次使用'),
               ),
             ],
           ),
         );
+        _syncRecognition();
         if (agreed == true && mounted && generation == _voiceGeneration) {
           await _voice(allowNetwork: true);
         }
       } else {
+        _syncRecognition();
         await _say(e.message);
       }
     } catch (_) {
@@ -210,6 +284,7 @@ class _NavigationPageState extends State<NavigationPage>
           _listening = false;
           _speechStatus = '未能收音，請用文字搜尋。';
         });
+        _syncRecognition();
       }
     }
   }
@@ -219,21 +294,21 @@ class _NavigationPageState extends State<NavigationPage>
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('收藏名稱'),
+        title: const AppText('收藏名稱'),
         content: TextFormField(
           initialValue: initial,
           onChanged: (value) => name = value,
           maxLength: 80,
-          decoration: const InputDecoration(labelText: '請輸入收藏名稱'),
+          decoration: InputDecoration(labelText: context.tr('請輸入收藏名稱')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: const AppText('取消'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, name),
-            child: const Text('儲存'),
+            child: const AppText('儲存'),
           ),
         ],
       ),
@@ -244,26 +319,29 @@ class _NavigationPageState extends State<NavigationPage>
   Future<void> _end() async {
     if (_confirmingEnd) return;
     _confirmingEnd = true;
-    await _stop();
+    _syncRecognition();
+    // Mute immediately; a slow native stop must not delay the confirmation.
+    unawaited(_stop());
     if (!mounted) return;
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('結束導航？'),
+        title: const AppText('結束導航？'),
         actions: [
           TextButton(
             autofocus: true,
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('繼續導航'),
+            child: const AppText('繼續導航'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('確認結束'),
+            child: const AppText('確認結束'),
           ),
         ],
       ),
     );
     _confirmingEnd = false;
+    _syncRecognition();
     if (!mounted) return;
     if (yes == true) {
       await _stop();
@@ -278,24 +356,24 @@ class _NavigationPageState extends State<NavigationPage>
   Future<void> _privacy() => showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('導航服務說明'),
+      title: const AppText('導航服務說明'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
+            const AppText(
               '搜尋及路線查詢會把查詢字詞、起點和目的地傳送至 Apple 或 Google。Android 路線會經本專案的代理服務；不保存行走軌跡。收藏只保存在此手機。步行路線的樓梯、升降機及入口未經實地核實。',
             ),
             TextButton(
               onPressed: () => launchUrl(
                 Uri.parse('https://maps.google.com/help/terms_maps/'),
               ),
-              child: const Text('Google Maps 使用條款'),
+              child: const AppText('Google Maps 使用條款'),
             ),
             TextButton(
               onPressed: () =>
                   launchUrl(Uri.parse('https://policies.google.com/privacy')),
-              child: const Text('Google 私隱政策'),
+              child: const AppText('Google 私隱政策'),
             ),
             if (const String.fromEnvironment('NAVIGATION_PRIVACY_URL')
                 .isNotEmpty)
@@ -305,7 +383,7 @@ class _NavigationPageState extends State<NavigationPage>
                     const String.fromEnvironment('NAVIGATION_PRIVACY_URL'),
                   ),
                 ),
-                child: const Text('領路通導航私隱政策'),
+                child: const AppText('領路通導航私隱政策'),
               ),
             if (const String.fromEnvironment('NAVIGATION_TERMS_URL').isNotEmpty)
               TextButton(
@@ -314,7 +392,7 @@ class _NavigationPageState extends State<NavigationPage>
                     const String.fromEnvironment('NAVIGATION_TERMS_URL'),
                   ),
                 ),
-                child: const Text('領路通導航使用條款'),
+                child: const AppText('領路通導航使用條款'),
               ),
           ],
         ),
@@ -322,7 +400,7 @@ class _NavigationPageState extends State<NavigationPage>
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('關閉'),
+          child: const AppText('關閉'),
         ),
       ],
     ),
@@ -333,6 +411,8 @@ class _NavigationPageState extends State<NavigationPage>
     ++_voiceGeneration;
     _pending = null;
     _nav.removeListener(_changed);
+    _recognition.removeListener(_visionChanged);
+    _recognition.dispose();
     _nav.dispose();
     unawaited(_stop());
     unawaited(_speech.cancel());
@@ -350,18 +430,18 @@ class _NavigationPageState extends State<NavigationPage>
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(56),
                 ),
-                child: Text(text),
+                child: AppText(text),
               )
             : OutlinedButton(
                 onPressed: action,
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(56),
                 ),
-                child: Text(text),
+                child: AppText(text),
               ),
       );
   Widget _saved(SavedDestination saved, {required bool favorite}) => ListTile(
-    title: Text(saved.label),
+    title: AppText(saved.label),
     onTap: _nav.busy || _listening
         ? null
         : () {
@@ -370,7 +450,7 @@ class _NavigationPageState extends State<NavigationPage>
           },
     trailing: favorite
         ? PopupMenuButton<String>(
-            tooltip: '管理 ${saved.label}',
+            tooltip: context.tr('管理 ${saved.label}'),
             onSelected: (action) async {
               if (action == 'delete') {
                 await _nav.removeFavorite(saved);
@@ -380,8 +460,8 @@ class _NavigationPageState extends State<NavigationPage>
               }
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'rename', child: Text('改名')),
-              PopupMenuItem(value: 'delete', child: Text('刪除')),
+              PopupMenuItem(value: 'rename', child: AppText('改名')),
+              PopupMenuItem(value: 'delete', child: AppText('刪除')),
             ],
           )
         : null,
@@ -429,17 +509,17 @@ class _NavigationPageState extends State<NavigationPage>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
+              AppText(
                 instruction,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               if (guiding)
-                Text(
+                AppText(
                   '下一步約 ${nav.progress!.nextDistance.round()} 米，剩餘約 ${nav.progress!.remaining.round()} 米。',
                 ),
-              Text(
+              AppText(
                 nav.locationStatus,
                 key: const ValueKey('navigation-location-status'),
               ),
@@ -502,25 +582,74 @@ class _NavigationPageState extends State<NavigationPage>
               children: [
                 Semantics(
                   header: true,
-                  child: Text(
+                  child: AppText(
                     '路線導航',
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                 ),
-                const Text('香港戶外步行輔助；樓梯、升降機及入口未經核實。'),
+                const AppText('香港戶外步行輔助；樓梯、升降機及入口未經核實。'),
                 if (nav.searchService.provider == MapProvider.google)
-                  const Text('Google Maps 步行路線仍屬測試功能，可能缺少行人路或步行通道資料。'),
-                TextButton(onPressed: _privacy, child: const Text('導航服務及私隱說明')),
-                Text(nav.message),
-                if (_speechStatus != null) Text(_speechStatus!),
+                  const AppText('Google Maps 步行路線仍屬測試功能，可能缺少行人路或步行通道資料。'),
+                TextButton(
+                  onPressed: _privacy,
+                  child: const AppText('導航服務及私隱說明'),
+                ),
+                AppText(nav.message),
+                if (_speechStatus != null) AppText(_speechStatus!),
                 if (nav.busy) const LinearProgressIndicator(),
+                if (hasTask) ...[
+                  SwitchListTile(
+                    title: const AppText('導航時辨識'),
+                    subtitle: const AppText('導航提示優先；辨識結果不排隊。'),
+                    value: _recognize,
+                    onChanged: (value) {
+                      setState(() => _recognize = value);
+                      _syncRecognition();
+                    },
+                  ),
+                  if (_recognize) ...[
+                    AppText(_recognition.status),
+                    const AppText('辨識只提供物件名稱；未量度距離，不提供避障指令。'),
+                    if (_recognition.ready)
+                      SizedBox(
+                        height: 220,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) => Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              const VisionPreview(),
+                              CustomPaint(
+                                painter: DetectionBoxPainter(
+                                  mapped: mapDetectionsToScreen(
+                                    detections:
+                                        _recognition.frame?.detections ?? [],
+                                    fit: DisplayFit.contain(
+                                      frame: _recognition.source!.frameSize,
+                                      view: constraints.biggest,
+                                    ),
+                                  ),
+                                  showLabels: false,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    AppText(
+                      resultSummary(
+                        _recognition.frame?.detections ?? [],
+                        minScore: widget.settings.speakThreshold,
+                      ),
+                    ),
+                  ],
+                ],
                 if (!hasTask) ...[
                   TextField(
                     controller: _query,
                     enabled: !_listening && !nav.busy,
-                    decoration: const InputDecoration(
-                      labelText: '搜尋目的地',
-                      hintText: '輸入香港地點或地址',
+                    decoration: InputDecoration(
+                      labelText: context.tr('搜尋目的地'),
+                      hintText: context.tr('輸入香港地點或地址'),
                     ),
                     textInputAction: TextInputAction.search,
                     onSubmitted: _search,
@@ -542,11 +671,12 @@ class _NavigationPageState extends State<NavigationPage>
                             ++_voiceGeneration;
                             await _speech.cancel();
                             if (mounted) setState(() => _listening = false);
+                            _syncRecognition();
                           }
                         : _voice,
                   ),
                   if (nav.searchService.provider == MapProvider.google)
-                    const Text('搜尋資料：Google Maps'),
+                    const AppText('搜尋資料：Google Maps'),
                   for (final result in nav.results)
                     ListTile(
                       title: Text(result.name),
@@ -562,20 +692,20 @@ class _NavigationPageState extends State<NavigationPage>
                 if (place != null) ...[
                   Semantics(
                     header: true,
-                    child: Text(
+                    child: AppText(
                       place.name,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
                   Text(place.address),
                   if (route != null) ...[
-                    Text(
+                    AppText(
                       '全程約 ${route.distance.round()} 米，出發預估約 ${(route.duration / 60).ceil()} 分鐘。',
                     ),
                     (widget.mapBuilder ?? _platform.map)(route, place),
                     for (final notice in route.notices) Text(notice),
                     if (nav.progress != null && hasTask) ...[
-                      Text(
+                      AppText(
                         nav.state == NavigationState.navigating
                             ? nav.progress!.instruction
                             : nav.message,
@@ -622,33 +752,33 @@ class _NavigationPageState extends State<NavigationPage>
                   if (!hasTask) _button('修改目的地', () => nav.end()),
                 ],
                 if (!hasTask) ...[
-                  Semantics(header: true, child: const Text('此手機收藏')),
+                  Semantics(header: true, child: const AppText('此手機收藏')),
                   for (final p in nav.favorites) _saved(p, favorite: true),
-                  Semantics(header: true, child: const Text('最近使用')),
+                  Semantics(header: true, child: const AppText('最近使用')),
                   for (final p in nav.recent) _saved(p, favorite: false),
                   TextButton(
                     onPressed: () async {
                       final yes = await showDialog<bool>(
                         context: context,
                         builder: (context) => AlertDialog(
-                          title: const Text('清除收藏及最近使用？'),
+                          title: const AppText('清除收藏及最近使用？'),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context, false),
-                              child: const Text('取消'),
+                              child: const AppText('取消'),
                             ),
                             TextButton(
                               onPressed: () => Navigator.pop(context, true),
-                              child: const Text('確認清除'),
+                              child: const AppText('確認清除'),
                             ),
                           ],
                         ),
                       );
                       if (yes == true) await nav.clearSaved();
                     },
-                    child: const Text('清除此手機地點'),
+                    child: const AppText('清除此手機地點'),
                   ),
-                  const Text('錄製路線（開發中）'),
+                  const AppText('錄製路線（開發中）'),
                 ],
               ],
             ),
@@ -658,4 +788,19 @@ class _NavigationPageState extends State<NavigationPage>
       ),
     );
   }
+}
+
+class _NavigationOutput implements Speaker {
+  _NavigationOutput(this.page);
+  final _NavigationPageState page;
+  @override
+  Future<void> speak(String text) => page._outputSpeak(text);
+  @override
+  Future<void> stop() {
+    ++page._backendGeneration;
+    return page._speaker.stop();
+  }
+
+  @override
+  Future<List<String>> languages() => page._speaker.languages();
 }

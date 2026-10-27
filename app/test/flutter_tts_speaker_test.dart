@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pathguide/tts/flutter_tts_speaker.dart';
+import 'package:pathguide/settings/app_settings.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 // flutter_tts 的音訊設定用 dart:io 判斷宿主；Windows 測試只記錄 API 邊界。
@@ -147,6 +148,20 @@ void main() {
       expect(speaker.isCantonese, isFalse);
       await speaker.speak('垃圾桶');
       expect(calls.where((c) => c.method == 'speak'), isEmpty);
+    },
+  );
+
+  test(
+    'English selection and switching back choose an accepted voice',
+    () async {
+      available = ['en-GB', 'zh-HK'];
+      final speaker = FlutterTtsSpeaker(language: AppLanguage.english);
+      expect(await speaker.initialize(), 'en-GB');
+      await speaker.speak('stairs');
+      expect(calls.where((c) => c.method == 'speak').last.arguments, 'stairs');
+      await speaker.setAppLanguage(AppLanguage.chinese);
+      expect(await speaker.initialize(), 'zh-HK');
+      expect(speaker.isCantonese, isTrue);
     },
   );
 

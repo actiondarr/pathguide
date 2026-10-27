@@ -38,12 +38,14 @@ class DetectionBoxPainter extends CustomPainter {
     required this.showLabels,
     this.fontFamily,
     this.textScaler = TextScaler.noScaling,
+    this.englishLabels = false,
   });
 
   final List<({Detection detection, Rect rect})> mapped;
   final bool showLabels;
   final String? fontFamily;
   final TextScaler textScaler;
+  final bool englishLabels;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -91,7 +93,7 @@ class DetectionBoxPainter extends CustomPainter {
   void _label(Canvas canvas, Size size, Rect rect, Label? label, double score) {
     final text = label == null
         ? 'id? ${score.toStringAsFixed(2)}'
-        : '${label.nameZh} ${score.toStringAsFixed(2)}';
+        : '${englishLabels ? label.nameEn.replaceAll('_', ' ') : label.nameZh} ${score.toStringAsFixed(2)}';
     final tp = TextPainter(
       text: TextSpan(
         text: text,
@@ -138,6 +140,7 @@ class DetectionBoxPainter extends CustomPainter {
   bool shouldRepaint(covariant DetectionBoxPainter old) =>
       old.mapped != mapped ||
       old.showLabels != showLabels ||
+      old.englishLabels != englishLabels ||
       old.fontFamily != fontFamily ||
       old.textScaler != textScaler;
 }

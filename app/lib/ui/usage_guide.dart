@@ -1,11 +1,13 @@
+import '../l10n/app_language.dart';
+
 import 'package:flutter/material.dart';
 
 Future<void> showUsageGuide(BuildContext context) => showDialog<void>(
   context: context,
   builder: (context) => AlertDialog(
     scrollable: true,
-    title: const Text('使用教學'),
-    content: const Text(
+    title: const AppText('使用教學'),
+    content: const AppText(
       '在首頁選擇「即時辨識」便會啟動相機及自動播報；首次使用需要允許相機權限。\n\n'
       '把手機後置相機朝向要辨識的環境，保持穩定；避免手指遮住鏡頭。\n\n'
       '「更多操作」內可重播目前結果、開關播報及調整辨識設定；「暫停辨識」會停止相機及播報。'
@@ -27,7 +29,7 @@ Future<void> showUsageGuide(BuildContext context) => showDialog<void>(
       TextButton(
         style: TextButton.styleFrom(minimumSize: const Size(56, 56)),
         onPressed: () => Navigator.of(context).pop(),
-        child: const Text('關閉教學'),
+        child: const AppText('關閉教學'),
       ),
     ],
   ),

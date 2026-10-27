@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -84,6 +86,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
   }
 
   Future<void> _say(String text) async {
+    text = context.tr(text);
     final stopping = _stop();
     final generation = _speechGeneration;
     await stopping;
@@ -104,12 +107,16 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
         if (_speaker is FlutterTtsSpeaker) {
           final tts = _speaker;
           await tts.setSpeechRate(widget.settings.speechSpeed.rate);
+          await tts.setAppLanguage(widget.settings.language);
           await tts.initialize();
           if (!mounted || generation != _speechGeneration) return;
           if (tts.resolvedLanguage == null) {
             throw StateError('speech unavailable');
           }
-          _speechMessage = tts.isCantonese ? null : '此裝置未提供粵語，正使用其他中文語音。';
+          _speechMessage =
+              widget.settings.language == AppLanguage.english || tts.isCantonese
+              ? null
+              : '此裝置未提供粵語，正使用其他中文語音。';
         }
         _speaking = true;
         if (mounted) setState(() {});
@@ -166,18 +173,18 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
         context: context,
         builder: (ctx) => AlertDialog(
           scrollable: true,
-          title: const Text('使用 Apple 線上語音搜尋？'),
-          content: const Text(
+          title: const AppText('使用 Apple 線上語音搜尋？'),
+          content: const AppText(
             '這部手機未提供離線粵語辨識。選擇繼續後，這次錄音可能由 Apple 的線上語音服務處理，需要網絡。菜單照片不會傳送到該服務。你亦可取消，直接輸入菜式。',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消，改用文字'),
+              child: const AppText('取消，改用文字'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('這次使用線上語音'),
+              child: const AppText('這次使用線上語音'),
             ),
           ],
         ),
@@ -212,7 +219,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
     final results = _menu.results;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('菜單閱讀'),
+        title: const AppText('菜單閱讀'),
         leading: BackButton(onPressed: widget.onBack),
       ),
       bottomNavigationBar: SafeArea(
@@ -222,7 +229,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
           child: OutlinedButton.icon(
             onPressed: _speaking || _outputBusy ? () => _stop() : null,
             icon: const Icon(Icons.stop_circle_outlined),
-            label: const Text('停止 App 朗讀'),
+            label: const AppText('停止 App 朗讀'),
           ),
         ),
       ),
@@ -231,19 +238,19 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
           key: const ValueKey('menu-page'),
           padding: const EdgeInsets.all(20),
           children: [
-            const Text('先拍攝菜單，再講「我想食牛腩飯」。App 會搜尋已辨識文字，讀出可確認的標示價錢。'),
+            const AppText('先拍攝菜單，再講「我想食牛腩飯」。App 會搜尋已辨識文字，讀出可確認的標示價錢。'),
             const SizedBox(height: 12),
             if (!_menu.reader.supported)
-              const Text('本輪菜單閱讀先支援 iPhone，繁體中文辨識需要 iOS 16 或以上。'),
+              const AppText('本輪菜單閱讀先支援 iPhone，繁體中文辨識需要 iOS 16 或以上。'),
             Semantics(
               // Result speech has one explicit output path; do not announce it twice.
               liveRegion: false,
-              child: Text(_menu.message, key: const ValueKey('menu-status')),
+              child: AppText(_menu.message, key: const ValueKey('menu-status')),
             ),
-            if (_speechMessage != null) Text(_speechMessage!),
+            if (_speechMessage != null) AppText(_speechMessage!),
             if (_menu.state == MenuState.listening) ...[
               const SizedBox(height: 12),
-              Text(
+              AppText(
                 _menu.partial.isEmpty
                     ? '正在聆聽，只在這次搜尋錄音。'
                     : '聽到：${_menu.partial}',
@@ -251,7 +258,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
               FilledButton.icon(
                 onPressed: () => _menu.reader.finishListening(),
                 icon: const Icon(Icons.done),
-                label: const Text('提早完成這次輸入'),
+                label: const AppText('提早完成這次輸入'),
               ),
             ],
             if (_menu.busy)
@@ -262,7 +269,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
                   await _stop();
                   await _menu.cancel();
                 },
-                child: const Text('取消目前操作'),
+                child: const AppText('取消目前操作'),
               ),
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -271,7 +278,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
                   ? () => _read(MenuImageSource.camera)
                   : null,
               icon: const Icon(Icons.document_scanner_outlined),
-              label: Text(document == null ? '拍攝菜單' : '重新拍攝菜單'),
+              label: AppText(document == null ? '拍攝菜單' : '重新拍攝菜單'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -279,16 +286,16 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
                   ? () => _read(MenuImageSource.library)
                   : null,
               icon: const Icon(Icons.photo_library_outlined),
-              label: const Text('選取一張菜單照片'),
+              label: const AppText('選取一張菜單照片'),
             ),
             TextButton(
               key: const ValueKey('scan-menu'),
               onPressed: _menu.reader.supported && !_menu.busy
                   ? () => _read(MenuImageSource.scanner)
                   : null,
-              child: const Text('文件掃描（選用，可拍多頁）'),
+              child: const AppText('文件掃描（選用，可拍多頁）'),
             ),
-            const Text(
+            const AppText(
               '拍攝時將菜單文字放入鏡頭，盡量保持平穩及避免反光。密集菜單可近距離分區拍攝。使用系統相機拍照，再選擇使用照片；照片只用於本次讀字，不加入訓練上傳。',
             ),
             if (document != null) ...[
@@ -297,19 +304,19 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
                 key: const ValueKey('voice-menu-search'),
                 onPressed: _menu.canSearch ? () => _voice() : null,
                 icon: const Icon(Icons.mic_none),
-                label: const Text('語音搜尋菜式'),
+                label: const AppText('語音搜尋菜式'),
               ),
               const SizedBox(height: 12),
-              const ExcludeSemantics(child: Text('想食的菜式')),
+              const ExcludeSemantics(child: AppText('想食的菜式')),
               const SizedBox(height: 8),
               Semantics(
-                label: '想食的菜式',
+                label: context.tr('想食的菜式'),
                 child: TextField(
                   controller: _query,
                   focusNode: _searchFocus,
                   enabled: _menu.canSearch,
-                  decoration: const InputDecoration(
-                    hintText: '例如：牛腩飯',
+                  decoration: InputDecoration(
+                    hintText: context.tr('例如：牛腩飯'),
                     border: OutlineInputBorder(),
                   ),
                   textInputAction: TextInputAction.search,
@@ -319,7 +326,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
               const SizedBox(height: 8),
               OutlinedButton(
                 onPressed: _menu.canSearch ? _search : null,
-                child: const Text('文字搜尋'),
+                child: const AppText('文字搜尋'),
               ),
               TextButton(
                 onPressed: !_menu.busy
@@ -328,11 +335,11 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
                         _menu.search('');
                       }
                     : null,
-                child: const Text('清除搜尋，返回全部分類'),
+                child: const AppText('清除搜尋，返回全部分類'),
               ),
               Semantics(
                 header: true,
-                child: Text(
+                child: AppText(
                   '菜單分類',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
@@ -342,7 +349,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
                 runSpacing: 8,
                 children: [
                   ChoiceChip(
-                    label: const Text('全部'),
+                    label: const AppText('全部'),
                     selected: _menu.section == null,
                     onSelected: _menu.busy
                         ? null
@@ -360,8 +367,8 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
                 ],
               ),
               const SizedBox(height: 12),
-              Text('目前 ${results.length} 項。分類及價錢按照片文字整理，多欄或反光可能影響配對。'),
-              if (results.isEmpty) const Text('呢次辨識結果搵唔到相符內容，可修改搜尋或重拍。'),
+              AppText('目前 ${results.length} 項。分類及價錢按照片文字整理，多欄或反光可能影響配對。'),
+              if (results.isEmpty) const AppText('呢次辨識結果搵唔到相符內容，可修改搜尋或重拍。'),
               ...results
                   .take(_visibleLimit)
                   .map(
@@ -371,19 +378,19 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text(
+                            AppText(
                               entry.text,
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
-                            Text(
+                            AppText(
                               '第 ${entry.page} 頁 · ${entry.section}${entry.uncertain ? " · 文字待核對" : ""}',
                             ),
-                            if (entry.prices.isEmpty) const Text('未能確認價錢'),
+                            if (entry.prices.isEmpty) const AppText('未能確認價錢'),
                             OutlinedButton(
                               onPressed: _menu.busy
                                   ? null
                                   : () => _say(entry.spoken),
-                              child: Text('重播 ${entry.name}'),
+                              child: AppText('重播 ${entry.name}'),
                             ),
                           ],
                         ),
@@ -393,14 +400,14 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
               if (results.length > _visibleLimit)
                 OutlinedButton(
                   onPressed: () => setState(() => _visibleLimit += 30),
-                  child: const Text('顯示更多菜單內容'),
+                  child: const AppText('顯示更多菜單內容'),
                 ),
               TextButton(
                 onPressed: () => showDialog<void>(
                   context: context,
                   builder: (ctx) => AlertDialog(
                     scrollable: true,
-                    title: const Text('菜單辨識原文'),
+                    title: const AppText('菜單辨識原文'),
                     content: SelectableText(document.original),
                     actions: [
                       TextButton(
@@ -410,20 +417,20 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
                           );
                           if (ctx.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('已複製辨識排查資料。')),
+                              const SnackBar(content: AppText('已複製辨識排查資料。')),
                             );
                           }
                         },
-                        child: const Text('複製排查資料'),
+                        child: const AppText('複製排查資料'),
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text('關閉'),
+                        child: const AppText('關閉'),
                       ),
                     ],
                   ),
                 ),
-                child: const Text('查看辨識原文'),
+                child: const AppText('查看辨識原文'),
               ),
             ],
             const SizedBox(height: 12),

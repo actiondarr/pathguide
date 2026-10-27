@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
@@ -43,25 +45,25 @@ class _AppShellState extends State<AppShell> {
         _navigationTask &&
         section != _section) {
       if (_confirmingNavigationExit) return;
-      _confirmingNavigationExit = true;
+      setState(() => _confirmingNavigationExit = true);
       final leave = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('結束導航並離開？'),
+          title: const AppText('結束導航並離開？'),
           actions: [
             TextButton(
               autofocus: true,
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('繼續導航'),
+              child: const AppText('繼續導航'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('確認結束'),
+              child: const AppText('確認結束'),
             ),
           ],
         ),
       );
-      _confirmingNavigationExit = false;
+      if (mounted) setState(() => _confirmingNavigationExit = false);
       if (leave != true || !mounted) return;
     }
     _navigationTask = false;
@@ -91,6 +93,7 @@ class _AppShellState extends State<AppShell> {
     AppSection.navigation => NavigationPage(
       settings: widget.settings,
       onTaskChanged: (active) => _navigationTask = active,
+      speechSuspended: _confirmingNavigationExit,
     ),
     AppSection.settings => SettingsPage(
       onAccount: _openAccount,
@@ -175,9 +178,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Text('播報速度', style: Theme.of(context).textTheme.titleLarge),
+                  AppText(
+                    '播報速度',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 6),
-                  Text(
+                  AppText(
                     '只會調整粵語播報的速度；不會改變音量或音調。',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -195,7 +201,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   TextButton(
                     onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('關閉'),
+                    child: const AppText('關閉'),
                   ),
                 ],
               ),
@@ -225,20 +231,20 @@ class _SettingsPageState extends State<SettingsPage> {
             children: <Widget>[
               const _DevelopmentBadge(),
               const SizedBox(height: 14),
-              Text(
+              AppText(
                 title,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 10),
-              Text(
+              AppText(
                 description,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge
                     ?.copyWith(color: AppColors.textMuted),
               ),
               const SizedBox(height: 18),
-              Text(
+              AppText(
                 '此版本不會要求新的系統權限，也不會開始下載或連接網絡服務。',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium,
@@ -249,7 +255,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(52),
                 ),
-                child: const Text('知道了'),
+                child: const AppText('知道了'),
               ),
             ],
           ),
@@ -267,9 +273,38 @@ class _SettingsPageState extends State<SettingsPage> {
           key: const ValueKey('settings-page'),
           padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
           children: <Widget>[
-            Text('設定', style: Theme.of(context).textTheme.headlineMedium),
+            Row(
+              children: [
+                Expanded(
+                  child: AppText(
+                    '設定',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                ),
+                PopupMenuButton<AppLanguage>(
+                  key: const ValueKey('app-language'),
+                  tooltip: context.tr('語言 / Language'),
+                  icon: const Icon(Icons.language),
+                  initialValue: settings.language,
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: AppLanguage.chinese,
+                      child: Text('繁體中文（香港）'),
+                    ),
+                    PopupMenuItem(
+                      value: AppLanguage.english,
+                      child: Text('English'),
+                    ),
+                  ],
+                  onSelected: settings.setLanguage,
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
-            Text('管理播報及即時辨識功能。', style: Theme.of(context).textTheme.bodyMedium),
+            AppText(
+              '管理播報及即時辨識功能。',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
             if (widget.onAccount != null) ...[
               const SizedBox(height: 16),
               AccountEntry(onManage: widget.onAccount!),
@@ -278,7 +313,7 @@ class _SettingsPageState extends State<SettingsPage> {
             OutlinedButton.icon(
               onPressed: () => showUsageGuide(context),
               icon: const Icon(Icons.help_outline),
-              label: const Text('使用教學'),
+              label: const AppText('使用教學'),
             ),
             const SizedBox(height: 24),
             _NativeSettingsSection(
@@ -326,7 +361,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 _futureRow(
                   context,
                   title: '導航地圖',
-                  description: '需要定位和地圖資料；目前沒有接入地圖、GPS 或路線服務。',
+                  description: '戶外步行導航已接入；室內 graph 定位及路線仍待驗證。',
                   icon: Icons.map_rounded,
                 ),
                 _futureRow(
@@ -454,7 +489,7 @@ class _SpeechSpeedChoice extends StatelessWidget {
               child: Row(
                 children: <Widget>[
                   Expanded(
-                    child: Text(
+                    child: AppText(
                       speed.label,
                       style: const TextStyle(
                         color: AppColors.text,
@@ -492,7 +527,7 @@ class _NativeSettingsSection extends StatelessWidget {
       children: <Widget>[
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
+          child: AppText(
             title,
             style: const TextStyle(
               color: AppColors.textMuted,
@@ -549,7 +584,7 @@ class _NativeSettingsRow extends StatelessWidget {
     final interactive = onTap != null;
     return Semantics(
       button: interactive,
-      label: semanticLabel,
+      label: context.tr(semanticLabel),
       excludeSemantics: true,
       onTap: onTap,
       child: Material(
@@ -571,7 +606,7 @@ class _NativeSettingsRow extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(
+                        AppText(
                           title,
                           style: const TextStyle(
                             color: AppColors.text,
@@ -581,7 +616,7 @@ class _NativeSettingsRow extends StatelessWidget {
                         ),
                         if (detail != null) ...<Widget>[
                           const SizedBox(height: 3),
-                          Text(
+                          AppText(
                             detail!,
                             style: const TextStyle(
                               color: AppColors.textMuted,
@@ -596,7 +631,7 @@ class _NativeSettingsRow extends StatelessWidget {
                   const SizedBox(width: 10),
                   Flexible(
                     flex: 4,
-                    child: Text(
+                    child: AppText(
                       value,
                       textAlign: TextAlign.end,
                       style: TextStyle(
@@ -638,7 +673,7 @@ class _DevelopmentBadge extends StatelessWidget {
         border: Border.all(color: AppColors.warning.withValues(alpha: 0.6)),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
+      child: AppText(
         '開發中',
         textAlign: TextAlign.center,
         style: TextStyle(
@@ -663,7 +698,23 @@ class _AppNavigationBar extends StatelessWidget {
     // than clipped. Give the bar enough height for the scaled label plus its
     // icon; the page above remains scrollable.
     final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final navigationHeight = textScale > 1.3 ? 84.0 : 68.0;
+    var navigationHeight = textScale > 1.3 ? 84.0 : 68.0;
+    final labelWidth = (MediaQuery.sizeOf(context).width - 44) / 4;
+    for (final label in ['首頁', '辨識', '導航', '設定']) {
+      final measure = TextPainter(
+        text: TextSpan(
+          text: context.tr(label),
+          style: DefaultTextStyle.of(context).style.merge(
+            const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout(maxWidth: labelWidth > 1 ? labelWidth : 1);
+      final requiredHeight = measure.height + 40; // icon, gap, padding, border
+      if (requiredHeight > navigationHeight) navigationHeight = requiredHeight;
+      measure.dispose();
+    }
     return ColoredBox(
       color: AppColors.background,
       child: SafeArea(
@@ -744,7 +795,7 @@ class _NavItem extends StatelessWidget {
       child: Semantics(
         selected: active,
         button: true,
-        label: label,
+        label: context.tr(label),
         excludeSemantics: true,
         onTap: () => onSelected(section),
         child: InkWell(
@@ -766,7 +817,7 @@ class _NavItem extends StatelessWidget {
                   color: active ? AppColors.primary : AppColors.textMuted,
                 ),
                 const SizedBox(height: 2),
-                Text(
+                AppText(
                   label,
                   style: TextStyle(
                     color: active ? AppColors.primary : AppColors.textMuted,

@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 
 import 'ui/app_shell.dart';
+import 'l10n/app_language.dart';
 import 'ui/app_theme.dart';
 import 'ui/demo_page.dart';
 import 'settings/app_settings.dart';
@@ -89,17 +90,27 @@ class _PathGuideAppState extends State<PathGuideApp>
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _settings,
+    builder: (context, _) => _buildApp(context),
+  );
+
+  Widget _buildApp(BuildContext context) {
     final app = AccountScope(
       controller: _account,
       child: MaterialApp(
         title: '領路通',
-        locale: const Locale.fromSubtags(
-          languageCode: 'zh',
-          scriptCode: 'Hant',
-          countryCode: 'HK',
-        ),
+        builder: (context, child) =>
+            AppLanguageScope(language: _settings.language, child: child!),
+        locale: _settings.language == AppLanguage.english
+            ? const Locale('en')
+            : const Locale.fromSubtags(
+                languageCode: 'zh',
+                scriptCode: 'Hant',
+                countryCode: 'HK',
+              ),
         supportedLocales: const <Locale>[
+          Locale('en'),
           Locale.fromSubtags(
             languageCode: 'zh',
             scriptCode: 'Hant',
