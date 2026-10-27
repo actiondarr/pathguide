@@ -220,7 +220,7 @@ flutter test
 | 同版iPhone編譯 | `flutter build ios --release --no-codesign --no-pub --dart-define-from-file=config/firebase.local.json`通過；無簽署、未安裝，語音／相機同時運作仍須真機驗收 |
 | 同日既有導航工程紀錄 | 6項導航原生測試、analyze及簽署建置／安裝有通過紀錄；本次文件整併未重跑 |
 | 手機／實地 | 使用者曾回報基本戶外步行正常；新版逐項VoiceOver、定位恢復、背景、收藏、偏離及終點驗收仍待 |
-| 發佈／回退 | 1.1.0+2分支／tag備份及GitHub Release依Backend記錄；Release未齊前不安裝交付 |
+| 發佈／回退 | 1.1.0+2分支、不可變tag及試用Release已保存／核對；另有整合前還原點，未安裝手機。見Backend第7節及發佈核對紀錄 |
 
 下一輪需記錄：VoiceOver與兩倍文字、拒絕權限、五次粵語查詢、背景／來電／耳機、GPS不足／斷網／偏離；HKDI不同路況各三次及三十分鐘耗電。室內另測行人橫過、轉角、玻璃、暗光、持機偏轉及失效撤回；工程目標場景≥10 Hz、p95延遲≤500 ms，尚未實測。
 

@@ -175,7 +175,7 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 
 倉庫為https://github.com/actiondarr/pathguide，既有工作分支feature/cross-platform-navigation。小型共用模型隨Git，過大共用產物用Release asset並記SHA及精確版本；私人照片／權重不得進共用repo。保留舊tag、模型及相容資料；回退App需重建並有效簽署，必要時用新的遞增iOS build號。私人模型則由本人授權registry保留上一版。
 
-文件整併的歷史提交不冒充新App還原點。本輪1.1.0+2包括中英文與導航／辨識共用語音、當前試用模型及manifest，247項Flutter測試與未簽署iOS編譯通過。預定不可變tag `v1.1.0+2`；歷史源碼／模型還原點 `v1.0.0+1-baseline` 指向 `f9dfb494ac3bc9a470337d15cde6a5c67018aac9`（舊hkdi10 pilot模型，不冒充已重新驗收版本）。遠端分支／tag核對與Release狀態另存verification的機器紀錄。
+文件整併的歷史提交不冒充新App還原點。本輪1.1.0+2包括中英文與導航／辨識共用語音、當前試用模型及manifest，247項Flutter測試與未簽署iOS編譯通過。不可變tag `v1.1.0+2`；歷史源碼／模型還原點 `v1.0.0+1-baseline` 指向 `f9dfb494ac3bc9a470337d15cde6a5c67018aac9`（舊hkdi10 pilot模型，不冒充已重新驗收版本）。遠端分支／tag核對與Release狀態另存verification的機器紀錄。
 
 版本發佈使用正常Git推送，以及有效的gh登入或GitHub已登入網頁流程；不從OS憑證庫抽出Git token作API登入。Release列模型SHA、試驗限制、測試、重建與回退方法；現有本機Firebase設定不入Git。CLI登入無效時，本版用正常GitHub網頁建立prerelease。
 
@@ -201,3 +201,5 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 2026-10-27參考產品補充：將路線內容、私人權重、session與模型下載分開設計，保留本機即時感知與用途界線；新功能仍屬候選，不新增上傳／背景服務或改部署狀態。
 
 2026-10-27整合版：App語言只在本機SharedPreferences保存；導航中的辨識不建立照片／observations／深度上傳或新增Cloud API。照片上傳仍關閉，付費GPU仍停用。1.1.0+2包含已核對共用模型；以正常Git備份分支／tag、GitHub網頁建立prerelease，未安裝交付；工程驗證不代表真機／模型精度已通過。
+
+2026-10-27發佈核對：App源碼commit `687d40188c117e7764cd71b063e834b23763682d` 已推至既有分支；以 `git ls-remote` 核對分支及兩個tag的實際commit。[1.1.0+2試用Release](https://github.com/actiondarr/pathguide/releases/tag/v1.1.0%2B2)及[整合前還原點](https://github.com/actiondarr/pathguide/releases/tag/v1.0.0%2B1-baseline)均經正常GitHub網頁建立並核對，沒有抽取憑證。產物含相符源碼／模型與manifest；無簽署IPA，未安裝手機。機器收據：verification/release-receipts/app-1.1.0+2.json。後續文件核對提交不移動App tag。
