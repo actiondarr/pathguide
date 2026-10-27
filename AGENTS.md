@@ -12,7 +12,10 @@ The user explicitly requested only these three maintained documents:
   active training handoff, evaluation and source attribution.
 
 Every feature, interface, model or acceptance-status change must update the
-relevant document(s) in the same commit. Update the current-state and limitation
+relevant document(s) in the same commit. Each document must retain the shared
+S0-S7 stage table (work, evidence-based current status, completion criteria and
+next dependencies) and a per-feature implementation plan (method/data flow,
+dependencies and acceptance). Preserve App background in the frontend document. Update the current-state and limitation
 sections as well as the dated maintenance entry. Check behavior against actual
 code and evidence; do not mark a feature complete merely because it is planned,
 builds, or passes unit tests. Cross-component changes update every affected doc.

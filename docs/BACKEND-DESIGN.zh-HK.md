@@ -4,6 +4,48 @@
 
 **後端把已同意的錯誤場景，經覆核、訓練與評估，轉成可回退的私人模型。** 上傳成功只代表收到照片，不代表已學會、變準或可以更新。
 
+## 開發階段與目前進度
+
+三份文件共用S0–S7階段編號。狀態只表示可追溯證據：**已有程式**不等於已部署；**待實測**不等於通過；**受阻**需先解依賴；**未開始／未來研究**不是現有功能。沒有足夠工作量與驗收資料前不編造完成百分比或日期。
+
+S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基準及S2核准資料，S6整合驗收通過後才擴大S7範圍。當前主線仍是改善準確度，室內畫面不可取代品質驗收。
+
+| 階段 | 本階段後端工作 | 目前進度 | 完成標準 | 下一步／依賴 |
+|---|---|---|---|---|
+| S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 規則／callable已有；文件已備份，App／模型未提交工作未成新release | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
+| S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
+| S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理程式已有，本機關閉；管理員覆核服務未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
+| S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；付費GPU預算未定 | 模擬完整流程、真實工作受配額控制、合格模型可本人下載／回退 | 先mock worker、資料接口與取消／刪除，再開付費執行 |
+| S4 室內近距離感知與引導 | 只供版本／設定；不把即時深度送雲端推理 | 無室內服務，首版即時運算在手機 | 離線空間感知不依賴後端；無深度／姿態上傳副作用 | 與Frontend確認接口，保留原照片用途界線 |
+| S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
+| S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
+| S7 多場地、多樓層與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 未開始／未來設計 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
+
+## 各功能計劃如何實現
+
+本節接口名稱若寫「新增」即尚未實作，不能當成目前已可呼叫的API。
+
+| 功能／階段 | 目前狀態 | 實現方法與輸入／輸出 | 依賴／完成標準 |
+|---|---|---|---|
+| B01 帳號、角色與私人聯絡／S1–S2 | Google／聯絡規則已有；覆核角色未接 | 驗證token取得UID，以可重試交易建profile；聯絡資料保持獨立。新增覆核角色由受權Admin設定custom claims，服務端驗證，不接受前端自報admin或ownerUid | 本人／覆核者／一般訪客權限分開；角色變更與token刷新／撤銷有測試 |
+| B02 照片同意與提交／S2 | callable已有，未啟用 | 沿用get／setPhotoConsent與submitPhoto；檢查UID、epoch、配額／尺寸，解碼重編碼、綁photoId／objectGeneration，再原子更新validated／pending。sourceSha與清理後sha分開 | 前端F05同幀資料；重試冪等、無效App Check／舊epoch拒絕，不改成公開Storage |
+| B03 管理員覆核／S2 | 未接通 | 新增受權覆核操作，輸入photoId、版本、完整annotations與coverage及核准／拒絕理由；先提供可匯入覆核清單與原圖檢視的內部工具，服務端寫reviewedBy／time／version。模型預測另存，不能覆寫人工答案 | Dataset D02；不能只改狀態approved，全圖答案／來源／雜湊須有效；延遲AI寫入不破壞核准版本 |
+| B04 私人快照匯出／S3 | 未接通 | 依ownerUid＋仍有效用途查核准版本，合併獲授權基礎回放，固定影像／標註版本、場景split、coverage與SHA，輸出不可變manifest；重送同一請求沿用snapshot ID | Dataset D03／D07；同實物不跨split，其他UID資料不得混入，資料變動建新snapshot |
+| B05 排程、去重與佇列／S3 | 未實作 | 每日03:00香港時間檢查新核准資料與獨立驗證條件；以UID＋snapshot＋config建唯一job，交易取lease，綁GPU預算／單次時限。建立GCP Batch工作，記provider job ID，狀態由受權事件／查詢更新 | 缺預算不提交；同UID單工作、重複事件不重開；UTC照片配額日界保持不變 |
+| B06 GPU訓練worker／S3 | 現有Colab實驗；服務未實作 | 容器固定工具／權重／設定，最小IAM讀指定snapshot，執行preflight→smoke→正式run；每輪備份checkpoint／optimizer／CSV及心跳。相同快照中斷才resume，改資料開新run；逾時／取消不發佈 | Dataset提供D04／D05／D07腳本；先mock成功／失敗／重試，再配置GPU；不把免費Colab當可靠無人服務 |
+| B07 品質門檻與獨立評估／S3 | 只有本地A／B評估工具 | worker產生候選與現用模型的同資料逐類比較、樣本量、export parity及手機結果；核准服務驗完整報告並套版本化門檻，不能由worker一句success直接寫ready | Dataset第3節為門檻唯一來源；目標無真值或其他類別退化則不核准；測試集不拿來反覆調參 |
+| B08 Registry與發佈包／S3–S5 | 未實作 | 新增不可變模型record：ownerUid／shared scope、job／snapshot、A或B namespace、權重／manifest SHA與大小、taxonomy、App相容性、評估與狀態；核准才設可下載，發布指標另指向可回退版本 | A／B映射不得互換；現行內置format:1不無聲改義；共用模型與私人模型有不同存取範圍 |
+| B09 本人下載、自動更新與回退／S3 | 未接通 | 新增本人模型offer與限時下載授權；發票前重驗身分／用途／刪除狀態，URL只指向核准物件且不記完整URL日誌。App下載暫存、核對offer、SHA與映射後在任務停止時切換；保留上一版／內置版 | Frontend F08；逾時重取授權，跨UID／不相容／損壞拒絕。已簽網址有有效期，撤回後仍須處理過期窗口與物件清理 |
+| B10 撤回、取消、帳號刪除與到期／S2–S3 | 第四階段清理已有；訓練資源未覆蓋 | 沿用tombstone／deleting，先禁止新上傳／job／下載，取消並等待或隔離worker，再按清單刪照片、annotations、snapshot、外部副本及私人模型，最後Auth；每步可重試並拒絕遲到重建 | 擴充現有deletePhotoAccountData；基礎共用資料不因單UID刪除而誤刪，處理中狀態可理解 |
+| B11 Android搜尋／步行代理／S1 | computeWalkingRoute已有，未部署／驗證 | App Check驗應用，訪客可用；固定Google Routes WALK、HK／繁中與回傳欄位，Secret Manager供金鑰，逾時／配額分類；不接受任意網址代理、不持久保存軌跡 | Google配置、預算、簽署限制及真機；iPhoneMapKit不改走此代理 |
+| B12 發佈、診斷與預算／S0–S6 | Git提交已有；完整App版本checkpoint未齊 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依第7節先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
+| B13 室內即時資料邊界／S4 | 未有深度服務，規劃本機處理 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
+| B14 場地圖、樓層與地標版本／S7 | 未實作 | 新增經場地授權的building／floor／graph／anchor版本，房間／走廊／升降機連接分開；App取得相容地圖，標記校準後在本機路由。地圖記入口／可用性證據與有效期，未知不默認通行 | F14／D09；不用GPS猜樓層，無場地資料不提供指定課室；場地更新不破壞舊App |
+| B15 路線錄製／場景摘要同步／S7 | 後續構想 | 先本機功能；自願同步才新增UID版本化路標序列與刪除。場景摘要預設本機有效證據，不自動新增雲端影像描述或追蹤紀錄 | F17；另行確認用途與授權，不能因訓練照片同意便錄影／上傳路線 |
+| B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
+
+管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
+
 ## 1. 已有程式與缺口
 
 | 項目 | 現況 |
@@ -111,3 +153,6 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 ## 9. 維護紀錄
 
 2026-10-27：帳號／照片契約、部署、隱私草稿重點、訓練／更新及GitHub回退整合於此。本輪沒有部署、開收集、提交GPU或改App功能。每次功能／接口／部署變更直接更新本檔現況、設定、驗證與限制。
+
+
+2026-10-27階段化補充：加入S0–S7分工及B01–B16實現路線，標示現有callable與待新增的覆核／快照／worker／registry／場地服務，列明輸入、輸出、依賴與驗收。下一輪先S2權限／部署與覆核，再用mock完成S3；預算未定不提交付費GPU。本次沒有部署或改接口程式。
