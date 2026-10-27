@@ -1,6 +1,6 @@
 # 領路通 PathGuide 後端與雲端資料流程方案
 
-更新日期：2026 年 10 月 27 日。閱讀入口：[App 與原計劃對照](APP-PLAN-REVIEW.zh-HK.md)。
+更新：2026年10月27日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
 
 **後端把已同意的錯誤場景，經覆核、訓練與評估，轉成可回退的私人模型。** 上傳成功只代表收到照片，不代表已學會、變準或可以更新。
 
@@ -14,7 +14,7 @@
 | 導航 | computeWalkingRoute 已有 Google Routes 代理程式，與照片同意獨立；iPhone MapKit不依賴它 |
 | 私人學習 | 管理員覆核、快照匯出、排程、GPU worker、registry及下載授權未接通 |
 
-活動程式來源為 [Functions](../backend/functions/index.js)、[照片政策](../backend/functions/photo_policy.js)、[規則](../backend/firestore.rules)及[第四階段接入](PHASE4-IMPLEMENTATION.zh-HK.md)。舊firebaseCode-2的signed URL原型只作歷史參考，不是目前App接口。
+活動程式來源為 [Functions](../backend/functions/index.js)、[照片政策](../backend/functions/photo_policy.js)、[規則](../backend/firestore.rules)。舊firebaseCode-2的signed URL原型只作歷史參考，不是目前App接口。
 
 ## 2. 現行照片流程與資料
 
@@ -57,7 +57,7 @@
 
 使用者可另行預先同意自動更新；未同意則手動選擇。僅App前景且辨識／導航等相機任務停止時下載至暫存，驗UID／雜湊／映射／相容性，試載入後原子切換。保留上一個私人版本與內置備援，失敗回退。此決定取代「每次都必須手動啟用」。
 
-App／共用模型完成後先推GitHub commit、tag／Release並核對，再安裝交付。私人照片、權重及含私人資訊報告留在受權限保護的儲存，不進共用repo；私人registry保留歷史版本供本人回退。詳見 [交接](../HANDOFF.md)。
+App／共用模型完成後先推GitHub commit、tag／Release並核對，再安裝交付。私人照片、權重及含私人資訊報告留在受權限保護的儲存，不進共用repo；私人registry保留歷史版本供本人回退。完整版本程序見本檔第7節。
 
 ## 5. 撤回、刪除與失效
 
@@ -75,4 +75,39 @@ App／共用模型完成後先推GitHub commit、tag／Release並核對，再安
 - [ ] 刪除與訓練／下載競爭不復活舊資料；私人產物不進GitHub。
 - [ ] 共用版本遠端備份完成才交付，舊tag與對應模型可重建。
 
-本輪只更新文件，沒有部署、開啟照片收集、提交GPU或改App功能。
+## 7. 部署、設定與版本回退
+
+帳號與照片服務分開配置；目前本機照片開關關閉，既有紀錄未部署照片服務，本輪未讀取雲端清單，不以文件代替部署驗收。
+
+- iOS：啟用Google provider並註冊相符bundle ID，取得手機端GoogleService-Info.plist。在app目錄執行下方設定工具；不用管理員私鑰，不能把本機設定提交Git。
+
+```sh
+python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
+./tool/run_iphone.sh
+```
+
+- 上傳：先確認計費／預算、Storage bucket、Functions區域（現有callable為asia-east2）及App Check，再覆核Firestore／Storage規則與索引。測試用debug attestation只限測試；正式版不發佈debug token或放寬規則。部署與實際測試通過前PHOTO_UPLOAD_ENABLED保持false。
+- 在backend/functions安裝依賴後執行pnpm test；backend根目錄的pnpm test跑Firestore／Storage Emulator，需Node22、Java21及pnpm。Emulator與真實專案分開，呼叫handler的測試不代表雲端App Check閘道已通過。
+- Android：需Java17與Android SDK、Google Play服務、相符Firebase Android App及簽署SHA、Maps／Places受限金鑰，設定範本在app/config/navigation.android.example.json。現有SDK固定Maps19.2.0、Places5.1.1、Location21.3.0，實際建置仍待驗證。
+- Google Routes憑證放Secret Manager，代理設定GOOGLE_ROUTES_API_KEY；只在服務與App Check驗證後啟用NAVIGATION_GOOGLE_ENABLED。iPhone MapKit不需Google Routes部署。Google路線只顯示在Google地圖，Apple路線在Apple地圖。
+- 正式公開導航前，補營運者／聯絡方式及可用政策網址，設定NAVIGATION_PRIVACY_URL與NAVIGATION_TERMS_URL。下方草稿重點不能當已發佈政策。
+
+每個App／共用模型版本：完成檢查 → 增加App版本／build → 提交程式、lockfile、對應模型／映射及三份文件更新 → 建不可變tag（v版本+build）／Release → 推送並核對遠端 → 才安裝交付。Release記錄模型SHA、評估、限制與重裝方法；實驗版標prerelease，不覆寫tag、不force push。
+
+倉庫為https://github.com/actiondarr/pathguide，既有工作分支feature/cross-platform-navigation。小型共用模型隨Git，過大共用產物用Release asset並記SHA及精確版本；私人照片／權重不得進共用repo。保留舊tag、模型及相容資料；回退App需重建並有效簽署，必要時用新的遞增iOS build號。私人模型則由本人授權registry保留上一版。
+
+文件整併是文件提交，不冒充App還原點；現有未提交App／模型仍須另行完成版本備份。
+
+## 8. 導航資料與使用說明（發佈前草稿重點）
+
+導航只在使用者啟動與App前景取得位置；暫停、背景或結束停止定位，不建立／上傳行走軌跡。Apple／Google會收到完成搜尋及路線所需查詢、起點／目的地；代理不持久保存完整座標／路線，診斷避免私人位置。
+
+語音按鈕才收音；優先裝置端，線上服務先取得本次同意，不把導航或錄音加入模型訓練。收藏／最近十個地點在本機安全儲存，可清除，不跟帳號同步；Google項目以Place ID、使用者標籤與時間保存，再查地點。
+
+路線可能有誤差、延遲或入口不符，不保證樓梯／升降機可用，不提供過路時機、室內樓層或鎖屏導航。接近終點仍需確認入口，資訊不代替白杖、導盲犬或定向技能。Android需已配置服務、網絡與適當權限。
+
+供應商參考：[Google Maps條款](https://maps.google.com/help/terms_maps/)、[Google私隱](https://policies.google.com/privacy)、[Apple地圖條款](https://www.apple.com/legal/internet-services/maps/terms-en.html)、[Apple私隱](https://www.apple.com/legal/privacy/)。正式政策需補聯絡及變更通知方式，不能以本章冒充已公開條款。
+
+## 9. 維護紀錄
+
+2026-10-27：帳號／照片契約、部署、隱私草稿重點、訓練／更新及GitHub回退整合於此。本輪沒有部署、開收集、提交GPU或改App功能。每次功能／接口／部署變更直接更新本檔現況、設定、驗證與限制。

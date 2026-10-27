@@ -29,3 +29,6 @@ backend/functions/node_modules/
 
 # Per-platform navigation/Firebase client settings.
 app/config/*.local.json
+
+# Generated review evidence stays outside the three canonical documents.
+dataset_pipeline/review_artifacts/
