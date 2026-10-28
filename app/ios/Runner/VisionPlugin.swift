@@ -632,6 +632,16 @@ enum IOSFramePreprocessor {
   ) throws -> IOSPreparedFrame {
     guard inputSize > 0 else { throw VisionError.inputSize }
     guard CVPixelBufferGetPlaneCount(pixelBuffer) >= 2 else { throw VisionError.pixelFormat }
+    let formatType = CVPixelBufferGetPixelFormatType(pixelBuffer)
+    guard formatType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange ||
+      formatType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange else { throw VisionError.pixelFormat }
+    let fullRange = formatType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+    let matrix = CVBufferCopyAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, nil) as? String
+    // ARKit normally supplies an explicit matrix; reject unknown matrices
+    // rather than silently applying a different colour conversion.
+    guard matrix == nil || matrix == kCVImageBufferYCbCrMatrix_ITU_R_601_4 as String ||
+      matrix == kCVImageBufferYCbCrMatrix_ITU_R_709_2 as String else { throw VisionError.pixelFormat }
+    let bt709 = matrix == kCVImageBufferYCbCrMatrix_ITU_R_709_2 as String
     CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
     defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
 
@@ -676,12 +686,9 @@ enum IOSFramePreprocessor {
         sy = min(height - 1, max(0, sy))
         let yy = Float32(y[sy * yStride + sx])
         let chroma = (sy / 2) * uvStride + (sx / 2) * 2
-        let cb = Float32(uv[chroma]) - 128
-        let cr = Float32(uv[chroma + 1]) - 128
-        let luma = 1.164 * (yy - 16)
-        let r = clamp01((luma + 1.596 * cr) / 255)
-        let g = clamp01((luma - 0.392 * cb - 0.813 * cr) / 255)
-        let b = clamp01((luma + 2.017 * cb) / 255)
+        let rgb = CameraImageMath.rgb(y: Double(yy), cb: Double(uv[chroma]),
+          cr: Double(uv[chroma + 1]), fullRange: fullRange, bt709: bt709)
+        let (r, g, b) = rgb
         let index = ((padY + dy) * inputSize + padX + dx) * 3
         values[index] = r
         values[index + 1] = g
@@ -691,7 +698,7 @@ enum IOSFramePreprocessor {
       }
     }
     if minimum == Float32.greatestFiniteMagnitude { minimum = pad; maximum = pad }
-    let format = "NV12 \(width)x\(height) rot=\(rotationDegrees) yStride=\(yStride) uvStride=\(uvStride)"
+    let format = "NV12 \(width)x\(height) rot=\(rotationDegrees) full=\(fullRange) 709=\(bt709) yStride=\(yStride) uvStride=\(uvStride)"
     let stats = String(format: "count=%d [%.3f,%.3f]", values.count, minimum, maximum)
     return IOSPreparedFrame(
       values: values,

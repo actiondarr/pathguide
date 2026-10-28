@@ -24,6 +24,7 @@ Future<void> showDepth(
   AppLanguage language = AppLanguage.chinese,
   double scale = 1,
   DepthSpeaker? speaker,
+  bool objects = false,
 }) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
@@ -39,6 +40,7 @@ Future<void> showDepth(
             textScaler: TextScaler.linear(scale),
           ),
           child: DepthPage(
+            initialObjects: objects,
             settings: AppSettings.memory(language: language),
             source: source,
             speaker: speaker ?? DepthSpeaker(),
@@ -105,7 +107,7 @@ void main() {
       await tester.pump();
       expect(find.text('距離未知'), findsOneWidget);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(source.starts, 1);
       expect(find.text('開始測距'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
@@ -129,4 +131,108 @@ void main() {
     await tester.pump();
     await source.events.close();
   });
+  for (final language in AppLanguage.values) {
+    testWidgets(
+      'object names ranges and unknown depth at double text ${language.name}',
+      (tester) async {
+        final source = FakeDepthSource(), speaker = DepthSpeaker();
+        await showDepth(
+          tester,
+          source,
+          language: language,
+          scale: 2,
+          speaker: speaker,
+          objects: true,
+        );
+        await tester.tap(find.byKey(const ValueKey('depth-toggle')));
+        await tester.pump();
+        for (var i = 0; i < 3; i++) {
+          source.objectFrame(1 + i * .15, [
+            FakeDepthSource.object(),
+            FakeDepthSource.object(id: 18, box: [.7, .2, .2, .5], known: false),
+          ]);
+        }
+        await tester.pump();
+        expect(source.lastObjects, isTrue);
+        expect(
+          find.textContaining(language == AppLanguage.english ? 'bin' : '垃圾桶'),
+          findsOneWidget,
+        );
+        expect(
+          find.text(
+            language == AppLanguage.english
+                ? 'Surface inside box about 2.0 m'
+                : '框內表面約 2.0 米',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.text(language == AppLanguage.english ? 'Range unknown' : '距離未知'),
+          findsOneWidget,
+        );
+        for (final key in ['depth-toggle', 'depth-read']) {
+          expect(find.byKey(ValueKey(key)).hitTestable(), findsOneWidget);
+        }
+        expect(speaker.words, isEmpty);
+        await tester.tap(find.byKey(const ValueKey('depth-read')));
+        await tester.pump();
+        expect(
+          speaker.words.single,
+          contains(language == AppLanguage.english ? 'Range unknown' : '距離未知'),
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        await source.events.close();
+      },
+    );
+  }
+  testWidgets(
+    'pause is required to change camera mode and background clears objects',
+    (tester) async {
+      final source = FakeDepthSource();
+      await showDepth(tester, source, objects: true);
+      await tester.tap(find.byKey(const ValueKey('depth-toggle')));
+      await tester.pump();
+      final control = tester.widget<SwitchListTile>(
+        find.byKey(const ValueKey('depth-objects')),
+      );
+      expect(control.onChanged, isNull);
+      for (var i = 0; i < 3; i++) {
+        source.objectFrame(1 + i * .15, [FakeDepthSource.object()]);
+      }
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(find.textContaining('垃圾桶'), findsNothing);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      expect(source.starts, 1);
+      await tester.ensureVisible(find.byKey(const ValueKey('depth-objects')));
+      await tester.tap(find.byKey(const ValueKey('depth-objects')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<SwitchListTile>(find.byKey(const ValueKey('depth-objects')))
+            .value,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('depth-toggle')))
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.byKey(const ValueKey('depth-toggle')));
+      await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+      expect(source.starts, 2);
+      expect(source.lastObjects, isFalse);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      await source.events.close();
+    },
+  );
 }

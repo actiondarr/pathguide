@@ -16,7 +16,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
 | S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理程式已有，本機關閉；管理員覆核服務未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
 | S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；付費GPU預算未定 | 模擬完整流程、真實工作受配額控制、合格模型可本人下載／回退 | 先mock worker、資料接口與取消／刪除，再開付費執行 |
-| S4 室內近距離感知與引導 | 只供版本／設定；不把即時深度送雲端推理 | 1.3.0+4測距在iPhone記憶體處理；無室內雲端服務 | 離線空間感知不依賴後端；無深度／姿態上傳副作用 | 與Frontend確認接口，保留原照片用途界線 |
+| S4 室內近距離感知與引導 | 只供版本／設定；不把即時深度送雲端推理 | 1.4.0+5同幀辨識與測距在iPhone記憶體處理；無室內雲端服務 | 離線空間感知不依賴後端；無深度／姿態上傳副作用 | 與Frontend確認接口，保留原照片用途界線 |
 | S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
 | S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
 | S7 多場地、多樓層與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 本機typed graph／觀察原型已有；雲端及真實場地服務未實作 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
@@ -39,7 +39,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B10 撤回、取消、帳號刪除與到期／S2–S3 | 第四階段清理已有；訓練資源未覆蓋 | 沿用tombstone／deleting，先禁止新上傳／job／下載，取消並等待或隔離worker，再按清單刪照片、annotations、snapshot、外部副本及私人模型，最後Auth；每步可重試並拒絕遲到重建 | 擴充現有deletePhotoAccountData；基礎共用資料不因單UID刪除而誤刪，處理中狀態可理解 |
 | B11 Android搜尋／步行代理／S1 | computeWalkingRoute已有，未部署／驗證 | App Check驗應用，訪客可用；固定Google Routes WALK、HK／繁中與回傳欄位，Secret Manager供金鑰，逾時／配額分類；不接受任意網址代理、不持久保存軌跡 | Google配置、預算、簽署限制及真機；iPhoneMapKit不改走此代理 |
 | B12 發佈、診斷與預算／S0–S6 | 1.3.0+4工程／簽署建置與遠端核對通過；之後安裝及啟動成功，舊版保留，場測待補 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依第7節先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
-| B13 室內即時資料邊界／S4 | 1.3.0+4獨立LiDAR測距已本機處理，無雲端服務 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
+| B13 室內即時資料邊界／S4 | 1.4.0+5辨識框與深度已本機處理，無雲端服務 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
 | B14 拓撲graph、觀察序列與場地版本／S7 | 1.2.0+3本機Dart模型／樣例已有，無雲端API | IndoorGraph／IndoorNode／LandmarkObject／LandmarkObservation以固定ID、內容版本、scope與有界queue表達；手動node／edge先驗證；永久地圖、node內容與行程觀察分開版本化，圖片只產生候選對照。不吻合先保留未知與待覆核，核准後才更新地圖；量測座標／幾何校準及樓層連接後續加入 | F14／D09；不用GPS猜樓層，無場地資料不提供指定課室；場地更新不破壞舊App |
 | B15 路線錄製／場景摘要同步／S7 | 後續構想 | 先本機功能；自願同步才新增UID版本化路標序列與刪除。場景摘要預設本機有效證據，不自動新增雲端影像描述或追蹤紀錄 | F17；另行確認用途與授權，不能因訓練照片同意便錄影／上傳路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
@@ -225,3 +225,11 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 同輪1.3.0+4工程核對：294項Flutter、12項原生數值檢查、analyze及iOS簽署建置通過；包內版本與模型manifest／SHA相符。verification/app-1.3.0+4.json保存構建證據，後續GitHub與裝機收據另記，App tag不移動。
 
 同日1.3.0+4發佈交付核對：正常Git推送後，ls-remote核對分支與v1.3.0+4均指向6a0e65203dd1804f5682bae2d8a88116f769795a；GitHub網頁建立並核對[試用Release](https://github.com/actiondarr/pathguide/releases/tag/v1.3.0%2B4)的標題／tag／commit。先備份再安裝；首次鎖機受阻，使用者解鎖後成功安裝及啟動。去識別收據在verification/release-receipts/app-1.3.0+4.json，公開內容不含裝置ID／安裝路徑／簽署資料。App tag不移動，後續文件提交只更新交付證據。
+
+2026-10-28 物件距離版：1.4.0+5延伸本機hk.pathguide/depth契約，start帶objects模式、threshold、已校驗的內置權重cache路徑／SHA／bytes／classIds／classes／inputSize；原生再次核對才建立模型。不是外部下載／私人模型offer，不新增Cloud API。靜態內置權重快取放App support的PathGuideDepth，以SHA命名；只寫共用模型，沒有照片／深度／pose／UID資料。背景停止會作廢尚未完成的準備或啟動。
+
+物件事件status=objects，附同session／timestamp／ageMs、viewWidth／viewHeight／rotation及最多5個objects：專案class id、score、已裁切預覽box、reason，可用時另帶rangeM／planeZM／accepted／total／spreadM。score是物件模型分數，不是距離可信度或正確率；rangeM是框內代表表面的徑向米數。短時track ID只在Dart當次session作配對，不寫永久graph／觀察資料庫。原有sample準星事件保留，兩種模式不能混用米數。資料不持久保存／上傳；訓練照片用途／同意／配額及PHOTO_UPLOAD_ENABLED=false不變，無付費GPU工作。
+
+本版依既有先GitHub分支／不可變tag／試用Release核對、後安裝的程序保存；最新構建及交付收據見verification/app-1.4.0+5.json、verification/release-receipts/app-1.4.0+5.json。保留v1.3.0+4與舊版，沒有移動tag、部署室內服務或修改雲端訓練。
+
+同輪1.4.0+5工程核對：完整314項Flutter、11項iOS原生XCTest、25項距離／座標／色彩數值檢查通過，analyze無問題，最終iOS簽署建置、系統簽章及包內版本／模型相符。verification/app-1.4.0+5.json記錄構建快照；發佈／裝機由收據更新。不是實地辨識、量尺精度或VoiceOver驗收。

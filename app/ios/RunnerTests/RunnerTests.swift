@@ -1,4 +1,6 @@
 import Flutter
+import CoreVideo
+import CryptoKit
 import CoreLocation
 import MapKit
 @testable import Runner
@@ -159,12 +161,40 @@ class RunnerTests: XCTestCase {
       .appendingPathComponent("Frameworks/App.framework/flutter_assets/assets/models/detector.tflite")
     XCTAssertTrue(FileManager.default.fileExists(atPath: modelURL.path), "Flutter model asset missing")
     let interpreter = try TFLiteModelRunner(modelPath: modelURL.path, threadCount: 4)
+    let manifestURL = modelURL.deletingLastPathComponent().appendingPathComponent("detector.json")
+    let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any])
+    let classes = try XCTUnwrap(manifest["modelClassCount"] as? Int)
+    let bytes = try Data(contentsOf: modelURL)
+    XCTAssertEqual(bytes.count, manifest["bytes"] as? Int)
+    XCTAssertEqual(SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined(), manifest["sha256"] as? String)
     XCTAssertEqual(interpreter.inputShape, [1, 3, 640, 640])
-    XCTAssertEqual(interpreter.outputShape, [1, 13, 8400])
+    XCTAssertEqual(interpreter.outputShape, [1, classes + 4, 8400])
     let output = try interpreter.invoke(input: [Float32](repeating: 114.0 / 255.0, count: 640 * 640 * 3))
-    XCTAssertEqual(output.count, 13 * 8400)
+    XCTAssertEqual(output.count, (classes + 4) * 8400)
     XCTAssertTrue(output.allSatisfy { $0.isFinite })
     XCTAssertTrue(output.dropFirst(4 * 8400).allSatisfy { $0 >= 0 && $0 <= 1 })
+  }
+
+  func testCameraPreprocessingSeparatesFullAndVideoRange() throws {
+    func make(_ format: OSType) throws -> CVPixelBuffer {
+      var value: CVPixelBuffer?
+      XCTAssertEqual(CVPixelBufferCreate(nil, 4, 4, format, nil, &value), kCVReturnSuccess)
+      let buffer = try XCTUnwrap(value)
+      CVBufferSetAttachment(buffer, kCVImageBufferYCbCrMatrixKey,
+        kCVImageBufferYCbCrMatrix_ITU_R_709_2, .shouldPropagate)
+      CVPixelBufferLockBaseAddress(buffer, [])
+      for plane in 0..<2 {
+        let base = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(buffer, plane))
+        memset(base, plane == 0 ? 16 : 128,
+          CVPixelBufferGetBytesPerRowOfPlane(buffer, plane) * CVPixelBufferGetHeightOfPlane(buffer, plane))
+      }
+      CVPixelBufferUnlockBaseAddress(buffer, [])
+      return buffer
+    }
+    let full = try IOSFramePreprocessor.prepare(pixelBuffer: make(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange), inputSize: 4, rotationDegrees: 90)
+    let video = try IOSFramePreprocessor.prepare(pixelBuffer: make(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange), inputSize: 4, rotationDegrees: 90)
+    XCTAssertTrue(full.values.allSatisfy { abs($0 - 16 / 255) < 0.00001 })
+    XCTAssertTrue(video.values.allSatisfy { $0 == 0 })
   }
 
 }

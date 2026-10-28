@@ -3,13 +3,23 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'depth_model.dart';
+import 'depth_objects.dart';
+
 abstract class DepthSource {
   Stream<Map<Object?, Object?>> get frames;
-  Future<String> start(String session);
+  Set<int> get classIds;
+  Future<String> start(String session, {bool objects = false});
   Future<void> stop();
 }
 
 class PlatformDepthSource implements DepthSource {
+  PlatformDepthSource({this.threshold = 0.7});
+  final double threshold;
+  int _generation = 0;
+  Set<int> _classIds = const {};
+  @override
+  Set<int> get classIds => _classIds;
   static bool get _native =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
   static const _methods = MethodChannel('hk.pathguide/depth');
@@ -21,16 +31,31 @@ class PlatformDepthSource implements DepthSource {
         )
       : Stream<Map<Object?, Object?>>.multi((_) {});
   @override
-  Future<String> start(String session) async {
+  Future<String> start(String session, {bool objects = false}) async {
+    final generation = ++_generation;
     if (!_native) return 'unsupported';
+    Map<String, Object> model = const {};
+    if (objects) {
+      try {
+        model = await prepareDepthModel();
+        _classIds = Set.unmodifiable((model['classIds'] as List<int>));
+      } catch (_) {
+        return 'model';
+      }
+    }
+    if (generation != _generation) return 'paused';
     final value = await _methods.invokeMapMethod<String, Object?>('start', {
       'session': session,
+      'objects': objects,
+      'threshold': threshold.clamp(0.05, 0.95),
+      ...model,
     });
     return value?['status'] as String? ?? 'failed';
   }
 
   @override
   Future<void> stop() async {
+    ++_generation;
     if (_native) await _methods.invokeMethod<void>('stop');
   }
 }
@@ -47,6 +72,10 @@ class DepthSession extends ChangeNotifier {
   bool _disposed = false;
   Future<void> _operations = Future.value();
   final _window = <({double time, double range})>[];
+  final _objects = DepthObjects();
+  List<DepthObject> get objects => _objects.snapshot;
+  bool objectsEnabled = false;
+  String? _viewport;
   double? _lastTimestamp;
   String status = 'idle';
   bool running = false;
@@ -59,6 +88,7 @@ class DepthSession extends ChangeNotifier {
     rangeM = planeZM = spreadM = null;
     accepted = total = 0;
     _window.clear();
+    _objects.clear();
   }
 
   void _changed() {
@@ -71,11 +101,13 @@ class DepthSession extends ChangeNotifier {
     return next;
   }
 
-  Future<void> start() async {
+  Future<void> start({bool recognizeObjects = false}) async {
     if (_disposed) return;
     final generation = ++_generation;
     _token = '$generation-${DateTime.now().microsecondsSinceEpoch}';
     final token = _token;
+    objectsEnabled = recognizeObjects;
+    _viewport = null;
     running = true;
     _expiry?.cancel();
     _lastTimestamp = null;
@@ -97,7 +129,7 @@ class DepthSession extends ChangeNotifier {
       // a later stop from reaching native code when this page is left.
       unawaited(
         source
-            .start(token)
+            .start(token, objects: recognizeObjects)
             .then((result) {
               if (_disposed || generation != _generation) return;
               if (result != 'running') {
@@ -153,6 +185,38 @@ class DepthSession extends ChangeNotifier {
     }
     _lastTimestamp = time;
     _armExpiry();
+    if (state == 'objects' && objectsEnabled) {
+      final width = number('viewWidth'), height = number('viewHeight');
+      final rotation = event['rotation'];
+      if (width == null ||
+          height == null ||
+          width <= 0 ||
+          height <= 0 ||
+          !const [0, 90, 180, 270].contains(rotation)) {
+        _clear('unreliable');
+        _changed();
+        return;
+      }
+      final viewport = '$width/$height/$rotation';
+      if (_viewport != viewport) _objects.clear();
+      _viewport = viewport;
+      if (!_objects.update(
+        event['objects'],
+        time,
+        acceptedIds: source.classIds,
+      )) {
+        _clear('unreliable');
+      } else {
+        status = objects.isEmpty ? 'noObjects' : 'objectsReady';
+      }
+      _changed();
+      return;
+    }
+    if (state == 'sample' && objectsEnabled) {
+      _clear('unreliable');
+      _changed();
+      return;
+    }
     if (state != 'sample') {
       _clear(
         const [

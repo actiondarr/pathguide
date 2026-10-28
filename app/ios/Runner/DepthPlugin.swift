@@ -1,5 +1,6 @@
 import ARKit
 import AVFoundation
+import CryptoKit
 import Flutter
 import SceneKit
 import UIKit
@@ -18,6 +19,12 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
   private var previousPose: simd_float4x4?
   private var token = ""
   private var startedAt = Double.infinity
+  private let work = DispatchQueue(label: "hk.pathguide.depth.inference", qos: .userInitiated)
+  // detector is owned exclusively by work; busy/epoch by the main queue.
+  private var detector: DepthDetector?
+  private var objectsEnabled = false
+  private var busy = false
+  private var epoch = 0
 
   init(messenger: FlutterBinaryMessenger) {
     methods = FlutterMethodChannel(name: "hk.pathguide/depth", binaryMessenger: messenger)
@@ -70,6 +77,8 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
     generation += 1
     running = false
     previousPose = nil
+    epoch += 1
+    work.async { [weak self] in self?.detector = nil }
     session.pause()
   }
 
@@ -85,6 +94,7 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
       }
       stop()
       token = id
+      objectsEnabled = args["objects"] as? Bool == true
       guard ARWorldTrackingConfiguration.isSupported,
         ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) else {
         result(["status": "unsupported"]); return
@@ -114,19 +124,37 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
         if let vision = VisionPlugin.active { vision.release { _ in run() } }
         else { run() }
       }
-      switch AVCaptureDevice.authorizationStatus(for: .video) {
-      case .authorized: begin(true)
-      case .notDetermined:
-        AVCaptureDevice.requestAccess(for: .video) { granted in
-          DispatchQueue.main.async { begin(granted) }
+      func authorize() {
+        guard expected == self.generation else { result(["status": "paused"]); return }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: begin(true)
+        case .notDetermined:
+          AVCaptureDevice.requestAccess(for: .video) { granted in
+            DispatchQueue.main.async { begin(granted) }
+          }
+        default: begin(false)
         }
-      default: begin(false)
       }
+      if objectsEnabled {
+        work.async { [weak self] in
+          guard let self else { return }
+          do {
+            self.detector = try DepthDetector(arguments: args)
+            DispatchQueue.main.async { authorize() }
+          } catch {
+            self.detector = nil
+            DispatchQueue.main.async {
+              result(["status": expected == self.generation ? "model" : "paused"])
+            }
+          }
+        }
+      } else { authorize() }
     default: result(FlutterMethodNotImplemented)
     }
   }
 
-  private func emit(_ status: String, frame: ARFrame? = nil, patch: DepthPatch? = nil) {
+  private func emit(_ status: String, frame: ARFrame? = nil, patch: DepthPatch? = nil,
+    details: [String: Any] = [:]) {
     var value: [String: Any] = ["session": token, "status": status]
     if let frame {
       value["timestamp"] = frame.timestamp
@@ -139,6 +167,7 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
       value["total"] = patch.total
       value["spreadM"] = patch.spread
     }
+    value.merge(details) { _, new in new }
     sink?(value)
   }
 
@@ -146,10 +175,12 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
     guard running, frame.timestamp >= startedAt, frame.timestamp - lastSent >= 0.12 else { return }
     lastSent = frame.timestamp
     guard ProcessInfo.processInfo.systemUptime - frame.timestamp <= 0.35 else {
+      epoch += 1
       previousPose = nil
       emit("stale", frame: frame); return
     }
     guard case .normal = frame.camera.trackingState else {
+      epoch += 1
       previousPose = nil
       emit("tracking", frame: frame); return
     }
@@ -162,7 +193,12 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
     let rotation = simd_mul(simd_transpose(simd_float3x3(old)), simd_float3x3(pose))
     let cosine = max(-1, min(1, (rotation.columns.0.x + rotation.columns.1.y + rotation.columns.2.z - 1) / 2))
     guard moved <= 0.025, acos(cosine) <= 0.04 else {
+      epoch += 1
       emit("moving", frame: frame); return
+    }
+    if objectsEnabled {
+      analyzeObjects(frame)
+      return
     }
     guard let view = preview, view.bounds.width > 0, view.bounds.height > 0,
       let orientation = view.window?.windowScene?.interfaceOrientation,
@@ -210,6 +246,56 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
     emit("sample", frame: frame, patch: patch)
   }
 
+  private func analyzeObjects(_ frame: ARFrame) {
+    guard !busy else { return } // Drop frames, never queue camera inference.
+    guard let view = preview, view.bounds.width > 0, view.bounds.height > 0,
+      let orientation = view.window?.windowScene?.interfaceOrientation else {
+      epoch += 1
+      emit("unavailable", frame: frame); return
+    }
+    let rotation: Int
+    switch orientation {
+    case .portrait: rotation = 90
+    case .portraitUpsideDown: rotation = 270
+    case .landscapeLeft: rotation = 180
+    case .landscapeRight: rotation = 0
+    default: emit("unavailable", frame: frame); return
+    }
+    let size = view.bounds.size
+    let transform = frame.displayTransform(for: orientation, viewportSize: size)
+    let expectedGeneration = generation, expectedEpoch = epoch
+    busy = true
+    work.async { [weak self] in
+      guard let self else { return }
+      let result: Result<[[String: Any]], Error>
+      let start = ProcessInfo.processInfo.systemUptime
+      do {
+        guard let detector = self.detector else { throw DepthDetector.Failure.invalid }
+        result = .success(try detector.analyze(frame, rotation: rotation, displayTransform: transform))
+      } catch { result = .failure(error) }
+      let inferenceMs = (ProcessInfo.processInfo.systemUptime - start) * 1000
+      DispatchQueue.main.async {
+        self.busy = false
+        guard self.running, expectedGeneration == self.generation, expectedEpoch == self.epoch else { return }
+        guard self.preview?.bounds.size == size,
+          self.preview?.window?.windowScene?.interfaceOrientation == orientation else {
+          self.epoch += 1
+          self.emit("moving", frame: frame); return
+        }
+        guard ProcessInfo.processInfo.systemUptime - frame.timestamp <= 0.35 else {
+          self.emit("stale", frame: frame); return
+        }
+        guard case .success(let objects) = result else {
+          self.emit("failed", frame: frame)
+          self.stop(); return
+        }
+        self.emit("objects", frame: frame, details: ["objects": objects,
+          "viewWidth": size.width, "viewHeight": size.height, "rotation": rotation,
+          "inferenceMs": inferenceMs])
+      }
+    }
+  }
+
   func sessionWasInterrupted(_ session: ARSession) {
     emit("interrupted")
     stop()
@@ -217,6 +303,121 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
   func session(_ session: ARSession, didFailWithError error: Error) {
     emit("failed")
     stop()
+  }
+}
+
+private final class DepthDetector {
+  enum Failure: Error { case invalid }
+  let runner: TFLiteModelRunner
+  let ids: [Int]
+  let side: Int
+  let anchors: Int
+  let transposed: Bool
+  let threshold: Float32
+
+  init(arguments args: [String: Any]) throws {
+    guard let path = args["model"] as? String, let sha = args["sha256"] as? String,
+      let bytes = args["bytes"] as? Int, let classes = args["classes"] as? Int,
+      let size = args["inputSize"] as? Int,
+      let values = args["classIds"] as? [NSNumber],
+      let cutoff = args["threshold"] as? Double, cutoff.isFinite, cutoff >= 0.05, cutoff <= 0.95 else {
+      throw Failure.invalid
+    }
+    let data = try Data(contentsOf: URL(fileURLWithPath: path))
+    guard data.count == bytes,
+      SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == sha else { throw Failure.invalid }
+    runner = try TFLiteModelRunner(modelPath: path, threadCount: 4)
+    side = try IOSModelInputLayout(shape: runner.inputShape).side
+    ids = values.map(\.intValue)
+    let out = runner.outputShape
+    guard side == size, out.count == 3, out[0] == 1,
+      min(out[1], out[2]) == classes + 4, max(out[1], out[2]) > classes + 4,
+      ids.count == classes, Set(ids).count == classes, ids.allSatisfy({ $0 >= 0 }) else { throw Failure.invalid }
+    anchors = max(out[1], out[2])
+    transposed = out[1] > out[2]
+    threshold = Float32(cutoff)
+  }
+
+  func analyze(_ frame: ARFrame, rotation: Int, displayTransform: CGAffineTransform) throws -> [[String: Any]] {
+    let prepared = try IOSFramePreprocessor.prepare(pixelBuffer: frame.capturedImage,
+      inputSize: side, rotationDegrees: rotation)
+    let output = try runner.invoke(input: prepared.values)
+    guard output.count == anchors * (ids.count + 4) else { throw Failure.invalid }
+    let decoded = IOSYoloDecoder.decode(values: output, anchors: anchors, classes: ids.count,
+      transposed: transposed, threshold: threshold, inputSize: side,
+      sourceWidth: prepared.uprightWidth, sourceHeight: prepared.uprightHeight,
+      scaledWidth: prepared.scaledWidth, scaledHeight: prepared.scaledHeight,
+      padX: prepared.padX, padY: prepared.padY, classIds: ids)
+    let detections = IOSYoloDecoder.nonMaximumSuppression(decoded.detections, iouThreshold: 0.45, maximum: 20)
+    let rawBoxes = detections.map { detection -> CGRect in
+      let corners = [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)].map { dx, dy in
+        CameraImageMath.rawPoint(x: Double(detection.cx) + dx * Double(detection.width) / 2,
+          y: Double(detection.cy) + dy * Double(detection.height) / 2, rotation: rotation)
+      }
+      let xs = corners.map { $0.0 }, ys = corners.map { $0.1 }
+      return CGRect(x: max(0, xs.min()!), y: max(0, ys.min()!),
+        width: min(1, xs.max()!) - max(0, xs.min()!), height: min(1, ys.max()!) - max(0, ys.min()!))
+    }
+    var results: [[String: Any]] = []
+    for (index, detection) in detections.enumerated() {
+      let raw = rawBoxes[index]
+      let displayed = raw.applying(displayTransform).standardized
+      let visible = displayed.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+      guard !visible.isNull, displayed.width > 0, displayed.height > 0,
+        displayed.midX >= 0, displayed.midX <= 1, displayed.midY >= 0, displayed.midY <= 1,
+        visible.width * visible.height / (displayed.width * displayed.height) >= 0.6 else { continue }
+      var value: [String: Any] = ["id": detection.id, "score": Double(detection.score),
+        "box": [visible.minX, visible.minY, visible.width, visible.height], "reason": "unreliable"]
+      let inner = raw.insetBy(dx: raw.width * 0.25, dy: raw.height * 0.25)
+      let overlap = rawBoxes.enumerated().contains { i, other in
+        guard i != index else { return false }
+        let intersection = inner.intersection(other)
+        return !intersection.isNull && intersection.width * intersection.height > inner.width * inner.height * 0.1
+      }
+      if overlap { value["reason"] = "overlap" }
+      else if let patch = sample(frame, box: raw) {
+        value["rangeM"] = patch.range
+        value["planeZM"] = patch.z
+        value["accepted"] = patch.accepted
+        value["total"] = patch.total
+        value["spreadM"] = patch.spread
+        value["reason"] = "sample"
+      }
+      results.append(value)
+      if results.count == 5 { break }
+    }
+    return results
+  }
+
+  private func sample(_ frame: ARFrame, box: CGRect) -> DepthPatch? {
+    guard let depth = frame.sceneDepth, let confidence = depth.confidenceMap else { return nil }
+    let buffer = depth.depthMap
+    let w = CVPixelBufferGetWidth(buffer), h = CVPixelBufferGetHeight(buffer)
+    guard CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_DepthFloat32,
+      CVPixelBufferGetPixelFormatType(confidence) == kCVPixelFormatType_OneComponent8,
+      CVPixelBufferGetWidth(confidence) == w, CVPixelBufferGetHeight(confidence) == h,
+      let grid = CameraImageMath.grid(box: box, width: w, height: h) else { return nil }
+    CVPixelBufferLockBaseAddress(buffer, .readOnly)
+    CVPixelBufferLockBaseAddress(confidence, .readOnly)
+    defer {
+      CVPixelBufferUnlockBaseAddress(confidence, .readOnly)
+      CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
+    }
+    guard let raw = CVPixelBufferGetBaseAddress(buffer),
+      let conf = CVPixelBufferGetBaseAddress(confidence) else { return nil }
+    let k = frame.camera.intrinsics
+    let sx = Double(w) / Double(frame.camera.imageResolution.width)
+    let sy = Double(h) / Double(frame.camera.imageResolution.height)
+    let fx = Double(k.columns.0.x) * sx, fy = Double(k.columns.1.y) * sy
+    let cx = Double(k.columns.2.x) * sx, cy = Double(k.columns.2.y) * sy
+    guard fx > 0, fy > 0 else { return nil }
+    let pixels = grid.map { col, row -> DepthPixel in
+      let values = raw.advanced(by: row * CVPixelBufferGetBytesPerRow(buffer)).assumingMemoryBound(to: Float32.self)
+      let confidenceRow = conf.advanced(by: row * CVPixelBufferGetBytesPerRow(confidence)).assumingMemoryBound(to: UInt8.self)
+      return DepthPixel(z: Double(values[col]), confidence: confidenceRow[col],
+        rayX: (Double(col) - cx) / fx, rayY: (Double(row) - cy) / fy)
+    }
+    return DepthSampling.evaluate(pixels)
   }
 }
 

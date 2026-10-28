@@ -650,7 +650,7 @@ class _NavigationPageState extends State<NavigationPage>
                 if (!hasTask) ...[
                   if (widget.onOpenDepth != null)
                     _button(
-                      'LiDAR 測距（試驗）',
+                      '物件與測距（試驗）',
                       nav.busy || _listening ? null : widget.onOpenDepth,
                     ),
                   if (widget.onOpenReplay != null)
