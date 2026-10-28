@@ -1,6 +1,6 @@
 # 領路通 PathGuide 後端與雲端資料流程方案
 
-更新：2026年10月27日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
+更新：2026年10月28日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
 
 **後端把已同意的錯誤場景，經覆核、訓練與評估，轉成可回退的私人模型。** 上傳成功只代表收到照片，不代表已學會、變準或可以更新。
 
@@ -12,14 +12,14 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 
 | 階段 | 本階段後端工作 | 目前進度 | 完成標準 | 下一步／依賴 |
 |---|---|---|---|---|
-| S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.1.0+2源碼／模型／映射已核對，分支＋不可變tag／prerelease保存；真機驗收未齊 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
+| S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.2.0+3 graph版與原試驗模型已核對；依分支＋不可變tag／prerelease備份，場測未齊 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
 | S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
 | S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理程式已有，本機關閉；管理員覆核服務未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
 | S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；付費GPU預算未定 | 模擬完整流程、真實工作受配額控制、合格模型可本人下載／回退 | 先mock worker、資料接口與取消／刪除，再開付費執行 |
 | S4 室內近距離感知與引導 | 只供版本／設定；不把即時深度送雲端推理 | 無室內服務，首版即時運算在手機 | 離線空間感知不依賴後端；無深度／姿態上傳副作用 | 與Frontend確認接口，保留原照片用途界線 |
 | S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
 | S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
-| S7 多場地、多樓層與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 未開始／未來設計 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
+| S7 多場地、多樓層與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 本機typed graph／觀察原型已有；雲端及真實場地服務未實作 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
 
 ## 各功能計劃如何實現
 
@@ -38,9 +38,9 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B09 本人下載、自動更新與回退／S3 | 未接通 | 新增本人模型offer與限時下載授權；發票前重驗身分／用途／刪除狀態，URL只指向核准物件且不記完整URL日誌。App下載暫存、核對offer、SHA與映射後在任務停止時切換；保留上一版／內置版 | Frontend F08；逾時重取授權，跨UID／不相容／損壞拒絕。已簽網址有有效期，撤回後仍須處理過期窗口與物件清理 |
 | B10 撤回、取消、帳號刪除與到期／S2–S3 | 第四階段清理已有；訓練資源未覆蓋 | 沿用tombstone／deleting，先禁止新上傳／job／下載，取消並等待或隔離worker，再按清單刪照片、annotations、snapshot、外部副本及私人模型，最後Auth；每步可重試並拒絕遲到重建 | 擴充現有deletePhotoAccountData；基礎共用資料不因單UID刪除而誤刪，處理中狀態可理解 |
 | B11 Android搜尋／步行代理／S1 | computeWalkingRoute已有，未部署／驗證 | App Check驗應用，訪客可用；固定Google Routes WALK、HK／繁中與回傳欄位，Secret Manager供金鑰，逾時／配額分類；不接受任意網址代理、不持久保存軌跡 | Google配置、預算、簽署限制及真機；iPhoneMapKit不改走此代理 |
-| B12 發佈、診斷與預算／S0–S6 | 1.1.0+2程式核對通過；分支／tag／prerelease保存後已安裝／啟動；場測待補 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依第7節先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
+| B12 發佈、診斷與預算／S0–S6 | 1.2.0+3程式及簽署建置通過；先核對遠端版本，再安裝；場測待補 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依第7節先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
 | B13 室內即時資料邊界／S4 | 未有深度服務，規劃本機處理 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
-| B14 拓撲graph、觀察序列與場地版本／S7 | 概念討論，未實作 | 先手動node／edge驗證；永久地圖、node內容與行程觀察分開版本化，圖片只產生候選對照。不吻合先保留未知與待覆核，核准後才更新地圖；量測座標／幾何校準及樓層連接後續加入 | F14／D09；不用GPS猜樓層，無場地資料不提供指定課室；場地更新不破壞舊App |
+| B14 拓撲graph、觀察序列與場地版本／S7 | 1.2.0+3本機Dart模型／樣例已有，無雲端API | IndoorGraph／IndoorNode／LandmarkObject／LandmarkObservation以固定ID、內容版本、scope與有界queue表達；手動node／edge先驗證；永久地圖、node內容與行程觀察分開版本化，圖片只產生候選對照。不吻合先保留未知與待覆核，核准後才更新地圖；量測座標／幾何校準及樓層連接後續加入 | F14／D09；不用GPS猜樓層，無場地資料不提供指定課室；場地更新不破壞舊App |
 | B15 路線錄製／場景摘要同步／S7 | 後續構想 | 先本機功能；自願同步才新增UID版本化路標序列與刪除。場景摘要預設本機有效證據，不自動新增雲端影像描述或追蹤紀錄 | F17；另行確認用途與授權，不能因訓練照片同意便錄影／上傳路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
 
@@ -138,6 +138,14 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 
 App／共用模型完成後先推GitHub commit、tag／Release並核對，再安裝交付。私人照片、權重及含私人資訊報告留在受權限保護的儲存，不進共用repo；私人registry保留歷史版本供本人回退。完整版本程序見本檔第7節。
 
+### 1.2.0+3本機graph資料邊界
+
+目前只增加App內的typed Dart資料與樣例，不部署Firestore、Storage、callable或Server定位服務。`IndoorGraph(id, version, floor, nodes, edges)`保存不可變node與開放／封閉無向edge；`IndoorNode`保存固定ID、名稱、contentVersion與objects，各object的已核准aliases先正規化再配對；同一node的不同object不可共用匹配key，避免同一個詞被當成兩份證據。畫圖layout另存，不是可輸出米數的x,y。
+
+`LandmarkObservation`含sessionId、sequence、capturedAt、graphId、mapVersion、floor與landmarks；樣例`ReplayEvent.receivedAt`模擬回覆收到時間。GraphReplaySession最多保留50筆、拒絕跨session更新、忽略較舊序號；scope／時間不符撤回目前位置。未知或改名候選不會寫入永久圖。版本欄位和N08別名只示範資料分層，沒有實作地圖編輯、審批、雲端registry或自動升版服務。
+
+本機回放無帳號、無照片／GPS擷取、無影像／路徑／深度上傳，也不讀取現有私人照片佇列。5秒是樣例capture時間間隔；自動顯示每秒一筆，兩者都不是新增拍攝API。未來實拍／Server adapter需另訂用途、配額與授權，不能沿用訓練照片同意。付費GPU仍停用。
+
 ## 5. 撤回、刪除與失效
 
 - 關閉收集停止本機擷取／待傳；另提供個人訓練及自動更新控制，worker在排隊、取資料、續跑與發佈前重驗授權。
@@ -205,3 +213,5 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 2026-10-27發佈核對：App源碼commit `687d40188c117e7764cd71b063e834b23763682d` 已推至既有分支；以 `git ls-remote` 核對分支及兩個tag的實際commit。[1.1.0+2試用Release](https://github.com/actiondarr/pathguide/releases/tag/v1.1.0%2B2)及[整合前還原點](https://github.com/actiondarr/pathguide/releases/tag/v1.0.0%2B1-baseline)均經正常GitHub網頁建立並核對，沒有抽取憑證。產物含相符源碼／模型與manifest；無簽署IPA，未安裝手機。機器收據：verification/release-receipts/app-1.1.0+2.json。後續文件核對提交不移動App tag。
 
 同日交付核對：GitHub核對後才簽署，包內1.1.0+2、模型SHA與manifest相符；正常系統信任服務簽章驗證、CoreDevice安裝及啟動成功。無IPA公開下載；裝置ID、安裝路徑及簽署資料不寫入公開收據。見verification/release-receipts/app-1.1.0+2.json；App tag與權重沒有變動。
+
+2026-10-28 graph版：1.2.0+3加入純本機graph／內容／觀察資料模型與回放，雲端服務、UID資料及GPU均沒有變動。274項Flutter測試及簽署iOS建置通過；版本備份包含同一mixed10試驗模型與manifest，舊1.1.0+2保留。先核對遠端tag／prerelease，再安裝；收據放verification。

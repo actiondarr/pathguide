@@ -35,6 +35,7 @@ class NavigationPage extends StatefulWidget {
     this.onTaskChanged,
     this.visionFactory,
     this.speechSuspended = false,
+    this.onOpenReplay,
   });
   final AppSettings settings;
   final NavigationController? controller;
@@ -44,6 +45,7 @@ class NavigationPage extends StatefulWidget {
   final ValueChanged<bool>? onTaskChanged;
   final VisionSource Function()? visionFactory;
   final bool speechSuspended;
+  final VoidCallback? onOpenReplay;
   @override
   State<NavigationPage> createState() => _NavigationPageState();
 }
@@ -644,6 +646,11 @@ class _NavigationPageState extends State<NavigationPage>
                   ],
                 ],
                 if (!hasTask) ...[
+                  if (widget.onOpenReplay != null)
+                    _button(
+                      '室內路標回放（樣例）',
+                      nav.busy || _listening ? null : widget.onOpenReplay,
+                    ),
                   TextField(
                     controller: _query,
                     enabled: !_listening && !nav.busy,

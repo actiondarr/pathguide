@@ -13,6 +13,7 @@ import 'usage_guide.dart';
 import '../account/account_ui.dart';
 import '../menu/menu_page.dart';
 import '../navigation/navigation_page.dart';
+import '../indoor/graph_replay_page.dart';
 
 enum AppSection { home, explore, navigation, settings }
 
@@ -38,9 +39,15 @@ class _AppShellState extends State<AppShell> {
 
   bool _accountVisible = false;
   bool _menuVisible = false;
+  bool _graphVisible = false;
   bool _navigationTask = false, _confirmingNavigationExit = false;
   Future<void> _select(AppSection section) async {
-    if (_section == section && !_accountVisible && !_menuVisible) return;
+    if (_section == section &&
+        !_accountVisible &&
+        !_menuVisible &&
+        !_graphVisible) {
+      return;
+    }
     if (_section == AppSection.navigation &&
         _navigationTask &&
         section != _section) {
@@ -71,6 +78,7 @@ class _AppShellState extends State<AppShell> {
       _section = section;
       _accountVisible = false;
       _menuVisible = false;
+      _graphVisible = false;
     });
   }
 
@@ -94,6 +102,7 @@ class _AppShellState extends State<AppShell> {
       settings: widget.settings,
       onTaskChanged: (active) => _navigationTask = active,
       speechSuspended: _confirmingNavigationExit,
+      onOpenReplay: () => setState(() => _graphVisible = true),
     ),
     AppSection.settings => SettingsPage(
       onAccount: _openAccount,
@@ -109,13 +118,20 @@ class _AppShellState extends State<AppShell> {
       // keep it alive (and potentially speaking) during its exit animation.
       body: KeyedSubtree(
         key: ValueKey(
-          _menuVisible
+          _graphVisible
+              ? 'graph-replay'
+              : _menuVisible
               ? 'menu'
               : _accountVisible
               ? 'account'
               : _section,
         ),
-        child: _menuVisible
+        child: _graphVisible
+            ? GraphReplayPage(
+                settings: widget.settings,
+                onBack: () => setState(() => _graphVisible = false),
+              )
+            : _menuVisible
             ? MenuPage(
                 settings: widget.settings,
                 onBack: () => setState(() => _menuVisible = false),
