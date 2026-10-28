@@ -55,6 +55,45 @@ Future<void> showDepth(
 
 void main() {
   for (final language in AppLanguage.values) {
+    testWidgets('shows refusal cause and depth point counts ${language.name}', (
+      tester,
+    ) async {
+      final source = FakeDepthSource();
+      await showDepth(
+        tester,
+        source,
+        language: language,
+        objects: true,
+        scale: 2,
+      );
+      await tester.tap(find.byKey(const ValueKey('depth-toggle')));
+      await tester.pump();
+      source.objectFrame(1, [
+        {
+          ...FakeDepthSource.object(known: false),
+          'reason': 'low_depth',
+          'validDepth': 8,
+          'depthTotal': 25,
+          'samplePoint': [.2, .4],
+        },
+      ]);
+      await tester.pump();
+      expect(
+        find.text(
+          language == AppLanguage.english
+              ? 'Insufficient high-confidence depth in range'
+              : '量程內高信心深度不足',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('8/25'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      await source.events.close();
+    });
+  }
+  for (final language in AppLanguage.values) {
     testWidgets(
       'depth ${language.name} large text retains start/read controls',
       (tester) async {

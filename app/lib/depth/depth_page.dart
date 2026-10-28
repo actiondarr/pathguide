@@ -11,6 +11,7 @@ import '../vision/labels.dart';
 import '../tts/announcer.dart';
 import '../tts/flutter_tts_speaker.dart';
 import 'depth_session.dart';
+import 'depth_objects.dart';
 
 class DepthPage extends StatefulWidget {
   const DepthPage({
@@ -348,6 +349,32 @@ class _DepthPageState extends State<DepthPage> with WidgetsBindingObserver {
                                           ),
                                         ),
                                       ),
+                                    for (final object in _session.objects)
+                                      if (object.samplePoint != null)
+                                        Positioned(
+                                          left:
+                                              object.samplePoint!.dx *
+                                                  constraints.maxWidth -
+                                              5,
+                                          top:
+                                              object.samplePoint!.dy *
+                                                  constraints.maxHeight -
+                                              5,
+                                          child: Container(
+                                            width: 10,
+                                            height: 10,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: object.rangeM == null
+                                                  ? Colors.orange
+                                                  : Colors.cyan,
+                                              border: Border.all(
+                                                color: Colors.black,
+                                                width: 2,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                   ],
                                 ),
                               ),
@@ -383,6 +410,17 @@ class _DepthPageState extends State<DepthPage> with WidgetsBindingObserver {
                                   ? _t('距離未知', 'Range unknown')
                                   : '${_t('框內表面約 ', 'Surface inside box about ')}${_session.objects[i].rangeM!.toStringAsFixed(1)} ${_t('米', 'm')}',
                             ),
+                            Text(
+                              depthReasonText(
+                                _session.objects[i].reason,
+                                english: _english,
+                              ),
+                            ),
+                            if (_session.objects[i].validDepth != null)
+                              Text(
+                                '${_t('量程內高信心點：', 'High-confidence points in range: ')}'
+                                '${_session.objects[i].validDepth}/${_session.objects[i].depthTotal}',
+                              ),
                           ],
                         ),
                       ),
@@ -391,6 +429,12 @@ class _DepthPageState extends State<DepthPage> with WidgetsBindingObserver {
                     _t(
                       '距離是框內可信表面的估算，不是整個物件最近邊緣，也不是可通行或碰撞判斷。朗讀最多讀出目前三個物件。',
                       'Range estimates a reliable surface inside a box, not the nearest object edge, clear space or collision risk. Reading covers up to three current objects.',
+                    ),
+                  ),
+                  Text(
+                    _t(
+                      '框內圓點標示實際取樣位置；點數不是正確率。',
+                      'The dot marks the actual sample location. Point counts are not accuracy.',
                     ),
                   ),
                 ],

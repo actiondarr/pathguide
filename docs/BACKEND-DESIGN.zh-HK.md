@@ -235,3 +235,7 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 同輪1.4.0+5工程核對：完整314項Flutter、11項iOS原生XCTest、25項距離／座標／色彩數值檢查通過，analyze無問題，最終iOS簽署建置、系統簽章及包內版本／模型相符。verification/app-1.4.0+5.json記錄構建快照；發佈／裝機由收據更新。不是實地辨識、量尺精度或VoiceOver驗收。
 
 同日1.4.0+5發佈交付核對：正常Git推送／ls-remote核對分支與tag指向26fa41eeca58b9554efd81d964455bb652628004，正常GitHub網頁建立及核對prerelease。備份後CoreDevice安裝／啟動成功，收據verification/release-receipts/app-1.4.0+5.json；公開資料不含裝置ID、安裝路徑或簽署憑證。文件／收據提交不移動App tag，沒有新雲端部署或費用。
+
+2026-10-28 1.4.1+6修正版：物件本機事件新增samplePoint（當次預覽normalized座標）、validDepth／depthTotal與細分reason；前端展示原因與點數，不把它們當正確率。深度信心／量程／混合表面／過期門檻不變，僅改框內局部取樣選擇及遮擋檢查；取樣位置改變重新累積時序證據。本機不新增影像／深度記錄或Cloud API、照片上傳仍關閉，無GPU／訓練工作。使用者提供測試截圖未放GitHub／dataset。318項Flutter與33項數值檢查的構建證據見verification/app-1.4.1+6.json，最新GitHub／手機狀態由release-receipts記錄；舊tag保留。
+
+同輪1.4.1+6最終核對：318項Flutter、33項原生數值檢查、analyze、簽署建置、系統簽章及包內版本／原模型SHA通過。先保存GitHub分支／tag／prerelease，再交付；最新裝機狀態由verification/release-receipts/app-1.4.1+6.json記錄，未將合成回歸當真機問題已解決。

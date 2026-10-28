@@ -368,35 +368,25 @@ private final class DepthDetector {
         visible.width * visible.height / (displayed.width * displayed.height) >= 0.6 else { continue }
       var value: [String: Any] = ["id": detection.id, "score": Double(detection.score),
         "box": [visible.minX, visible.minY, visible.width, visible.height], "reason": "unreliable"]
-      let inner = raw.insetBy(dx: raw.width * 0.25, dy: raw.height * 0.25)
-      let overlap = rawBoxes.enumerated().contains { i, other in
-        guard i != index else { return false }
-        let intersection = inner.intersection(other)
-        return !intersection.isNull && intersection.width * intersection.height > inner.width * inner.height * 0.1
-      }
-      if overlap { value["reason"] = "overlap" }
-      else if let patch = sample(frame, box: raw) {
-        value["rangeM"] = patch.range
-        value["planeZM"] = patch.z
-        value["accepted"] = patch.accepted
-        value["total"] = patch.total
-        value["spreadM"] = patch.spread
-        value["reason"] = "sample"
-      }
+      let occluders = rawBoxes.enumerated().filter { $0.offset != index }.map { $0.element }
+      value.merge(sample(frame, box: raw, occluders: occluders, transform: displayTransform)) { _, next in next }
       results.append(value)
       if results.count == 5 { break }
     }
     return results
   }
 
-  private func sample(_ frame: ARFrame, box: CGRect) -> DepthPatch? {
-    guard let depth = frame.sceneDepth, let confidence = depth.confidenceMap else { return nil }
+  private func sample(_ frame: ARFrame, box: CGRect, occluders: [CGRect], transform: CGAffineTransform) -> [String: Any] {
+    guard let depth = frame.sceneDepth, let confidence = depth.confidenceMap else { return ["reason": "depth_missing"] }
     let buffer = depth.depthMap
     let w = CVPixelBufferGetWidth(buffer), h = CVPixelBufferGetHeight(buffer)
     guard CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_DepthFloat32,
       CVPixelBufferGetPixelFormatType(confidence) == kCVPixelFormatType_OneComponent8,
-      CVPixelBufferGetWidth(confidence) == w, CVPixelBufferGetHeight(confidence) == h,
-      let grid = CameraImageMath.grid(box: box, width: w, height: h) else { return nil }
+      CVPixelBufferGetWidth(confidence) == w, CVPixelBufferGetHeight(confidence) == h else { return ["reason": "depth_format"] }
+    let unmasked = CameraImageMath.localPatches(box: box, occluders: [], width: w, height: h)
+    guard !unmasked.isEmpty else { return ["reason": "small"] }
+    let patches = CameraImageMath.localPatches(box: box, occluders: occluders, width: w, height: h)
+    guard !patches.isEmpty else { return ["reason": "overlap"] }
     CVPixelBufferLockBaseAddress(buffer, .readOnly)
     CVPixelBufferLockBaseAddress(confidence, .readOnly)
     defer {
@@ -404,20 +394,36 @@ private final class DepthDetector {
       CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
     }
     guard let raw = CVPixelBufferGetBaseAddress(buffer),
-      let conf = CVPixelBufferGetBaseAddress(confidence) else { return nil }
+      let conf = CVPixelBufferGetBaseAddress(confidence) else { return ["reason": "depth_missing"] }
     let k = frame.camera.intrinsics
     let sx = Double(w) / Double(frame.camera.imageResolution.width)
     let sy = Double(h) / Double(frame.camera.imageResolution.height)
     let fx = Double(k.columns.0.x) * sx, fy = Double(k.columns.1.y) * sy
     let cx = Double(k.columns.2.x) * sx, cy = Double(k.columns.2.y) * sy
-    guard fx > 0, fy > 0 else { return nil }
+    guard fx > 0, fy > 0 else { return ["reason": "depth_format"] }
+    var best: [String: Any] = ["reason": "low_depth"]
+    var bestValid = -1
+    for grid in patches {
     let pixels = grid.map { col, row -> DepthPixel in
       let values = raw.advanced(by: row * CVPixelBufferGetBytesPerRow(buffer)).assumingMemoryBound(to: Float32.self)
       let confidenceRow = conf.advanced(by: row * CVPixelBufferGetBytesPerRow(confidence)).assumingMemoryBound(to: UInt8.self)
       return DepthPixel(z: Double(values[col]), confidence: confidenceRow[col],
         rayX: (Double(col) - cx) / fx, rayY: (Double(row) - cy) / fy)
     }
-    return DepthSampling.evaluate(pixels)
+    let assessment = DepthSampling.inspect(pixels)
+    let center = grid[12]
+    let point = CGPoint(x: Double(center.0) / Double(w), y: Double(center.1) / Double(h)).applying(transform)
+    guard point.x >= 0, point.x <= 1, point.y >= 0, point.y <= 1 else { continue }
+    var result: [String: Any] = ["reason": assessment.reason, "validDepth": assessment.valid,
+      "depthTotal": assessment.total, "samplePoint": [point.x, point.y]]
+    if let patch = assessment.patch {
+      result["rangeM"] = patch.range; result["planeZM"] = patch.z
+      result["accepted"] = patch.accepted; result["total"] = patch.total; result["spreadM"] = patch.spread
+      return result
+    }
+    if assessment.valid > bestValid { best = result; bestValid = assessment.valid }
+    }
+    return best
   }
 }
 

@@ -50,6 +50,26 @@ import Foundation
     check(red601.0 > 0.99 && red601.1 < 0.01 && red601.2 < 0.01, "BT601 red conversion")
     let red709 = CameraImageMath.rgb(y: 54.213, cb: 98.784, cr: 255.5, fullRange: true, bt709: true)
     check(red709.0 > 0.99 && red709.1 < 0.01 && red709.2 < 0.01, "BT709 red conversion")
+    let bodyBox = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
+    let local = CameraImageMath.localPatches(box: bodyBox, occluders: [], width: 200, height: 200)
+    check(local.count == 9 && local[0].count == 25, "centre-first bounded local candidates")
+    check(local[0].map { $0.0 }.max()! - local[0].map { $0.0 }.min()! == 4 &&
+      Set(local[0].map { "\($0.0),\($0.1)" }).count == 25, "adjacent distinct pixels, not broad sparse grid")
+    func curved(_ grid: [(Int, Int)]) -> [DepthPixel] { grid.map { _, row in pixel(1.2 + Double(row) / 200) } }
+    let broad = CameraImageMath.grid(box: bodyBox, width: 200, height: 200)!
+    check(DepthSampling.evaluate(curved(broad)) == nil && DepthSampling.evaluate(curved(local[0])) != nil,
+      "curved person surface uses unchanged confidence gates on local patch")
+    let masked = CameraImageMath.localPatches(box: bodyBox,
+      occluders: [CGRect(x: 0.48,y:0.48,width:0.05,height:0.05)], width: 200, height: 200)
+    check(!masked.isEmpty && masked[0][12].1 < 90, "central occlusion uses unoccluded nearby patch")
+    check(CameraImageMath.localPatches(box: bodyBox, occluders: [bodyBox], width: 200, height: 200).isEmpty,
+      "fully occluded object never borrows another object depth")
+    check(CameraImageMath.localPatches(box: CGRect(x:0.1,y:0.1,width:0.01,height:0.5),
+      occluders: [], width:200,height:200).isEmpty, "small object cannot fit full local patch")
+    let low = DepthSampling.inspect(Array(repeating: pixel(2,1),count:25))
+    check(low.reason == "low_depth" && low.valid == 0 && low.patch == nil, "low confidence diagnosis")
+    let mixed = DepthSampling.inspect(Array(wall.prefix(19)) + Array(repeating:pixel(3),count:6))
+    check(mixed.reason == "mixed_depth" && mixed.valid == 25 && mixed.patch == nil, "mixed surface diagnosis")
     print("DepthSampling: \(checks) deterministic checks passed; no device accuracy claim")
   }
 }

@@ -4,6 +4,26 @@ import CoreGraphics
 /// Normalized, top-left origin coordinates. Detection boxes are upright;
 /// ARKit depth and intrinsics use the unrotated captured image coordinates.
 enum CameraImageMath {
+  /// Centre-first local patches avoid treating a person's entire torso/chair
+  /// envelope as one plane. Every patch stays in the box and avoids other boxes.
+  static func localPatches(box: CGRect, occluders: [CGRect], width: Int, height: Int) -> [[(Int, Int)]] {
+    guard width >= 5, height >= 5, box.origin.x.isFinite, box.origin.y.isFinite,
+      box.size.width.isFinite, box.size.height.isFinite, box.size.width > 0, box.size.height > 0,
+      box.minX >= 0, box.maxX <= 1, box.minY >= 0, box.maxY <= 1 else { return [] }
+    let centres = [(0.5,0.5),(0.5,0.35),(0.5,0.65),(0.35,0.5),(0.65,0.5),
+      (0.35,0.35),(0.65,0.35),(0.35,0.65),(0.65,0.65)]
+    var seen = Set<String>()
+    return centres.compactMap { u, v in
+      let x = Int((box.minX + box.width * u) * Double(width))
+      let y = Int((box.minY + box.height * v) * Double(height))
+      guard x >= 2, y >= 2, x + 2 < width, y + 2 < height,
+        seen.insert("\(x),\(y)").inserted else { return nil }
+      let patch = CGRect(x: Double(x - 2) / Double(width), y: Double(y - 2) / Double(height),
+        width: 5 / Double(width), height: 5 / Double(height))
+      guard box.contains(patch), !occluders.contains(where: { $0.intersects(patch) }) else { return nil }
+      return ((y - 2)...(y + 2)).flatMap { row in ((x - 2)...(x + 2)).map { col in (col, row) } }
+    }
+  }
   static func rawPoint(x: Double, y: Double, rotation: Int) -> (Double, Double) {
     switch rotation {
     case 90: return (y, 1 - x)

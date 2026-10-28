@@ -5,6 +5,56 @@ import 'package:pathguide/depth/depth_session.dart';
 import 'support/fake_depth.dart';
 
 void main() {
+  test('sample point change cannot inherit the old surface distance', () {
+    final tracker = DepthObjects();
+    Map<String, Object> at(double y) => {
+      ...FakeDepthSource.object(),
+      'samplePoint': [.2, y],
+      'validDepth': 23,
+      'depthTotal': 25,
+    };
+    for (var i = 0; i < 3; i++) {
+      tracker.update([at(.4)], 1 + i * .15, acceptedIds: {7});
+    }
+    expect(tracker.snapshot.single.rangeM, 2);
+    tracker.update([at(.55)], 1.5, acceptedIds: {7});
+    expect(tracker.snapshot.single.rangeM, isNull);
+    expect(tracker.snapshot.single.reason, 'sampling_changed');
+    expect(tracker.snapshot.single.validDepth, 23);
+  });
+  test(
+    'refusal diagnosis is retained and invalid markers cannot yield range',
+    () {
+      final tracker = DepthObjects();
+      tracker.update(
+        [
+          {
+            ...FakeDepthSource.object(known: false),
+            'reason': 'low_depth',
+            'validDepth': 8,
+            'depthTotal': 25,
+          },
+        ],
+        1,
+        acceptedIds: {7},
+      );
+      expect(tracker.snapshot.single.reason, 'low_depth');
+      expect(tracker.snapshot.single.validDepth, 8);
+      for (var i = 0; i < 3; i++) {
+        tracker.update(
+          [
+            {
+              ...FakeDepthSource.object(),
+              'samplePoint': [.95, .95],
+            },
+          ],
+          2 + i * .15,
+          acceptedIds: {7},
+        );
+      }
+      expect(tracker.snapshot.single.rangeM, isNull);
+    },
+  );
   late DepthObjects tracker;
   setUp(() => tracker = DepthObjects());
   void update(double time, List<Map<String, Object>> objects) {
