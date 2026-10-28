@@ -9,6 +9,7 @@ import UIKit
 final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   AVCaptureVideoDataOutputSampleBufferDelegate
 {
+  static weak var active: VisionPlugin?
   private enum Channel {
     static let method = "hk.pathguide/vision"
     static let frames = "hk.pathguide/vision/frame"
@@ -64,6 +65,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     methodChannel = FlutterMethodChannel(name: Channel.method, binaryMessenger: messenger)
     frameChannel = FlutterEventChannel(name: Channel.frames, binaryMessenger: messenger)
     super.init()
+    Self.active = self
     methodChannel.setMethodCallHandler { [weak self] call, result in
       self?.handle(call, result: result)
     }
@@ -195,6 +197,13 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   }
 
   private func startSession(_ result: @escaping FlutterResult) {
+    DispatchQueue.main.async { [weak self] in
+      DepthPlugin.active?.stop()
+      self?.startCaptureSession(result)
+    }
+  }
+
+  private func startCaptureSession(_ result: @escaping FlutterResult) {
     sessionQueue.async { [weak self] in
       guard let self else { return }
       do {
@@ -242,7 +251,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     sessionConfigured = true
   }
 
-  private func release(_ result: @escaping FlutterResult) {
+  func release(_ result: @escaping FlutterResult) {
     let group = DispatchGroup()
     group.enter()
     sessionQueue.async { [weak self] in

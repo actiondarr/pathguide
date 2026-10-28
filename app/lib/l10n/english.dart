@@ -1,5 +1,6 @@
 // Product copy. Keep user and provider content unchanged.
 const english = <String, String>{
+  "LiDAR 測距（試驗）": "LiDAR range (trial)",
   "室內路標回放（樣例）": "Indoor landmark replay (sample)",
   "領路通": "PathGuide",
   "首頁": "Home",

@@ -35,7 +35,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>領路通需要使用相機作即時物件辨識及拍攝菜單文字。</string>
+	<string>領路通需要使用相機作即時物件辨識、拍攝菜單文字及本機 LiDAR 表面測距。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>在前景使用目前位置計算步行路線及導航；不儲存行走軌跡。</string>
 	<key>NSMicrophoneUsageDescription</key>

@@ -97,6 +97,7 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
     }
   }
   private func presentCamera(id: String, scanner: Bool, attempt: Int) {
+    DepthPlugin.active?.stop()
     guard requestId == id, pending != nil else { return }
     guard let host = presenter(), host.viewIfLoaded?.window != nil,
           !host.isBeingDismissed, !host.isBeingPresented else {

@@ -14,6 +14,7 @@ import '../account/account_ui.dart';
 import '../menu/menu_page.dart';
 import '../navigation/navigation_page.dart';
 import '../indoor/graph_replay_page.dart';
+import '../depth/depth_page.dart';
 
 enum AppSection { home, explore, navigation, settings }
 
@@ -40,12 +41,14 @@ class _AppShellState extends State<AppShell> {
   bool _accountVisible = false;
   bool _menuVisible = false;
   bool _graphVisible = false;
+  bool _depthVisible = false;
   bool _navigationTask = false, _confirmingNavigationExit = false;
   Future<void> _select(AppSection section) async {
     if (_section == section &&
         !_accountVisible &&
         !_menuVisible &&
-        !_graphVisible) {
+        !_graphVisible &&
+        !_depthVisible) {
       return;
     }
     if (_section == AppSection.navigation &&
@@ -79,6 +82,7 @@ class _AppShellState extends State<AppShell> {
       _accountVisible = false;
       _menuVisible = false;
       _graphVisible = false;
+      _depthVisible = false;
     });
   }
 
@@ -103,6 +107,7 @@ class _AppShellState extends State<AppShell> {
       onTaskChanged: (active) => _navigationTask = active,
       speechSuspended: _confirmingNavigationExit,
       onOpenReplay: () => setState(() => _graphVisible = true),
+      onOpenDepth: () => setState(() => _depthVisible = true),
     ),
     AppSection.settings => SettingsPage(
       onAccount: _openAccount,
@@ -118,7 +123,9 @@ class _AppShellState extends State<AppShell> {
       // keep it alive (and potentially speaking) during its exit animation.
       body: KeyedSubtree(
         key: ValueKey(
-          _graphVisible
+          _depthVisible
+              ? 'depth'
+              : _graphVisible
               ? 'graph-replay'
               : _menuVisible
               ? 'menu'
@@ -126,7 +133,12 @@ class _AppShellState extends State<AppShell> {
               ? 'account'
               : _section,
         ),
-        child: _graphVisible
+        child: _depthVisible
+            ? DepthPage(
+                settings: widget.settings,
+                onBack: () => setState(() => _depthVisible = false),
+              )
+            : _graphVisible
             ? GraphReplayPage(
                 settings: widget.settings,
                 onBack: () => setState(() => _graphVisible = false),

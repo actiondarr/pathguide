@@ -36,6 +36,7 @@ class NavigationPage extends StatefulWidget {
     this.visionFactory,
     this.speechSuspended = false,
     this.onOpenReplay,
+    this.onOpenDepth,
   });
   final AppSettings settings;
   final NavigationController? controller;
@@ -46,6 +47,7 @@ class NavigationPage extends StatefulWidget {
   final VisionSource Function()? visionFactory;
   final bool speechSuspended;
   final VoidCallback? onOpenReplay;
+  final VoidCallback? onOpenDepth;
   @override
   State<NavigationPage> createState() => _NavigationPageState();
 }
@@ -646,6 +648,11 @@ class _NavigationPageState extends State<NavigationPage>
                   ],
                 ],
                 if (!hasTask) ...[
+                  if (widget.onOpenDepth != null)
+                    _button(
+                      'LiDAR 測距（試驗）',
+                      nav.busy || _listening ? null : widget.onOpenDepth,
+                    ),
                   if (widget.onOpenReplay != null)
                     _button(
                       '室內路標回放（樣例）',
