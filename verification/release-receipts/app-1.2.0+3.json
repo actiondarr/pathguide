@@ -16,9 +16,13 @@
   "bundleVersion": "1.2.0+3",
   "modelSha256": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0",
   "deviceModel": "iPhone 15 Pro Max",
-  "deviceInstalled": false,
-  "deviceLaunched": false,
-  "installationBlocker": "CoreDevice: device still locked / not unlocked recently; user asked to unlock",
+  "deviceInstalled": true,
+  "deviceLaunched": true,
+  "installationBlocker": null,
   "realSiteLocalizationValidated": false,
-  "previousAppTag": "v1.1.0+2"
+  "previousAppTag": "v1.1.0+2",
+  "installationHistory": [
+    "Initial installation blocked because device had not been unlocked recently",
+    "User confirmed device unlocked; CoreDevice installation and process launch succeeded"
+  ]
 }
