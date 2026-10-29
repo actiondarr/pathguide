@@ -1,8 +1,15 @@
 # 領路通 PathGuide 後端與雲端資料流程方案
 
-更新：2026年10月28日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
+更新：2026年10月29日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
 
 **後端把已同意的錯誤場景，經覆核、訓練與評估，轉成可回退的私人模型。** 上傳成功只代表收到照片，不代表已學會、變準或可以更新。
+
+## 1.4.2+7 前端恢復修正的契約與版本（候選）
+
+本輪只修正裝置端任務恢復：328項Flutter、12項原生XCTest、33項數值檢查、analyze及iOS簽署建置／包內核對通過。原生hk.pathguide/depth新增使用者明確按鈕觸發的openSettings→bool；從系統設定返回不自動啟動相機。Vision原生generation作廢晚到權限，菜單／辨識／ARKit開始前等待舊相機或picker釋放，Dart已dispose的來源拒絕舊初始化結果。這些是本機接口，不新增雲端API、模型下載、私人資料或同意用途。
+
+模型／映射與1.4.1+6相同，PHOTO_UPLOAD_ENABLED及付費GPU設定不變；不部署現有未提交後端服務。候選先保存source／lockfile／相同模型的Git樹、不可變tag與prerelease並核對遠端，之後才裝機；[本輪工程證據](../verification/app-1.4.2+7.json)，交付結果另存版本收據。真機資源交接、讀屏及精度仍須實測，完整統一任務協調層尚未完成。
+
 
 ## 開發階段與目前進度
 

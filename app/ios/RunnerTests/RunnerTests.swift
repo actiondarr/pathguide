@@ -1,4 +1,5 @@
 import Flutter
+import AVFoundation
 import CoreVideo
 import CryptoKit
 import CoreLocation
@@ -8,6 +9,24 @@ import UIKit
 import XCTest
 
 class RunnerTests: XCTestCase {
+
+  func testVisionReleaseInvalidatesLateCameraPermission() {
+    var permission: ((Bool) -> Void)?
+    let plugin = VisionPlugin(messenger: NavigationTestMessenger(),
+      cameraAuthorizationStatus: { .notDetermined },
+      requestCameraAccess: { permission = $0 })
+    let response = expectation(description: "cancelled start replies")
+    plugin.handle(FlutterMethodCall(methodName: "startPreview", arguments: nil)) { value in
+      XCTAssertEqual((value as? [String: Any])?["started"] as? Bool, false)
+      response.fulfill()
+    }
+    XCTAssertNotNil(permission)
+    let released = expectation(description: "camera release completes before permission")
+    plugin.release { _ in released.fulfill() }
+    wait(for: [released], timeout: 5)
+    permission?(true)
+    wait(for: [response], timeout: 5)
+  }
 
   func testNavigationPluginAcceptsFlutterDelegateCalls() {
     let plugin: FlutterPlugin = NavigationPlugin(messenger: NavigationTestMessenger())

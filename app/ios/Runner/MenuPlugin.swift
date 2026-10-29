@@ -8,6 +8,7 @@ import VisionKit
 
 /// Menu photos and OCR results stay in memory and never enter the training queue.
 final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerDelegate, PHPickerViewControllerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+  static weak var active: MenuPlugin?
   private let channel: FlutterMethodChannel
   private var pending: FlutterResult?
   private var requestId = ""
@@ -34,6 +35,7 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
   init(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(name: "hk.pathguide/menu", binaryMessenger: messenger)
     super.init()
+    Self.active = self
     NotificationCenter.default.addObserver(self, selector: #selector(enteredBackground),
       name: UIApplication.didEnterBackgroundNotification, object: nil)
     channel.setMethodCallHandler { [weak self] call, result in self?.handle(call, result: result) }
@@ -47,7 +49,7 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
     registrar.addMethodCallDelegate(plugin, channel: plugin.channel)
   }
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    if call.method == "cancelMenu" { cancel(); result(nil); return }
+    if call.method == "cancelMenu" { releaseCamera { result(nil) }; return }
     if call.method == "finishMenuSpeech" { finishSpeech(); result(nil); return }
     guard ["readMenu", "listenMenuQuery"].contains(call.method) else { result(FlutterMethodNotImplemented); return }
     guard pending == nil else { result(FlutterError(code: "busy", message: "請先完成或取消目前操作。", details: nil)); return }
@@ -73,9 +75,17 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
   }
   private func fail(_ code: String, _ message: String) { complete(FlutterError(code: code, message: message, details: nil)) }
   private func cancel() {
+    releaseCamera {}
+  }
+  /// Invalidate before dismissal; the next camera waits for completion.
+  func releaseCamera(completion: @escaping () -> Void) {
     textRequest?.cancel()
-    picker?.dismiss(animated: true); picker = nil
+    let controller = picker
+    picker = nil
     complete(isSpeechRequest ? ["outcome": "cancelled", "text": ""] : nil)
+    if let controller, controller.presentingViewController != nil {
+      controller.dismiss(animated: false, completion: completion)
+    } else { completion() }
   }
   private func openCamera(id: String, scanner: Bool = false) {
     func permitted() {
@@ -97,8 +107,16 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
     }
   }
   private func presentCamera(id: String, scanner: Bool, attempt: Int) {
-    DepthPlugin.active?.stop()
     guard requestId == id, pending != nil else { return }
+    if attempt == 0 {
+      DepthPlugin.active?.stop()
+      if let vision = VisionPlugin.active {
+        vision.release { [weak self] _ in
+          self?.presentCamera(id: id, scanner: scanner, attempt: 1)
+        }
+        return
+      }
+    }
     guard let host = presenter(), host.viewIfLoaded?.window != nil,
           !host.isBeingDismissed, !host.isBeingPresented else {
       if attempt < 10 {
@@ -124,10 +142,12 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
     }
   }
   func imagePickerControllerDidCancel(_ controller: UIImagePickerController) {
+    guard picker === controller else { return }
     controller.dismiss(animated: true); picker = nil; complete(nil)
   }
   func imagePickerController(_ controller: UIImagePickerController,
       didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+    guard picker === controller else { return }
     let id = requestId
     guard let image = info[.originalImage] as? UIImage else {
       controller.dismiss(animated: true); picker = nil
@@ -145,9 +165,11 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
     host.present(vc, animated: true)
   }
   func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+    guard picker === controller else { return }
     controller.dismiss(animated: true); picker = nil; complete(nil)
   }
   func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError _: Error) {
+    guard picker === controller else { return }
     let id = requestId
     controller.dismiss(animated: true) { [weak self] in
       guard let self, self.requestId == id, self.pending != nil else { return }
@@ -155,11 +177,13 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
     }
   }
   func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
+    guard picker === controller else { return }
     let images = (0..<min(scan.pageCount, 3)).map { scan.imageOfPage(at: $0) }
     controller.dismiss(animated: true); picker = nil
     recognize(images, truncated: scan.pageCount > 3)
   }
   func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+    guard self.picker === picker else { return }
     picker.dismiss(animated: true); self.picker = nil
     guard let item = results.first else { complete(nil); return }
     let id = requestId

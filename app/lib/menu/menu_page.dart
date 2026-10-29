@@ -81,7 +81,11 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
     ++_speechGeneration;
     _speaking = false;
     _outputBusy = false;
-    await _speaker.stop();
+    try {
+      await _speaker.stop();
+    } catch (_) {
+      // A speech service failure must not block cancelling or taking a photo.
+    }
     if (mounted) setState(() {});
   }
 
@@ -139,6 +143,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
     final generation = ++_voiceGeneration;
     _pendingReadout = null;
     await _stop();
+    if (!mounted || !_foreground || generation != _voiceGeneration) return;
     _query.clear();
     _visibleLimit = 30;
     FocusManager.instance.primaryFocus?.unfocus();
@@ -156,7 +161,7 @@ class _MenuPageState extends State<MenuPage> with WidgetsBindingObserver {
     final voiceGeneration = ++_voiceGeneration;
     _pendingReadout = null;
     await _stop();
-    if (!mounted || voiceGeneration != _voiceGeneration) return;
+    if (!mounted || !_foreground || voiceGeneration != _voiceGeneration) return;
     FocusManager.instance.primaryFocus?.unfocus();
     try {
       final query = await _menu.listen(allowNetwork: allowNetwork);

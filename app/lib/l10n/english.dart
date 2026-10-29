@@ -1,5 +1,12 @@
 // Product copy. Keep user and provider content unchanged.
 const english = <String, String>{
+  "辨識已取消，請重新開始": "Recognition cancelled. Start again.",
+  "結果已過期，正在重新取得。可停止後重試或返回。":
+      "Results expired. Getting new observations. Stop and retry, or go back.",
+  "結果已過期，正在重新取得。可暫停後重試或返回首頁。": "Results expired. Getting new observations. Pause and retry, or return Home.",
+  "暫未辨識到支援的物件。可繼續觀察或停止；不代表前方暢通。": "No supported objects recognized yet. Keep observing or stop; this does not establish clear space.",
+  "已取消收音。可用文字搜尋，或重新啟動語音搜尋。":
+      "Recording cancelled. Use text search, or start voice search again.",
   "物件與測距（試驗）": "Objects and range (trial)",
   "LiDAR 測距（試驗）": "LiDAR range (trial)",
   "室內路標回放（樣例）": "Indoor landmark replay (sample)",

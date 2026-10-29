@@ -706,6 +706,47 @@ void main() {
     await close(tester);
   });
 
+  testWidgets(
+    'silent camera withdraws old boxes and replay never reads the old object',
+    (tester) async {
+      await start(tester);
+      Future<void> frame() async {
+        ServicesBinding.instance.channelBuffers.push(
+          'hk.pathguide/vision/frame',
+          const StandardMethodCodec().encodeSuccessEnvelope({
+            'detections': [
+              {'id': 7, 'score': .95, 'cx': .5, 'cy': .5, 'w': .2, 'h': .2},
+            ],
+            'frameWidth': 1280,
+            'frameHeight': 720,
+          }),
+          (_) {},
+        );
+        await tester.pump();
+        await flushAsync(tester);
+      }
+
+      await frame();
+      expect(painter(tester).mapped, hasLength(1));
+      await tester.pump(const Duration(seconds: 3));
+      expect(painter(tester).mapped, isEmpty);
+      expect(find.textContaining('結果已過期'), findsOneWidget);
+      speechCalls.clear();
+      await openControls(tester);
+      await tester.tap(find.text('重播目前結果'));
+      await flushAsync(tester);
+      expect(
+        speechCalls.where(
+          (c) => c.method == 'speak' && c.arguments.toString().contains('垃圾桶'),
+        ),
+        isEmpty,
+      );
+      await frame();
+      expect(painter(tester).mapped, hasLength(1));
+      await close(tester);
+    },
+  );
+
   testWidgets('automatic entry stays compact and replay is optional', (
     tester,
   ) async {

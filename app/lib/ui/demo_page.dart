@@ -156,6 +156,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   bool _hasStarted = false;
   bool _screenReader = false;
   DateTime? _lastResultAt;
+  Timer? _resultExpiry;
   String _readback = '正在準備辨識…';
   bool _resumeAfterInterruption = false;
   bool _initializing = false;
@@ -271,6 +272,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   }
 
   void _pauseRecognition({bool interrupted = false}) {
+    _resultExpiry?.cancel();
     if (!interrupted) _resumeAfterInterruption = false;
     _initializing = false;
     _pendingStatusAnnouncement = null;
@@ -288,7 +290,8 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       _statusError = null;
       _readback = '已暫停辨識及播報';
     });
-    _transition = _transition.then((_) => _stopVision());
+    final stopping = _stopVision();
+    _transition = _transition.then((_) => stopping);
   }
 
   Future<void> _readCurrentResult() async {
@@ -387,6 +390,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   bool _isCurrent(int generation) => _active && _isRequested(generation);
 
   Future<void> _stopVision() async {
+    _resultExpiry?.cancel();
     _diagTimer?.cancel();
     _diagTimer = null;
     final sub = _sub;
@@ -462,6 +466,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       }
       await _announcePendingStatus();
       if (!_isCurrent(generation)) return;
+      _armResultExpiry();
       if (mode == SourceMode.camera) {
         _diagTimer = Timer.periodic(const Duration(milliseconds: 500), (
           _,
@@ -630,6 +635,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     // 假源同样按 threshold 过滤）。两处各过滤一次时，不一致的表现是
     // 「滑动条不生效」或「框数对不上」，且不报错。
     _lastResultAt = now;
+    _armResultExpiry();
     // Also retry after a delayed TTS setup or a screen-reader route change.
     // The status helper serializes itself and reads only the active generation.
     if (_pendingStatusAnnouncement != null) {
@@ -673,8 +679,24 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     });
   }
 
+  void _armResultExpiry() {
+    _resultExpiry?.cancel();
+    final generation = _sourceGeneration;
+    _resultExpiry = Timer(const Duration(seconds: 3), () {
+      if (!_isCurrent(generation)) return;
+      _stopSpeech();
+      setState(() {
+        _detections = const [];
+        _lastResultAt = null;
+        _fps = 0;
+        _readback = '結果已過期，正在重新取得。可暫停後重試或返回首頁。';
+      });
+    });
+  }
+
   @override
   void dispose() {
+    _resultExpiry?.cancel();
     _photoTimer?.cancel();
     widget.settings.removeListener(_applySettings);
     WidgetsBinding.instance.removeObserver(this);
@@ -683,7 +705,8 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     ++_sourceGeneration;
     _diagTimer?.cancel();
     _stopSpeech();
-    _transition = _transition.then((_) => _stopVision());
+    final stopping = _stopVision();
+    _transition = _transition.then((_) => stopping);
     _settingsFocus.dispose();
     super.dispose();
   }

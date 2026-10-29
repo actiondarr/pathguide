@@ -84,6 +84,11 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
 
   private func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     switch call.method {
+    case "openSettings":
+      guard let url = URL(string: UIApplication.openSettingsURLString) else {
+        result(false); return
+      }
+      UIApplication.shared.open(url, options: [:]) { opened in result(opened) }
     case "stop":
       stop()
       result(nil)
@@ -120,9 +125,14 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
           self.session.run(config, options: [.resetTracking, .removeExistingAnchors])
           result(["status": "running"])
         }
-        // Await AVCapture shutdown before ARKit takes the rear camera.
-        if let vision = VisionPlugin.active { vision.release { _ in run() } }
-        else { run() }
+        // Await picker dismissal and AVCapture shutdown before ARKit starts.
+        func releaseVision() {
+          guard expected == self.generation else { result(["status": "paused"]); return }
+          if let vision = VisionPlugin.active { vision.release { _ in run() } }
+          else { run() }
+        }
+        if let menu = MenuPlugin.active { menu.releaseCamera(completion: releaseVision) }
+        else { releaseVision() }
       }
       func authorize() {
         guard expected == self.generation else { result(["status": "paused"]); return }

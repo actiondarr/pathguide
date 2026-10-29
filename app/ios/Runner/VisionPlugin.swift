@@ -21,8 +21,12 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private let captureSession = AVCaptureSession()
   private let sessionQueue = DispatchQueue(label: "hk.pathguide.vision.session")
   private let inferenceQueue = DispatchQueue(label: "hk.pathguide.vision.inference")
+  private let cameraAuthorizationStatus: () -> AVAuthorizationStatus
+  private let requestCameraAccess: (@escaping (Bool) -> Void) -> Void
 
   private var sessionConfigured = false
+  // Main-queue generation invalidates permission and handoff completions.
+  private var cameraGeneration = 0
   private weak var previewView: VisionPreviewUIView?
   private var eventSink: FlutterEventSink?
   private var interpreter: TFLiteModelRunner?
@@ -61,16 +65,26 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private var decodeStats = ""
   private var bufferState = ""
 
-  init(messenger: FlutterBinaryMessenger) {
+  init(messenger: FlutterBinaryMessenger,
+       cameraAuthorizationStatus: @escaping () -> AVAuthorizationStatus = { AVCaptureDevice.authorizationStatus(for: .video) },
+       requestCameraAccess: @escaping (@escaping (Bool) -> Void) -> Void = { AVCaptureDevice.requestAccess(for: .video, completionHandler: $0) }) {
+    self.cameraAuthorizationStatus = cameraAuthorizationStatus
+    self.requestCameraAccess = requestCameraAccess
     methodChannel = FlutterMethodChannel(name: Channel.method, binaryMessenger: messenger)
     frameChannel = FlutterEventChannel(name: Channel.frames, binaryMessenger: messenger)
     super.init()
     Self.active = self
+    NotificationCenter.default.addObserver(self, selector: #selector(enteredBackground),
+      name: UIApplication.didEnterBackgroundNotification, object: nil)
     methodChannel.setMethodCallHandler { [weak self] call, result in
       self?.handle(call, result: result)
     }
     frameChannel.setStreamHandler(self)
   }
+
+  deinit { NotificationCenter.default.removeObserver(self) }
+
+  @objc private func enteredBackground() { release { _ in } }
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let plugin = VisionPlugin(messenger: registrar.messenger())
@@ -175,19 +189,22 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   // MARK: Camera
 
   private func requestPermissionAndStart(_ result: @escaping FlutterResult) {
-    switch AVCaptureDevice.authorizationStatus(for: .video) {
+    cameraGeneration += 1
+    let expected = cameraGeneration
+    func begin(_ granted: Bool) {
+      guard expected == self.cameraGeneration else {
+        result(["started": false, "error": "辨識已取消，請重新開始"]); return
+      }
+      if granted { self.startSession(result, expected: expected) }
+      else { result(["started": false, "error": "相機權限已被拒絕；可在設定的私隱與保安中重新允許"]) }
+    }
+    switch cameraAuthorizationStatus() {
     case .authorized:
-      startSession(result)
+      begin(true)
     case .notDetermined:
-      AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-        guard let self else { return }
-        if granted {
-          self.startSession(result)
-        } else {
-          DispatchQueue.main.async {
-            result(["started": false, "error": "相機權限已被拒絕；可在設定的私隱與保安中重新允許"])
-          }
-        }
+      requestCameraAccess { [weak self] granted in
+        guard self != nil else { return }
+        DispatchQueue.main.async { begin(granted) }
       }
     case .denied, .restricted:
       result(["started": false, "error": "沒有相機權限；請到設定 → 私隱與保安 → 相機允許領路通"])
@@ -196,11 +213,16 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     }
   }
 
-  private func startSession(_ result: @escaping FlutterResult) {
-    DispatchQueue.main.async { [weak self] in
+  private func startSession(_ result: @escaping FlutterResult, expected: Int) {
+    func begin() {
+      guard expected == self.cameraGeneration else {
+        result(["started": false, "error": "辨識已取消，請重新開始"]); return
+      }
       DepthPlugin.active?.stop()
-      self?.startCaptureSession(result)
+      self.startCaptureSession(result)
     }
+    if let menu = MenuPlugin.active { menu.releaseCamera(completion: begin) }
+    else { begin() }
   }
 
   private func startCaptureSession(_ result: @escaping FlutterResult) {
@@ -252,6 +274,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   }
 
   func release(_ result: @escaping FlutterResult) {
+    cameraGeneration += 1
     let group = DispatchGroup()
     group.enter()
     sessionQueue.async { [weak self] in

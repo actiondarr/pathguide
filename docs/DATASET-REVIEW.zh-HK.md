@@ -1,6 +1,13 @@
 # PathGuide Dataset 覆核與準確度改善
 
-更新：2026年10月28日。唯一Dataset Review文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Backend](BACKEND-DESIGN.zh-HK.md)管理服務與版本。資料、類別、模型或訓練進度改動必須同一提交更新此檔，不另開日期化狀態稿。私人訓練服務尚未接通。
+更新：2026年10月29日。唯一Dataset Review文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Backend](BACKEND-DESIGN.zh-HK.md)管理服務與版本。資料、類別、模型或訓練進度改動必須同一提交更新此檔，不另開日期化狀態稿。私人訓練服務尚未接通。
+
+## 1.4.2+7 前端候選與品質證據界線
+
+本輪只改可理解的未知／恢復提示、診斷分層、過期結果／語音撤回及相機交接；App十類與九類模型、映射、深度取樣及既有門檻均不變。內置十類SHA仍為a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0。
+
+328項Flutter、12項原生XCTest、33項數值檢查與簽署建置／UI預覽只屬工程證據，見[本輪紀錄](../verification/app-1.4.2+7.json)。未新增標註、獨立留集、TFLite自然圖評估、量尺或多人原場景覆驗，不宣稱準確率改善；B11交接、私人效益對照及資料用途維持原狀。Frontend仍須把名稱正確、表面距離、未知率、恢復成功及VoiceOver任務完成分開驗收。
+
 
 ## 開發階段與目前進度
 
