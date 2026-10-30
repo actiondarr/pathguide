@@ -4,6 +4,12 @@
 
 **後端把已同意的錯誤場景，經覆核、訓練與評估，轉成可回退的私人模型。** 上傳成功只代表收到照片，不代表已學會、變準或可以更新。
 
+## A10修正實驗與Colab執行界線
+
+本機兩個4 epoch A10候選因門驗證退化而拒用，沒有新模型registry、offer、共用部署或私人訓練服務。新[Colab notebook](https://colab.research.google.com/drive/1I5tvr1lTOHAeuHcg8YUjtwOs87iH6yg-)及約15.5MB套件已保存於原擁有者Drive的獨立`PathGuide/a10-repair-20261030-v1`；只新增56張既有CC BY 2公開來源照片，私人legacy影像沿用原擁有者已有的壓縮檔，沒有重新上傳。原run與B11保持不變。見[修正對照證據](../verification/mixed10-coverage-repair-20261030.json)。
+
+這是互動Colab實驗，不當作B06可靠無人worker：必須確認免費GPU，未配置預算仍拒絕付費提交；每epoch保存候選／CSV，訓練後比較baseline與candidate，只讀summary而不逐步讓模型監看。尚未完成Colab整輪驗證；Google若要求新runtime的Drive權限，須在授權畫面另外確認。下載／來源SHA、split、模型十類名稱或資料不符即停止，不發布。
+
 ## 1.4.3+8 相機前處理修正版（GitHub已保存，iPhone已安裝／啟動）
 
 裝置端共用前處理由最近鄰／截斷尺寸改為雙線性／取最近整數（恰半取偶數）的letterbox，影響普通辨識及ARKit同幀辨識輸入；模型SHA、bytes、十類ID、下載／上傳及後端契約不變。14項原生XCTest、328項Flutter、33項數值檢查、analyze及iOS簽署建置／包內核對通過；遠端版本／交付狀態另依[工程證據](../verification/app-1.4.3+8.json)及收據核對。自然圖仍大量漏門及誤認行人，不能把此版記作新共用權重或品質gate通過。
@@ -212,6 +218,7 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 
 ## 9. 維護紀錄
 
+2026-10-31 A10修正交接：本機負監督候選因門召回退化拒用；凍結27張新train／15張新val，新增App argmax驗證及Colab摘要工作包，已上傳獨立Drive資料夾但整輪尚未完成。免費GPU以外停用，無App權重更新或B11操作。
 2026-10-30 1.4.3+8交付核對：GitHub分支／不可變tag／prerelease先核實，之後iPhone安裝／啟動成功；限定Drive來源下載及原PT自然圖對照亦完成。權重未替換、品質仍未過關，沒有雲端部署、私人訓練或B11操作；詳細證據見本版收據與Dataset。
 
 2026-10-30 相機前處理版本同步：1.4.3+8只改iOS共用縮圖／letterbox與回歸測試，無後端接口／模型權重變動；自然圖仍未過品質驗收。限定Drive原產物下載未成功，B11及付費GPU不變；版本保存／裝機依本輪工程證據與收據分開確認。
