@@ -216,6 +216,70 @@ class RunnerTests: XCTestCase {
     XCTAssertTrue(video.values.allSatisfy { $0 == 0 })
   }
 
+  private func gradientBuffer(width: Int, height: Int, fullRange: Bool) throws -> CVPixelBuffer {
+    var value: CVPixelBuffer?
+    let format = fullRange ? kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+      : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    XCTAssertEqual(CVPixelBufferCreate(nil, width, height, format, nil, &value), kCVReturnSuccess)
+    let buffer = try XCTUnwrap(value)
+    CVBufferSetAttachment(buffer, kCVImageBufferYCbCrMatrixKey,
+      kCVImageBufferYCbCrMatrix_ITU_R_601_4, .shouldPropagate)
+    CVPixelBufferLockBaseAddress(buffer, [])
+    defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+    let y = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(buffer, 0)).assumingMemoryBound(to: UInt8.self)
+    for row in 0..<height {
+      for col in 0..<width {
+        y[row * CVPixelBufferGetBytesPerRowOfPlane(buffer, 0) + col] =
+          UInt8((fullRange ? 0 : 16) + row * 20 + col * 10)
+      }
+    }
+    let uv = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(buffer, 1))
+    memset(uv, 128, CVPixelBufferGetBytesPerRowOfPlane(buffer, 1) * CVPixelBufferGetHeightOfPlane(buffer, 1))
+    return buffer
+  }
+
+  func testCameraResizeUsesBilinearPixelCentresBeforeModelPacking() throws {
+    for fullRange in [true, false] {
+      // Half-pixel resize samples x/y=.5,2.5,...; the old nearest path
+      // incorrectly selected x/y=0,2,... and returned zero for this pixel.
+      let expectedByRotation: [Int: [Float32]] = [
+        0: [15,35,55,75,55,75,95,115,95,115,135,155],
+        90: [95,55,15,115,75,35,135,95,55,155,115,75],
+        180: [155,135,115,95,115,95,75,55,75,55,35,15],
+        270: [75,115,155,55,95,135,35,75,115,15,55,95],
+      ]
+      for rotation in [0, 90, 180, 270] {
+        let prepared = try IOSFramePreprocessor.prepare(
+          pixelBuffer: gradientBuffer(width: 8, height: 6, fullRange: fullRange),
+          inputSize: 4, rotationDegrees: rotation)
+        let portrait = rotation == 90 || rotation == 270
+        XCTAssertEqual(prepared.scaledWidth, portrait ? 3 : 4)
+        XCTAssertEqual(prepared.scaledHeight, portrait ? 4 : 3)
+        let divisor: Float32 = fullRange ? 255 : 219
+        let expected = try XCTUnwrap(expectedByRotation[rotation])
+        for row in 0..<4 {
+          for col in 0..<4 {
+            let padding = row >= prepared.scaledHeight || col >= prepared.scaledWidth
+            let value = padding ? Float32(114.0 / 255.0) : expected[row * prepared.scaledWidth + col] / divisor
+            for channel in 0..<3 {
+              XCTAssertEqual(prepared.values[(row * 4 + col) * 3 + channel], value, accuracy: 0.00001)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  func testLetterboxRoundsDimensionsAndRejectsUnsupportedRotation() throws {
+    let buffer = try gradientBuffer(width: 10, height: 8, fullRange: true)
+    let prepared = try IOSFramePreprocessor.prepare(pixelBuffer: buffer, inputSize: 6, rotationDegrees: 0)
+    XCTAssertEqual(prepared.scaledWidth, 6)
+    XCTAssertEqual(prepared.scaledHeight, 5) // 8 * .6 = 4.8, not four rows.
+    XCTAssertEqual(prepared.padY, 0)
+    XCTAssertTrue(prepared.values.suffix(18).allSatisfy { abs($0 - 114 / 255) < 0.00001 })
+    XCTAssertThrowsError(try IOSFramePreprocessor.prepare(pixelBuffer: buffer, inputSize: 6, rotationDegrees: 45))
+  }
+
 }
 
 private final class NavigationTestMessenger: NSObject, FlutterBinaryMessenger {

@@ -1,8 +1,14 @@
 # 領路通 PathGuide 後端與雲端資料流程方案
 
-更新：2026年10月29日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
+更新：2026年10月30日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
 
 **後端把已同意的錯誤場景，經覆核、訓練與評估，轉成可回退的私人模型。** 上傳成功只代表收到照片，不代表已學會、變準或可以更新。
+
+## 1.4.3+8 相機前處理修正版（工程驗證完成，待保存與交付）
+
+裝置端共用前處理由最近鄰／截斷尺寸改為雙線性／取最近整數（恰半取偶數）的letterbox，影響普通辨識及ARKit同幀辨識輸入；模型SHA、bytes、十類ID、下載／上傳及後端契約不變。14項原生XCTest、328項Flutter、33項數值檢查、analyze及iOS簽署建置／包內核對通過；遠端版本／交付狀態另依[工程證據](../verification/app-1.4.3+8.json)及收據核對。自然圖仍大量漏門及誤認行人，不能把此版記作新共用權重或品質gate通過。
+
+原十類checkpoint及原run資料紀錄已獲限定Drive讀取授權，瀏覽器下載失敗，Drive連接未接通；未進行新訓練、雲端部署或私人資料傳送，亦未操作B11。D04／D08後續須先完成原checkpoint自然圖PT↔TFLite對照及修正候選的獨立比較，再依既有B08／S0版本程序保存模型＋manifest＋設定。前處理版本本身亦遵守先GitHub備份、核對後才交付的順序。
 
 ## 1.4.2+7 前端恢復修正的契約與版本（已交付試用）
 
@@ -205,6 +211,8 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 供應商參考：[Google Maps條款](https://maps.google.com/help/terms_maps/)、[Google私隱](https://policies.google.com/privacy)、[Apple地圖條款](https://www.apple.com/legal/internet-services/maps/terms-en.html)、[Apple私隱](https://www.apple.com/legal/privacy/)。正式政策需補聯絡及變更通知方式，不能以本章冒充已公開條款。
 
 ## 9. 維護紀錄
+
+2026-10-30 相機前處理版本同步：1.4.3+8只改iOS共用縮圖／letterbox與回歸測試，無後端接口／模型權重變動；自然圖仍未過品質驗收。限定Drive原產物下載未成功，B11及付費GPU不變；版本保存／裝機依本輪工程證據與收據分開確認。
 
 2026-10-27：帳號／照片契約、部署、隱私草稿重點、訓練／更新及GitHub回退整合於此。本輪沒有部署、開收集、提交GPU或改App功能。每次功能／接口／部署變更直接更新本檔現況、設定、驗證與限制。
 
