@@ -1,14 +1,16 @@
 # 領路通 PathGuide 後端與雲端資料流程方案
 
-更新：2026年10月30日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
+更新：2026年10月31日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
 
 **後端把已同意的錯誤場景，經覆核、訓練與評估，轉成可回退的私人模型。** 上傳成功只代表收到照片，不代表已學會、變準或可以更新。
 
-## A10修正實驗與Colab執行界線
+## 目前問題：A10改善流程與發佈界線（2026-10-31）
 
-本機兩個4 epoch A10候選因門驗證退化而拒用，沒有新模型registry、offer、共用部署或私人訓練服務。新[Colab notebook](https://colab.research.google.com/drive/1I5tvr1lTOHAeuHcg8YUjtwOs87iH6yg-)及約15.5MB套件已保存於原擁有者Drive的獨立`PathGuide/a10-repair-20261030-v1`；只新增56張既有CC BY 2公開來源照片，私人legacy影像沿用原擁有者已有的壓縮檔，沒有重新上傳。原run與B11保持不變。見[修正對照證據](../verification/mixed10-coverage-repair-20261030.json)。
+本機兩個4 epoch候選及免費T4的6 epoch候選均未通過品質比較；訓練／保存／評估可完成，不等於模型變準。現階段問題是資料及驗收證據不足，未有可發佈的新權重；沒有新registry／offer、App模型更新或私人訓練服務。詳細問題及數字見[Dataset目前問題總結](DATASET-REVIEW.zh-HK.md#目前問題總結2026-10-31)。
 
-這是互動Colab實驗，不當作B06可靠無人worker：必須確認免費GPU，未配置預算仍拒絕付費提交；每epoch保存候選／CSV，訓練後比較baseline與candidate，只讀summary而不逐步讓模型監看。尚未完成Colab整輪驗證；Google若要求新runtime的Drive權限，須在授權畫面另外確認。下載／來源SHA、split、模型十類名稱或資料不符即停止，不發布。
+Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成，候選、設定、evaluation及summary保存在原擁有者的`PathGuide/a10-repair-20261030-v1/runs`。只新增56張既有CC BY 2公開來源照片；私人legacy影像沿用已有壓縮檔，未重新上傳、未進共享Git。原run及B11未操作；這次掛載授權不等於私人訓練服務的永久授權。
+
+後續先完成資料覆核與獨立驗收定義，再決定下一個修正實驗。Colab只作互動實驗，不能冒充B06可靠無人worker；付費GPU仍停用。LLM用量主要來自改程式、看圖及讀工具輸出，訓練迴圈不呼叫LLM；雲端運算不會自動減少token，採批量執行／最後摘要以減少中途讀取。本次review整理沒有新增訓練或部署。
 
 ## 1.4.3+8 相機前處理修正版（GitHub已保存，iPhone已安裝／啟動）
 
@@ -31,7 +33,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 
 | 階段 | 本階段後端工作 | 目前進度 | 完成標準 | 下一步／依賴 |
 |---|---|---|---|---|
-| S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.4.3+8前處理版沿用十類權重；分支／不可變tag／prerelease先核實，之後iPhone安裝／啟動成功。來源PT已取回；品質未過關 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
+| S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.4.3+8前處理版沿用十類權重；分支／不可變tag／prerelease先核實，之後iPhone安裝／啟動成功。來源PT已取回；品質未過關；Colab修正候選亦拒用 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
 | S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
 | S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理程式已有，本機關閉；管理員覆核服務未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
 | S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；付費GPU預算未定 | 模擬完整流程、真實工作受配額控制、合格模型可本人下載／回退 | 先mock worker、資料接口與取消／刪除，再開付費執行 |
@@ -218,6 +220,7 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 
 ## 9. 維護紀錄
 
+2026-10-31 目前問題總結：依使用者要求先整理十類辨識／物件測距問題，分開已重現證據、假說及缺少的驗收。補入免費T4完整結果：新val召回無提升、誤報增加，候選拒用；前處理已交付但權重未修復。未新增訓練、權重發佈或B11操作。
 2026-10-31 A10修正交接：本機負監督候選因門召回退化拒用；凍結27張新train／15張新val，新增App argmax驗證及Colab摘要工作包，已上傳獨立Drive資料夾但整輪尚未完成。免費GPU以外停用，無App權重更新或B11操作。
 2026-10-30 1.4.3+8交付核對：GitHub分支／不可變tag／prerelease先核實，之後iPhone安裝／啟動成功；限定Drive來源下載及原PT自然圖對照亦完成。權重未替換、品質仍未過關，沒有雲端部署、私人訓練或B11操作；詳細證據見本版收據與Dataset。
 

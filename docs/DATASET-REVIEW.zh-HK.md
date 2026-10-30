@@ -1,18 +1,41 @@
 # PathGuide Dataset 覆核與準確度改善
 
-更新：2026年10月30日。唯一Dataset Review文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Backend](BACKEND-DESIGN.zh-HK.md)管理服務與版本。資料、類別、模型或訓練進度改動必須同一提交更新此檔，不另開日期化狀態稿。私人訓練服務尚未接通。
+更新：2026年10月31日。唯一Dataset Review文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Backend](BACKEND-DESIGN.zh-HK.md)管理服務與版本。資料、類別、模型或訓練進度改動必須同一提交更新此檔，不另開日期化狀態稿。私人訓練服務尚未接通。
 
-## A10負監督對照與新資料凍結（候選未通過）
+## 目前問題總結（2026-10-31）
 
-原12,346筆來源影像已逐張核SHA。本機固定同一來源十類best、回放及設定，分control／repair各4 epoch；只在repair對18張逐張覆核的train圖補person不存在，其中11張也補fence不存在。其他未完整標註類保持unknown，不修改原val／test，不把訓練診斷當泛化。MPS非逐位確定、單seed、助手覆核而非獨立人手，不能聲稱因果或品質通過。
+**目前只能確認前處理一致性已改善，不能說十類模型已修好。三個修正候選均拒用；先整理問題及資料驗收，不再憑epoch數追加訓練。** 原App十類權重及gate=false維持不變，九類只作歷史比較。以下區分使用者回報、已重現證據與尚未證實的根因。
 
-固定argmax、640 RGB letterbox、clipped boxes、class-aware NMS0.45、max100、IoU0.5匹配，1388張原val中門GT18個；conf0.7的TP／FP／FN：baseline **2／1／16**，control **1／0／17**，repair **0／0／18**。repair把11張訓練診斷圖的高分誤報圍欄降至0，卻令獨立門召回退化，兩個候選均拒用；無權重替換。數字不與舊rect／multi-label報告直接相減。見[修正對照證據](../verification/mixed10-coverage-repair-20261030.json)。
+| 優先度 | 問題及證據 | 尚未確定／下一個判定點 |
+|---|---|---|
+| P0 | **來源權重本身誤認、漏認。** 使用者回報門→行人／圍欄；公開無人房間的床鋪也被原PT及TFLite認作行人。14張原門val圖的18個門，App預設conf0.7只找回2個 | 不是只換前處理便解決；尚未重現使用者原本那道門，不能把公開例子冒充原場景 |
+| P0 | **物件測距更嚴重的確切原因仍未定位。** 這是使用者回報；普通辨識及ARKit同幀辨識共用縮圖修正 | 缺同一道門、同角度／距離、同門檻的兩路原始輸入與輸出比較；不能直接斷言ARKit、旋轉或距離計算就是主因 |
+| P0 | **資料覆蓋及定義不足。** 混合來源只對已標註類給監督，其他類是unknown；門圖未標person／fence不等於它們不存在。已觀察到櫃、車／電器門等來源語義與入口門候選定義有差異 | 需覆核門／圍欄／行人的正例與確定負例、框定義及同源分組；目前只補少量反例，未證實哪項是主要根因，不能把全部unknown改成負例 |
+| P0 | **舊評估與App取類方式不同。** 舊multi-label驗證可同時保留高分fence與次高door；App只取最高類，可能漏門。另有rect、NMS等設定差異 | 新增A10專用argmax驗證及同設定比較；歷史不同設定的P／R不可直接當改善幅度。B11原validator行為未改 |
+| P0 | **目前修正實驗沒有泛化改善。** 本機補負監督能消除已參與訓練照片的誤報圍欄，但門val退化；Colab加入新門圖後召回仍無提升、誤報增加 | 不發佈候選、不以訓練診斷或較低loss代替獨立驗證；先查標註完整性、來源／場景偏差及錯誤類型，再決定下一實驗 |
+| P0 | **留集及品質門檻仍不足。** 新val只有15圖／21門框，標註為助手候選覆核；缺獨立人手與圍欄正例。舊legacy留集的同源／近重複曝光不能由本次排除train候選就消除 | 不能給可靠整體準確率、圍欄召回或推算HKDI效果；原test與新test均未推理，須保留。補獨立實體／場景及任務層驗收 |
+| P1 | **手機任務驗收仍缺。** 1.4.3+8已修雙線性／letterbox；單元、數值及格式對照通過。模型名稱、表面距離及失敗恢復是不同結果 | 仍需原門場景、量尺、等待／誤播／漏播、VoiceOver及跨任務切換真機驗收；詳見Frontend，不把工程通過當品質通過 |
 
-另發現舊Ultralytics驗證multi_label=True可同時保留同anchor的fence及次高door，與App取最高類別不同。新增A10專用AppArgmaxCoverageValidator，先argmax／NMS再依coverage排除unknown；原CoverageValidator行為及B11未改。6項coverage、2項argmax／梯度、2項來源完整性／test不解壓測試通過。
+### 已排查及已修正的部分
 
-下一輪從尚未使用的公開OID照片，先按作者及pHash分組、排除原留集相近來源，再在新模型預測前凍結27張train（29門框）／15張val（21門框）；原test及新test均不推理、不納入套件。助手只把明確門板／成對入口作候選定義，櫃、郵箱、車／電器門和空洞作已覆核反例；保留來源署名及每項修訂，正式taxonomy／ID未改。仍缺獨立人手、圍欄正例及足夠場景，gate=false。
+十類模型SHA／bytes／輸出映射吻合，person→ID6、fence→ID26、door→ID18未見對調；42個自然圖輸入的原PT↔TFLite最大差2.65e-5，未見匯出造成上述誤認。原12,346張來源影像已逐張核SHA。iOS舊最近鄰／截斷尺寸已改為半像素雙線性／取最近整數，平均像素差0.015123→1.95e-7；這些證據排除了部分工程問題，並未證明剩餘誤認全屬某一項資料或訓練原因。
 
-[Colab notebook](https://colab.research.google.com/drive/1I5tvr1lTOHAeuHcg8YUjtwOs87iH6yg-)與固定套件已在原擁有者Drive建立；預定免費GPU6 epoch，以新run從原十類best fine-tune，保留舊類回放、凍結backbone／BN，不重排head。程式批量輸出原val與新val門結果、已知person／fence負例的誤報frame分母、原val舊八類AP差及一份summary；不逐步讓LLM監看、不自動匯出／部署。尚未完成Colab整輪驗證；只做了程式／資料準備檢查。付費GPU仍停用，B11及手機權重不變。
+### 修正實驗的實際結果
+
+本機control／repair各4 epoch，固定來源十類best、回放及設定；repair只對18張train圖補person不存在，其中11張也補fence不存在。conf0.7，原18個門的TP／FP／FN為baseline **2／1／16**、control **1／0／17**、repair **0／0／18**。訓練診斷的fence誤報11張→0張，並未轉成門val改善；兩個候選均拒用。MPS非逐位確定、單seed、助手覆核，不作因果或品質通過聲明。
+
+其後公開OID候選先按作者／pHash分組及排除原留集相近來源，在新模型預測前凍結27張train（29門框）／15張val（21門框）。保留署名及逐項修訂，正式taxonomy／ID未改。免費T4以原十類best、新run、舊類回放、凍結backbone／BN、不重排head完成6 epoch；訓練約205秒，baseline／candidate批量評估合計約93秒，訓練迴圈沒有LLM呼叫。
+
+固定640 RGB letterbox、argmax、clipped boxes、class-aware NMS0.45、max100、GT匹配IoU0.5；下表為conf0.7，門指標只在已覆核／標註門類的14張原val及15張新val計算，legacy未標門的圖不當負例。
+
+| 留集 | baseline TP／FP／FN | Colab candidate TP／FP／FN | 判定 |
+|---|---|---|---|
+| 原val：18門框 | 2／1／16 | 1／4／17 | 召回、誤報均退化 |
+| 新val：21門框 | 3／2／18 | 3／3／18 | 召回無提升，誤報增加 |
+
+兩組合併門AP50約0.1526→0.0848；原val舊八類最大AP50下降約3.88個百分點。新val中已確認無person的12圖、無fence的10圖，兩模型在conf0.7均無該類誤報，不能因此宣稱person／fence召回良好。此候選亦拒用，未匯出／替換App權重。checkpoint SHA `8847eb6265f0a6f4a0e39e26efb066f6f9121a8494bfc75527a4bdba65ca1ce7`；完整聚合證據見[修正對照](../verification/mixed10-coverage-repair-20261030.json)，[Colab notebook](https://colab.research.google.com/drive/1I5tvr1lTOHAeuHcg8YUjtwOs87iH6yg-)及原始產物留在擁有者Drive。
+
+6項coverage、2項argmax／梯度、2項來源完整性／test不解壓測試通過。它們驗證程式及資料隔離，沒有驗證模型可交付。B11、原test、新test、App權重及付費GPU設定維持原狀。本次先完成review總結，不新增訓練。
 
 ## 1.4.3+8 前處理與自然圖重測（權重未修復）
 
@@ -31,7 +54,7 @@
 
 這與舊Ultralytics rect／NMS0.7報告的P28.6%／R11.1%是不同設定，不能直接相減當改善。其他類別在OID圖未完整標註，不能計算person／fence的P／R。人工檢視公開`96b573942e14da60`無人房間：標準RGB輸入已把床鋪認作person約0.710，修正後兩種NV12約0.722–0.726；證明權重錯誤不依賴ARKit，但不能當作已重現使用者原本那道門。
 
-模型版本仍2026-10-27.mixed10.experimental.1，SHA a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0、gate=false；沒有換九類或調高門檻掩蓋。限定Drive的candidate-best.pt／last、training-report、records及coverage已經連接下載；best SHA 33e8eb1d46c265796111bbb516ba4311e2de4bdddb401c65d99cde88254946b7與原匯出來源吻合。42個自然圖輸入的PT↔TFLite最大差2.65e-5，原PT同樣把床認成人，未見匯出造成此誤認。12,346筆原records與coverage一一吻合、類別／split／採樣次數可恢復；逐本機來源重建及12,346張SHA核對已完成。見[來源及自然圖對照](../verification/mixed10-natural-parity-20261030.json)。訓練反例挖掘／逐張候選覆核及負監督對照已完成，但候選未通過；下一步依上節固定新資料在Colab重測，未知不當負例，原驗證照片不加入訓練。新候選須對照舊類及獨立場景；不操作B11、不付費開GPU。
+模型版本仍2026-10-27.mixed10.experimental.1，SHA a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0、gate=false；沒有換九類或調高門檻掩蓋。限定Drive的candidate-best.pt／last、training-report、records及coverage已經連接下載；best SHA 33e8eb1d46c265796111bbb516ba4311e2de4bdddb401c65d99cde88254946b7與原匯出來源吻合。42個自然圖輸入的PT↔TFLite最大差2.65e-5，原PT同樣把床認成人，未見匯出造成此誤認。12,346筆原records與coverage一一吻合、類別／split／採樣次數可恢復；逐本機來源重建及12,346張SHA核對已完成。見[來源及自然圖對照](../verification/mixed10-natural-parity-20261030.json)。訓練反例挖掘／逐張候選覆核及負監督對照已完成，但候選未通過；Colab新資料重測亦未通過，下一步先依上節覆核資料與獨立驗收，未知不當負例，原驗證照片不加入訓練。新候選須對照舊類及獨立場景；不操作B11、不付費開GPU。
 
 工程測試14項原生XCTest（兩種range／四向插值等）、328項Flutter、33項數值檢查及analyze通過，GitHub核對後已安裝／啟動iPhone，見[交付收據](../verification/release-receipts/app-1.4.3+8.json)。完整數字與檔案雜湊見[本輪證據](../verification/app-1.4.3+8.json)；本機來源／腳本／輸出留在ignored review_artifacts，未上傳私人影像。權重修正、獨立品質及真機門場景／深度任務驗收尚未完成。
 
@@ -50,7 +73,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 
 | 階段 | 本階段Dataset工作 | 目前進度 | 完成標準 | 下一步／依賴 |
 |---|---|---|---|---|
-| S0 工程基線與版本保存 | 固定taxonomy、HKDI保留集、現用模型／映射與逐類基準 | 1.4.3+8前處理／42自然輸入PT↔TFLite對照通過；來源SHA與12346筆records／coverage已取回；十類權重品質未通過 | 可在同一獨立資料重現新舊逐類比較，產物與SHA可還原 | 先整理門／行人失敗例與不同實體場景 |
+| S0 工程基線與版本保存 | 固定taxonomy、HKDI保留集、現用模型／映射與逐類基準 | 1.4.3+8前處理／42自然輸入PT↔TFLite對照通過；來源SHA與12346筆records／coverage已取回；十類權重品質未通過；Colab修正候選亦拒用 | 可在同一獨立資料重現新舊逐類比較，產物與SHA可還原 | 先整理門／行人失敗例與不同實體場景 |
 | S1 現有App核心功能 | 校準A、菜單OCR與播報門檻，提供真機測試樣本 | 有A來源評估／parity與工程回歸；缺完整手機實景評估 | 不把PyTorch／mAP當手機任務成功率；按場景公布誤報／漏報 | 補TFLite與HKDI／菜單真值，與Frontend實測對照 |
 | S2 照片收集與管理員覆核 | 定義全圖答案、覆核清單、coverage、去重與場景 | 本地工具已有，App私人照片完整覆核閉環未接 | 每張核准圖有來源／定義／答案／分組與審核版本，partial不冒充完整 | 先既有失敗場景試覆核，再接Backend角色與照片 |
 | S3 私人訓練與模型更新 | UID快照、基礎回放、固定評估／門檻與匯出 | 未形成服務；付費worker待預算與資料 | 與現用模型同資料比較，合格才可下載，無證據不自動更新 | 先mock管線，核准資料不足保持收集 |
@@ -66,7 +89,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | D01 類別定義與版本映射／S0 | A十類／B十一類活動版本已知 | 以實際manifest／profile凍結名稱、順序、專案ID、正反例與框邊界；保留原標註，輸出連續YOLO索引及對照。A物件／B牌內圖示／OCR文字各自namespace，不把52登記或20／23候選當已訓練 | F02／B08；同一輸出在訓練、匯出與手機有同義映射，樓梯合併與門框定義可追溯 |
 | D02 新照片、預標註與人工覆核／S2 | 本地工具已有，私人服務未接 | 檢查授權／影像→模型預標→管理員全圖補漏／修框／改類→存原預測與核准答案／reviewer／version。私人首版十類全圖完成才核准；partial用coverage明確隔離 | B02–B03；低信心不當新類別，空框不當真負例，不能只把pending改approved |
 | D03 去重、場景分組與快照／S0–S3 | 精確像素／pHash工具已有，實體獨立性未完全證實 | 以來源／影片／實體門牌分組，增強／裁圖回原組；精確重複合併，近似候選覆核，不確定保守同組。再分train／val／test、固定SHA、coverage、來源與版本 | B04；跨集合圖像／實體洩漏被擋，無法證獨立不作宣稱；test不進訓練 |
-| D04 A模型門與舊類改善／S0–S1 | 本機兩候選拒用；新資料／Colab已備、未完成整輪 | 分析門FP／FN的材質／半開／尺度／光線與框定義，補不同門及櫃窗反例；固定新快照、回放舊類，短smoke後由相容十類best新fine-tune，逐類對照現用。不盲目加epoch／重排HK9 head | 先獨立門／圍欄驗證；新增資料須有coverage，person／舊類退化不以整體mAP掩蓋 |
+| D04 A模型門與舊類改善／S0–S1 | 本機／Colab候選拒用；先覆核資料與獨立留集 | 分析門FP／FN的材質／半開／尺度／光線與框定義，補不同門及櫃窗反例；固定新快照、回放舊類，短smoke後由相容十類best新fine-tune，逐類對照現用。不盲目加epoch／重排HK9 head | 先獨立門／圍欄驗證；新增資料須有coverage，person／舊類退化不以整體mAP掩蓋 |
 | D05 B圖示與箭嘴／S5 | 正式run中斷、最新授權連接受阻 | 保留目前checkpoint與CSV，恢復後驗epoch／optimizer／names再續訓；不從seed重跑。完成報逐類AP與固定conf的TP／FP／FN，檢查複合牌、方向與未知圖示；原圖ROI保留座標來源，不用整圖分類假框 | F13／B08；exit僅12張train／13框，不能宣稱成熟；正式、smoke與A結果分開 |
 | D06 菜單、牌面OCR與配對／S1–S5 | 菜單OCR有程式；牌面資料／整合未齊 | 系統OCR先作基線；保留逐字文字、多邊形、菜名／價格或設施／箭嘴關係真值。分菜單與牌面測，報文字錯誤、價格錯配、漏檢及拒答；錯誤證據充分後才規劃微調 | F07／F13；不為每個店名／房號新增物件class，不由menu測試推定sign任務成功 |
 | D07 私人微調與品質比較／S3 | 未接通 | 僅本人核准圖＋獲授權基礎回放，按場景留獨立驗證；固定現用／候選／threshold報逐類差異，按第3節門檻判定，資料不足不排隊。先在mock流程測不合格／退化，再接GPU | B04–B07；不能跨UID或自動加入新class，訓練成功不等於更新成功 |
@@ -238,6 +261,7 @@ People Detection原附README的上游署名保留如下；這是來源記錄，�
 
 ## 8. 維護紀錄
 
+2026-10-31 目前問題總結：依使用者要求先整理十類辨識／物件測距問題，分開已重現證據、假說及缺少的驗收。補入免費T4完整結果：新val召回無提升、誤報增加，候選拒用；前處理已交付但權重未修復。未新增訓練、權重發佈或B11操作。
 2026-10-31 A10修正交接：本機負監督候選因門召回退化拒用；凍結27張新train／15張新val，新增App argmax驗證及Colab摘要工作包，已上傳獨立Drive資料夾但整輪尚未完成。免費GPU以外停用，無App權重更新或B11操作。
 2026-10-30 1.4.3+8交付及來源核對：前處理版已保存GitHub及安裝／啟動iPhone；限定Drive原產物下載成功，來源checkpoint／訓練報告SHA吻合，42個自然圖輸入PT／TFLite最大差2.65e-5，源權重已有同樣誤認。12346筆records／coverage結構吻合；後續負監督修正只用逐張覆核的訓練圖，不動val/test、B11或付費GPU。
 

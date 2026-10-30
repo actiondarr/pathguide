@@ -1,5 +1,5 @@
 {
-  "status": "local_candidates_rejected_colab_package_prepared",
+  "status": "local_and_colab_candidates_rejected_review_first",
   "app_version": "1.4.3+8",
   "app_weights_changed": false,
   "source_pt_sha256": "33e8eb1d46c265796111bbb516ba4311e2de4bdddb401c65d99cde88254946b7",
@@ -120,12 +120,14 @@
     "public_images": 56,
     "fresh_train": 27,
     "fresh_val": 15,
-    "trained": false,
+    "trained": true,
     "uploaded": true,
     "paid_gpu_allowed": false,
     "drive_folder_id": "1XdV8gv_B6bPKxCR3hceEG-o2Bl8BlFtY",
     "notebook_url": "https://colab.research.google.com/drive/1I5tvr1lTOHAeuHcg8YUjtwOs87iH6yg-",
-    "archive_drive_id": "1WaqKxh80Yq4Ca1WTPydS25vmPdv5B7d7"
+    "archive_drive_id": "1WaqKxh80Yq4Ca1WTPydS25vmPdv5B7d7",
+    "completed": true,
+    "runtime_authorized_by_user": true
   },
   "checks": {
     "coverage_loss_tests": 6,
@@ -134,8 +136,132 @@
     "notebook_code_cells_compile": true,
     "training_worker_compile": true,
     "evaluation_worker_compile": true,
-    "colab_end_to_end_run_complete": false
+    "colab_end_to_end_run_complete": true
   },
   "deployment_performed": false,
-  "quality_gate_passed": false
+  "quality_gate_passed": false,
+  "colab_result": {
+    "run_id": "20261030T162638Z",
+    "completed_at_utc": "2026-10-30T16:32:32Z",
+    "training": {
+      "arm": "repair",
+      "checkpoint": "/content/pathguide-a10-repair-20261030T162638Z/workspace/runs/repair/weights/last.pt",
+      "checkpoint_sha256": "8847eb6265f0a6f4a0e39e26efb066f6f9121a8494bfc75527a4bdba65ca1ce7",
+      "source_pt_sha256": "33e8eb1d46c265796111bbb516ba4311e2de4bdddb401c65d99cde88254946b7",
+      "wall_seconds": 204.99673792099998,
+      "head_reinitialized": false,
+      "deployment_authorized": false,
+      "quality_gate_passed": false,
+      "torch_version": "2.11.0+cu130",
+      "gpu": "Tesla T4",
+      "free_gpu_verified_by_caller": true,
+      "paid_gpu_allowed": false
+    },
+    "summary": {
+      "baseline": {
+        "door_original_07": {
+          "tp": 2,
+          "fp": 1,
+          "fn": 16,
+          "ground_truth": 18,
+          "precision": 0.6666666666666666,
+          "recall": 0.1111111111111111
+        },
+        "door_fresh_07": {
+          "tp": 3,
+          "fp": 2,
+          "fn": 18,
+          "ground_truth": 21,
+          "precision": 0.6,
+          "recall": 0.14285714285714285
+        },
+        "known_person_fresh_07": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "ground_truth": 0,
+          "precision": null,
+          "recall": null
+        },
+        "known_fence_fresh_07": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "ground_truth": 0,
+          "precision": null,
+          "recall": null
+        },
+        "fresh_known_absent_frames": {
+          "person": 12,
+          "fence": 10
+        },
+        "fresh_false_positive_frames_07": {}
+      },
+      "repair": {
+        "door_original_07": {
+          "tp": 1,
+          "fp": 4,
+          "fn": 17,
+          "ground_truth": 18,
+          "precision": 0.2,
+          "recall": 0.05555555555555555
+        },
+        "door_fresh_07": {
+          "tp": 3,
+          "fp": 3,
+          "fn": 18,
+          "ground_truth": 21,
+          "precision": 0.5,
+          "recall": 0.14285714285714285
+        },
+        "known_person_fresh_07": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "ground_truth": 0,
+          "precision": null,
+          "recall": null
+        },
+        "known_fence_fresh_07": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "ground_truth": 0,
+          "precision": null,
+          "recall": null
+        },
+        "fresh_known_absent_frames": {
+          "person": 12,
+          "fence": 10
+        },
+        "fresh_false_positive_frames_07": {}
+      },
+      "old_class_AP50_drops": {
+        "repair": {
+          "person": 0.03884755586844113,
+          "bicycle": 0.03127071693872763,
+          "bin": 0.031201455751446727,
+          "bollard": -0.009359431018663544,
+          "traffic_cone": 0.010140026170438188,
+          "caution_slippery": -0.0083478260869565,
+          "stairs": 0.01670066072804899,
+          "escalator": 0.0254398824246983
+        }
+      },
+      "quality_gate_passed": false,
+      "deployment_performed": false,
+      "limits": "Assistant labels, single seed; independent fence-positive and field acceptance remain missing."
+    },
+    "evaluation_sha256": "f8f352feebf3f30c2deddb97dbe2209a2024c7a199257db7f26aa9df889adc89",
+    "original_door_covered_images": 14,
+    "fresh_door_covered_images": 15,
+    "door_AP50_combined": {
+      "baseline": 0.15259213865384463,
+      "repair": 0.08479428430647942
+    },
+    "decision": "reject: no fresh door recall gain, extra false door detections and original validation regression",
+    "new_training_started_after_review_request": false,
+    "app_weights_changed": false,
+    "artifacts_url": "https://drive.google.com/drive/folders/1IUpfzPwrHvCtfRmck_nkfDARit6u4ImF"
+  }
 }

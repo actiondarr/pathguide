@@ -1,5 +1,5 @@
 {
-  "status": "candidate_only",
+  "status": "executed_rejected",
   "source_pt_sha256": "33e8eb1d46c265796111bbb516ba4311e2de4bdddb401c65d99cde88254946b7",
   "epochs": 6,
   "optimizer": "AdamW",
@@ -20,5 +20,8 @@
   "deploy_automatically": false,
   "quality_gate_passed": false,
   "package_sha256": "1df4f811e7d096c482ffc7dd6097a2cf73a69f794c533c65f17cb2e73c5b2ef1",
-  "notebook_url": "https://colab.research.google.com/drive/1I5tvr1lTOHAeuHcg8YUjtwOs87iH6yg-"
+  "notebook_url": "https://colab.research.google.com/drive/1I5tvr1lTOHAeuHcg8YUjtwOs87iH6yg-",
+  "run_id": "20261030T162638Z",
+  "candidate_sha256": "8847eb6265f0a6f4a0e39e26efb066f6f9121a8494bfc75527a4bdba65ca1ce7",
+  "next_training_authorized_by_this_config": false
 }
