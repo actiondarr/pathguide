@@ -19,9 +19,9 @@
 
 這與舊Ultralytics rect／NMS0.7報告的P28.6%／R11.1%是不同設定，不能直接相減當改善。其他類別在OID圖未完整標註，不能計算person／fence的P／R。人工檢視公開`96b573942e14da60`無人房間：標準RGB輸入已把床鋪認作person約0.710，修正後兩種NV12約0.722–0.726；證明權重錯誤不依賴ARKit，但不能當作已重現使用者原本那道門。
 
-模型版本仍2026-10-27.mixed10.experimental.1，SHA a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0、gate=false；沒有換九類或調高門檻掩蓋。原run的candidate-best.pt／last、training-report、records及coverage已獲限定讀取授權並定位，但瀏覽器下載失敗，尚未取得本機checkpoint作自然圖PT↔TFLite對照／修正。Drive連接未接通；不操作B11、不付費開GPU。下一步先取得相符checkpoint／原資料紀錄，再由訓練資料挖掘並覆核門／床櫃／欄杆反例，保留獨立留集，對照舊類與手機任務後才接受新權重。原始驗證照片不可直接變成訓練修正例。
+模型版本仍2026-10-27.mixed10.experimental.1，SHA a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0、gate=false；沒有換九類或調高門檻掩蓋。限定Drive的candidate-best.pt／last、training-report、records及coverage已經連接下載；best SHA 33e8eb1d46c265796111bbb516ba4311e2de4bdddb401c65d99cde88254946b7與原匯出來源吻合。42個自然圖輸入的PT↔TFLite最大差2.65e-5，原PT同樣把床認成人，未見匯出造成此誤認。12,346筆原records與coverage一一吻合、類別／split／採樣次數可恢復；逐本機來源重建核對另行進行。見[來源及自然圖對照](../verification/mixed10-natural-parity-20261030.json)。下一步從訓練資料挖掘並逐張覆核反例，只把確定沒有某類的圖片補上該類負監督，不把未知一律當負例；原始驗證照片不可直接加入訓練。新候選須對照舊類及獨立場景；不操作B11、不付費開GPU。
 
-工程測試14項原生XCTest（兩種range／四向插值等）、328項Flutter、33項數值檢查及analyze通過。完整數字與檔案雜湊見[本輪證據](../verification/app-1.4.3+8.json)；本機腳本／輸出留在ignored review_artifacts，未新增私人影像上傳或資料真值。下載／訓練／真機門場景及深度任務驗收均未完成。
+工程測試14項原生XCTest（兩種range／四向插值等）、328項Flutter、33項數值檢查及analyze通過，GitHub核對後已安裝／啟動iPhone，見[交付收據](../verification/release-receipts/app-1.4.3+8.json)。完整數字與檔案雜湊見[本輪證據](../verification/app-1.4.3+8.json)；本機來源／腳本／輸出留在ignored review_artifacts，未上傳私人影像。權重修正、獨立品質及真機門場景／深度任務驗收尚未完成。
 
 ## 1.4.2+7 前端交付與品質證據界線
 
@@ -38,7 +38,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 
 | 階段 | 本階段Dataset工作 | 目前進度 | 完成標準 | 下一步／依賴 |
 |---|---|---|---|---|
-| S0 工程基線與版本保存 | 固定taxonomy、HKDI保留集、現用模型／映射與逐類基準 | A十類試驗已匯出；門gate失敗，圍欄無獨立val，HKDI基準不足 | 可在同一獨立資料重現新舊逐類比較，產物與SHA可還原 | 先整理門／行人失敗例與不同實體場景 |
+| S0 工程基線與版本保存 | 固定taxonomy、HKDI保留集、現用模型／映射與逐類基準 | 1.4.3+8前處理／42自然輸入PT↔TFLite對照通過；來源SHA與12346筆records／coverage已取回；十類權重品質未通過 | 可在同一獨立資料重現新舊逐類比較，產物與SHA可還原 | 先整理門／行人失敗例與不同實體場景 |
 | S1 現有App核心功能 | 校準A、菜單OCR與播報門檻，提供真機測試樣本 | 有A來源評估／parity與工程回歸；缺完整手機實景評估 | 不把PyTorch／mAP當手機任務成功率；按場景公布誤報／漏報 | 補TFLite與HKDI／菜單真值，與Frontend實測對照 |
 | S2 照片收集與管理員覆核 | 定義全圖答案、覆核清單、coverage、去重與場景 | 本地工具已有，App私人照片完整覆核閉環未接 | 每張核准圖有來源／定義／答案／分組與審核版本，partial不冒充完整 | 先既有失敗場景試覆核，再接Backend角色與照片 |
 | S3 私人訓練與模型更新 | UID快照、基礎回放、固定評估／門檻與匯出 | 未形成服務；付費worker待預算與資料 | 與現用模型同資料比較，合格才可下載，無證據不自動更新 | 先mock管線，核准資料不足保持收集 |
@@ -58,7 +58,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | D05 B圖示與箭嘴／S5 | 正式run中斷、最新授權連接受阻 | 保留目前checkpoint與CSV，恢復後驗epoch／optimizer／names再續訓；不從seed重跑。完成報逐類AP與固定conf的TP／FP／FN，檢查複合牌、方向與未知圖示；原圖ROI保留座標來源，不用整圖分類假框 | F13／B08；exit僅12張train／13框，不能宣稱成熟；正式、smoke與A結果分開 |
 | D06 菜單、牌面OCR與配對／S1–S5 | 菜單OCR有程式；牌面資料／整合未齊 | 系統OCR先作基線；保留逐字文字、多邊形、菜名／價格或設施／箭嘴關係真值。分菜單與牌面測，報文字錯誤、價格錯配、漏檢及拒答；錯誤證據充分後才規劃微調 | F07／F13；不為每個店名／房號新增物件class，不由menu測試推定sign任務成功 |
 | D07 私人微調與品質比較／S3 | 未接通 | 僅本人核准圖＋獲授權基礎回放，按場景留獨立驗證；固定現用／候選／threshold報逐類差異，按第3節門檻判定，資料不足不排隊。先在mock流程測不合格／退化，再接GPU | B04–B07；不能跨UID或自動加入新class，訓練成功不等於更新成功 |
-| D08 TFLite、模型包與手機驗證／S0–S6 | A已有匯出／raw parity，B未完成 | 固定權重SHA→匯出TFLite→核shape／前處理／本地索引→同圖raw parity與偵測比較→完整手機格式評估→真機延遲／耗電／播報。封裝manifest、namespace、taxonomy、來源與限制 | F02／F08／B08；保留原權重與上版，不用降低檢查配合不相容輸出；共用版本先GitHub再交付 |
+| D08 TFLite、模型包與手機驗證／S0–S6 | A前處理／42自然輸入PT↔TFLite對照通過；權重品質未過，B未完成 | 固定權重SHA→匯出TFLite→核shape／前處理／本地索引→同圖raw parity與偵測比較→完整手機格式評估→真機延遲／耗電／播報。封裝manifest、namespace、taxonomy、來源與限制 | F02／F08／B08；保留原權重與上版，不用降低檢查配合不相容輸出；共用版本先GitHub再交付 |
 | D09 拓撲node／觀察序列及室內幾何真值／S4–S7 | 12-node合成回放已執行；1.4.0+5同幀框內表面測距有工程檢查，實測聯合benchmark／圖片定位未完成 | 先人手定義位置node、實際通路與觀察對照，測重複／漏拍／倒行／分岔／改名，再接圖片特徵。公尺級幾何階段另量測距離／寬度／地標及授權RGB-D序列，按地點／時段／設備分集 | F09–F14；以陪同與量測判定，不讓模型輸出當導航真值；影片／姿態用途不能沿用照片同意 |
 | D10 擴類、場地與新平台／S7 | 候選，未開放私人擴class | 先確認任務與定義、補足新舊類全圖標註及陌生場景，再版本化taxonomy／mapping與App相容性；舊輸出有實際資料才做遷移。Android／非LiDAR能力另外基準與限制 | F18／B14；不重用舊ID改義，不因有COCO權重便假設保留全部類別 |
 | D11 扶手電梯、推拉與近身時序／S7 | 研究，未開始 | 受控授權序列包含同設備、上下端、移動／啟停、標誌、相機運動與真方向；門推拉另有文字證據。懸空／細障礙與相對運動另量測。分設備／場地／時段留集，報錯方向、拒答及過期清除 | F15–F16；單張箭嘴、門把或畫面位移不作實際方向真值，未知保留拒答 |
@@ -225,6 +225,8 @@ People Detection原附README的上游署名保留如下；這是來源記錄，�
 快照保留影像／標註SHA、授權、coverage、場景分組與split；LICENSE-SOURCES.json及audit.json跟snapshot。原docs內機器證據移到verification/，候選提案移到configs/planning/，本機覆核CSV／圖片等移到dataset_pipeline/review_artifacts/；工具新輸出不得再寫進docs。舊文件已移出工作閱讀區，Git內已提交版本可由歷史還原，本機未提交舊稿另有清理前備份。
 
 ## 8. 維護紀錄
+
+2026-10-30 1.4.3+8交付及來源核對：前處理版已保存GitHub及安裝／啟動iPhone；限定Drive原產物下載成功，來源checkpoint／訓練報告SHA吻合，42個自然圖輸入PT／TFLite最大差2.65e-5，源權重已有同樣誤認。12346筆records／coverage結構吻合；後續負監督修正只用逐張覆核的訓練圖，不動val/test、B11或付費GPU。
 
 2026-10-30 十類問題排查：核對模型／類別契約，修正兩條iOS路徑共用的縮圖／取整，完成14張OID val×兩種NV12的原生TFLite重測；漏門與床鋪誤認person仍存在，保留gate=false及原權重。限定Drive來源檔案已授權但下載未成功，未重訓／替換模型、未動B11或對test推理。工程一致性與模型品質分開記錄，不以本小集宣稱準確率改善。
 

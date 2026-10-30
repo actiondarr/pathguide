@@ -23,8 +23,9 @@
     "systemSignatureVerification": "passed outside sandbox using normal system trust store",
     "bundleVersionChecked": "1.4.3+8",
     "modelManifestMatchesSource": true,
-    "deviceInstalled": false,
-    "fieldFixVerified": false
+    "deviceInstalled": true,
+    "fieldFixVerified": false,
+    "deviceLaunched": true
   },
   "model": {
     "format": 1,
@@ -441,10 +442,10 @@
     "B11Touched": false
   },
   "pending": [
-    "Download hash-matched source candidate-best.pt and original records/coverage; browser download failed, Drive connection not confirmed",
-    "Natural image PyTorch vs TFLite parity and review of training hard negatives",
+    "Reviewed hard negatives, controlled candidate training, and new quality evaluation; source PT/TFLite natural-image parity now verified",
     "New candidate weight training and independent old-class/door/fence evaluation",
-    "Original user door scene and real iPhone recognition/range/VoiceOver validation",
-    "GitHub remote checkpoint then iPhone delivery"
-  ]
+    "Original user door scene and real iPhone recognition/range/VoiceOver validation"
+  ],
+  "deliveryReceipt": "verification/release-receipts/app-1.4.3+8.json",
+  "sourceFollowUp": "verification/mixed10-natural-parity-20261030.json"
 }

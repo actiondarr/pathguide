@@ -4,11 +4,11 @@
 
 **後端把已同意的錯誤場景，經覆核、訓練與評估，轉成可回退的私人模型。** 上傳成功只代表收到照片，不代表已學會、變準或可以更新。
 
-## 1.4.3+8 相機前處理修正版（工程驗證完成，待保存與交付）
+## 1.4.3+8 相機前處理修正版（GitHub已保存，iPhone已安裝／啟動）
 
 裝置端共用前處理由最近鄰／截斷尺寸改為雙線性／取最近整數（恰半取偶數）的letterbox，影響普通辨識及ARKit同幀辨識輸入；模型SHA、bytes、十類ID、下載／上傳及後端契約不變。14項原生XCTest、328項Flutter、33項數值檢查、analyze及iOS簽署建置／包內核對通過；遠端版本／交付狀態另依[工程證據](../verification/app-1.4.3+8.json)及收據核對。自然圖仍大量漏門及誤認行人，不能把此版記作新共用權重或品質gate通過。
 
-原十類checkpoint及原run資料紀錄已獲限定Drive讀取授權，瀏覽器下載失敗，Drive連接未接通；未進行新訓練、雲端部署或私人資料傳送，亦未操作B11。D04／D08後續須先完成原checkpoint自然圖PT↔TFLite對照及修正候選的獨立比較，再依既有B08／S0版本程序保存模型＋manifest＋設定。前處理版本本身亦遵守先GitHub備份、核對後才交付的順序。
+原十類checkpoint及原run資料紀錄已按限定授權經Drive連接下載到ignored本機目錄；來源checkpoint／訓練報告SHA與原匯出一致，42個自然圖PT↔TFLite對照通過，誤認存在於原權重。未進行雲端部署或私人資料傳送，亦未操作B11。D04／D08後續須完成覆核反例／修正候選的獨立比較，再依B08／S0保存模型＋manifest＋設定。前處理版source 7f1d270、不可變tag及prerelease核對後，已成功安裝／啟動iPhone，見[交付收據](../verification/release-receipts/app-1.4.3+8.json)。
 
 ## 1.4.2+7 前端恢復修正的契約與版本（已交付試用）
 
@@ -25,7 +25,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 
 | 階段 | 本階段後端工作 | 目前進度 | 完成標準 | 下一步／依賴 |
 |---|---|---|---|---|
-| S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.4.2+7沿用原模型；分支＋不可變tag／prerelease已核對，之後安裝／啟動成功，舊版保留，場景覆驗待補 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
+| S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.4.3+8前處理版沿用十類權重；分支／不可變tag／prerelease先核實，之後iPhone安裝／啟動成功。來源PT已取回；品質未過關 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
 | S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
 | S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理程式已有，本機關閉；管理員覆核服務未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
 | S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；付費GPU預算未定 | 模擬完整流程、真實工作受配額控制、合格模型可本人下載／回退 | 先mock worker、資料接口與取消／刪除，再開付費執行 |
@@ -211,6 +211,8 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 供應商參考：[Google Maps條款](https://maps.google.com/help/terms_maps/)、[Google私隱](https://policies.google.com/privacy)、[Apple地圖條款](https://www.apple.com/legal/internet-services/maps/terms-en.html)、[Apple私隱](https://www.apple.com/legal/privacy/)。正式政策需補聯絡及變更通知方式，不能以本章冒充已公開條款。
 
 ## 9. 維護紀錄
+
+2026-10-30 1.4.3+8交付核對：GitHub分支／不可變tag／prerelease先核實，之後iPhone安裝／啟動成功；限定Drive來源下載及原PT自然圖對照亦完成。權重未替換、品質仍未過關，沒有雲端部署、私人訓練或B11操作；詳細證據見本版收據與Dataset。
 
 2026-10-30 相機前處理版本同步：1.4.3+8只改iOS共用縮圖／letterbox與回歸測試，無後端接口／模型權重變動；自然圖仍未過品質驗收。限定Drive原產物下載未成功，B11及付費GPU不變；版本保存／裝機依本輪工程證據與收據分開確認。
 
