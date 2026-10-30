@@ -9,3 +9,26 @@ __pycache__/
 *.mobileprovision
 *.keystore
 *.jks
+dataset_pipeline/output/
+dataset_pipeline/runs/
+dataset_pipeline/snapshots/
+dataset_pipeline/external/
+
+# Firebase client configuration is supplied per development project.
+app/config/firebase.local.json
+app/ios/Flutter/Firebase.local.xcconfig
+**/GoogleService-Info.plist
+**/google-services.json
+**/*firebase-key*.json
+**/*service-account*.json
+backend/node_modules/
+backend/*-debug.log
+backend/.firebase/
+
+backend/functions/node_modules/
+
+# Per-platform navigation/Firebase client settings.
+app/config/*.local.json
+
+# Generated review evidence stays outside the three canonical documents.
+dataset_pipeline/review_artifacts/

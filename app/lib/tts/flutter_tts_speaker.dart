@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 import 'announcer.dart';
+import '../settings/app_settings.dart';
 
 /// 基于 `flutter_tts` 的粤语扬声器。
 ///
@@ -19,9 +20,14 @@ import 'announcer.dart';
 /// **一定要让 [resolvedLanguage] 暴露出来**：若最终落到 `zh-CN`，
 /// 播报会是普通话，这必须在演示界面上写清楚，不能让人以为在念粤语。
 class FlutterTtsSpeaker implements Speaker {
-  FlutterTtsSpeaker({FlutterTts? tts, double speechRate = defaultSpeechRate})
-    : _tts = tts ?? FlutterTts(),
-      _speechRate = speechRate.clamp(0.0, 1.0).toDouble();
+  FlutterTtsSpeaker({
+    FlutterTts? tts,
+    double speechRate = defaultSpeechRate,
+    AppLanguage language = AppLanguage.chinese,
+  }) : _tts = tts ?? FlutterTts(),
+       // ignore: prefer_initializing_formals
+       _language = language,
+       _speechRate = speechRate.clamp(0.0, 1.0).toDouble();
 
   static const double defaultSpeechRate = 0.45;
 
@@ -35,7 +41,23 @@ class FlutterTtsSpeaker implements Speaker {
   final FlutterTts _tts;
   double _speechRate;
   bool _ready = false;
+  AppLanguage _language;
+  Future<void> setAppLanguage(AppLanguage value) async {
+    if (_language == value) return;
+    _language = value;
+    await stop();
+    _resolved = null;
+    _ready = false;
+  }
+
   String? _resolved;
+  Completer<void>? _pendingSpeech;
+
+  void _finishSpeech() {
+    final pending = _pendingSpeech;
+    _pendingSpeech = null;
+    if (pending != null && !pending.isCompleted) pending.complete();
+  }
 
   /// 实际生效的语言标签。null 表示尚未初始化。
   String? get resolvedLanguage => _resolved;
@@ -66,6 +88,17 @@ class FlutterTtsSpeaker implements Speaker {
     await _tts.setSpeechRate(_speechRate);
     await _tts.setPitch(1.0);
     await _tts.setVolume(1.0);
+    // iOS flutter_tts does not complete its awaitSpeakCompletion result on
+    // cancellation. Track completion here so Pause always releases the caller.
+    _tts.setCompletionHandler(_finishSpeech);
+    _tts.setCancelHandler(_finishSpeech);
+    _tts.setErrorHandler((message) {
+      final pending = _pendingSpeech;
+      _pendingSpeech = null;
+      if (pending != null && !pending.isCompleted) {
+        pending.completeError(StateError(message));
+      }
+    });
     if (defaultTargetPlatform == TargetPlatform.android) {
       // Android 上队列模式会让后一句等前一句读完，冷却逻辑已保证不拥挤，
       // 用 QUEUE_FLUSH 让插队的 P0 能立刻打断。
@@ -91,7 +124,9 @@ class FlutterTtsSpeaker implements Speaker {
       // 拿不到语言列表时仍尝试直接设置，某些 ROM 不实现该查询。
     }
 
-    final ordered = defaultTargetPlatform == TargetPlatform.iOS
+    final ordered = _language == AppLanguage.english
+        ? const <String>['en-HK', 'en-GB', 'en-US']
+        : defaultTargetPlatform == TargetPlatform.iOS
         ? const <String>['zh-HK', 'yue-HK', 'zh-TW', 'zh-CN']
         : candidates;
     for (final c in ordered) {
@@ -120,11 +155,35 @@ class FlutterTtsSpeaker implements Speaker {
   Future<void> speak(String text) async {
     if (!_ready) await initialize();
     if (_resolved == null) return;
-    await _tts.speak(text);
+    // Recording temporarily changes the shared iOS audio session. Restore it on
+    // every utterance, including when language initialization was cached.
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      await _tts.setSharedInstance(true);
+      await _tts.setIosAudioCategory(
+        IosTextToSpeechAudioCategory.playback,
+        <IosTextToSpeechAudioCategoryOptions>[
+          IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+        ],
+      );
+    }
+    _finishSpeech();
+    final pending = Completer<void>();
+    _pendingSpeech = pending;
+    try {
+      await Future.wait<void>([
+        _tts.speak(text).then((result) {
+          if (result == 0) throw StateError('語音服務未接受播報');
+        }),
+        pending.future,
+      ], eagerError: true);
+    } finally {
+      if (identical(_pendingSpeech, pending)) _pendingSpeech = null;
+    }
   }
 
   @override
   Future<void> stop() async {
+    _finishSpeech();
     try {
       await _tts.stop();
     } catch (_) {

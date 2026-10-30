@@ -33,13 +33,24 @@ abstract final class BoxPalette {
 /// 一个 `BoxPainter`（在 `decoration.dart`）。同名会导致 `CustomPaint(painter: ...)`
 /// 解析到 Flutter 那个，编译报 `invocation_of_non_function` + `ambiguous_import`。
 class DetectionBoxPainter extends CustomPainter {
-  DetectionBoxPainter({required this.mapped, required this.showLabels});
+  DetectionBoxPainter({
+    required this.mapped,
+    required this.showLabels,
+    this.fontFamily,
+    this.textScaler = TextScaler.noScaling,
+    this.englishLabels = false,
+  });
 
   final List<({Detection detection, Rect rect})> mapped;
   final bool showLabels;
+  final String? fontFamily;
+  final TextScaler textScaler;
+  final bool englishLabels;
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
     for (final item in mapped) {
       final label = labelOf(item.detection.id);
       final color = label == null
@@ -62,8 +73,9 @@ class DetectionBoxPainter extends CustomPainter {
       // 角标：在框的左上角画粗短线，比整框描边更容易在余光里看到。
       _cornerMarks(canvas, rect, color);
 
-      if (showLabels) _label(canvas, rect, label, item.detection.score, color);
+      if (showLabels) _label(canvas, size, rect, label, item.detection.score);
     }
+    canvas.restore();
   }
 
   void _cornerMarks(Canvas canvas, Rect rect, Color color) {
@@ -78,20 +90,15 @@ class DetectionBoxPainter extends CustomPainter {
     canvas.drawLine(rect.topRight, rect.topRight + const Offset(0, len), p);
   }
 
-  void _label(
-    Canvas canvas,
-    Rect rect,
-    Label? label,
-    double score,
-    Color color,
-  ) {
+  void _label(Canvas canvas, Size size, Rect rect, Label? label, double score) {
     final text = label == null
         ? 'id? ${score.toStringAsFixed(2)}'
-        : '${label.nameZh} ${score.toStringAsFixed(2)}';
+        : '${englishLabels ? label.nameEn.replaceAll('_', ' ') : label.nameZh} ${score.toStringAsFixed(2)}';
     final tp = TextPainter(
       text: TextSpan(
         text: text,
-        style: const TextStyle(
+        style: TextStyle(
+          fontFamily: fontFamily,
           color: Colors.white,
           fontSize: 15,
           fontWeight: FontWeight.w700,
@@ -100,7 +107,8 @@ class DetectionBoxPainter extends CustomPainter {
         ),
       ),
       textDirection: TextDirection.ltr,
-    )..layout();
+      textScaler: textScaler,
+    )..layout(maxWidth: size.width > 10 ? size.width - 10 : 0);
 
     // 标签贴在框上方；框贴顶时改放在框内，避免跑出屏幕。
     var dx = rect.left;
@@ -109,19 +117,30 @@ class DetectionBoxPainter extends CustomPainter {
     if (dx + tp.width > rect.left + rect.width && rect.width > tp.width) {
       dx = rect.right - tp.width;
     }
-    dx = dx.clamp(0.0, double.infinity);
+    dx = dx.clamp(
+      0.0,
+      size.width > tp.width + 10 ? size.width - tp.width - 10 : 0.0,
+    );
+    dy = dy.clamp(
+      0.0,
+      size.height > tp.height + 4 ? size.height - tp.height - 4 : 0.0,
+    );
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(dx, dy, tp.width + 10, tp.height + 4),
         const Radius.circular(4),
       ),
-      Paint()..color = color.withValues(alpha: 0.85),
+      Paint()..color = const Color(0xE6000000),
     );
     tp.paint(canvas, Offset(dx + 5, dy + 2));
   }
 
   @override
   bool shouldRepaint(covariant DetectionBoxPainter old) =>
-      old.mapped != mapped || old.showLabels != showLabels;
+      old.mapped != mapped ||
+      old.showLabels != showLabels ||
+      old.englishLabels != englishLabels ||
+      old.fontFamily != fontFamily ||
+      old.textScaler != textScaler;
 }

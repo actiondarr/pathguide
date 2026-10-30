@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreVideo
+import CoreImage
 import Flutter
 import TensorFlowLiteC
 import UIKit
@@ -8,6 +9,7 @@ import UIKit
 final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   AVCaptureVideoDataOutputSampleBufferDelegate
 {
+  static weak var active: VisionPlugin?
   private enum Channel {
     static let method = "hk.pathguide/vision"
     static let frames = "hk.pathguide/vision/frame"
@@ -19,8 +21,12 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private let captureSession = AVCaptureSession()
   private let sessionQueue = DispatchQueue(label: "hk.pathguide.vision.session")
   private let inferenceQueue = DispatchQueue(label: "hk.pathguide.vision.inference")
+  private let cameraAuthorizationStatus: () -> AVAuthorizationStatus
+  private let requestCameraAccess: (@escaping (Bool) -> Void) -> Void
 
   private var sessionConfigured = false
+  // Main-queue generation invalidates permission and handoff completions.
+  private var cameraGeneration = 0
   private weak var previewView: VisionPreviewUIView?
   private var eventSink: FlutterEventSink?
   private var interpreter: TFLiteModelRunner?
@@ -33,6 +39,12 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private var classIds: [Int] = []
   private var threshold: Float = 0.30
   private var busy = false
+  private let photoQueue = DispatchQueue(label: "hk.pathguide.vision.photos")
+  private let photoContext = CIContext(options: [.cacheIntermediates: false])
+  private var pendingPhoto: (id: UUID, result: FlutterResult, trigger: String, deadline: CFAbsoluteTime)?
+  private var lowCandidate: IOSDetection?
+  private var lowSince: CFAbsoluteTime?
+
 
   // Diagnostics mirror Android so the existing Flutter HUD can inspect either platform.
   private var analyzedFrames: Int64 = 0
@@ -53,15 +65,26 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private var decodeStats = ""
   private var bufferState = ""
 
-  init(messenger: FlutterBinaryMessenger) {
+  init(messenger: FlutterBinaryMessenger,
+       cameraAuthorizationStatus: @escaping () -> AVAuthorizationStatus = { AVCaptureDevice.authorizationStatus(for: .video) },
+       requestCameraAccess: @escaping (@escaping (Bool) -> Void) -> Void = { AVCaptureDevice.requestAccess(for: .video, completionHandler: $0) }) {
+    self.cameraAuthorizationStatus = cameraAuthorizationStatus
+    self.requestCameraAccess = requestCameraAccess
     methodChannel = FlutterMethodChannel(name: Channel.method, binaryMessenger: messenger)
     frameChannel = FlutterEventChannel(name: Channel.frames, binaryMessenger: messenger)
     super.init()
+    Self.active = self
+    NotificationCenter.default.addObserver(self, selector: #selector(enteredBackground),
+      name: UIApplication.didEnterBackgroundNotification, object: nil)
     methodChannel.setMethodCallHandler { [weak self] call, result in
       self?.handle(call, result: result)
     }
     frameChannel.setStreamHandler(self)
   }
+
+  deinit { NotificationCenter.default.removeObserver(self) }
+
+  @objc private func enteredBackground() { release { _ in } }
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let plugin = VisionPlugin(messenger: registrar.messenger())
@@ -75,6 +98,36 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    case "captureFrame":
+      guard let args = call.arguments as? [String: Any],
+        let trigger = args["trigger"] as? String,
+        ["manual_report", "low_confidence", "scene_sample"].contains(trigger) else {
+        result(FlutterError(code: "bad_args", message: "擷取來源無效", details: nil)); return
+      }
+      let id = UUID()
+      inferenceQueue.async { [weak self] in
+        guard let self, self.interpreter != nil, self.captureSession.isRunning else {
+          DispatchQueue.main.async { result(FlutterError(code: "not_running", message: "請先開始即時辨識", details: nil)) }; return
+        }
+        guard self.pendingPhoto == nil else {
+          DispatchQueue.main.async { result(FlutterError(code: "busy", message: "正在擷取照片", details: nil)) }; return
+        }
+        self.lowSince = nil; self.lowCandidate = nil
+        self.pendingPhoto = (id, result, trigger, CFAbsoluteTimeGetCurrent() + 4)
+        self.inferenceQueue.asyncAfter(deadline: .now() + 4.1) { [weak self] in
+          guard let self, let pending = self.pendingPhoto, pending.id == id else { return }
+          self.pendingPhoto = nil
+          DispatchQueue.main.async { pending.result(nil) }
+        }
+      }
+    case "cancelCapture":
+      inferenceQueue.async { [weak self] in
+        if let pending = self?.pendingPhoto {
+          self?.pendingPhoto = nil
+          DispatchQueue.main.async { pending.result(nil) }
+        }
+        DispatchQueue.main.async { result(nil) }
+      }
     case "startPreview":
       requestPermissionAndStart(result)
     case "loadModel":
@@ -136,19 +189,22 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   // MARK: Camera
 
   private func requestPermissionAndStart(_ result: @escaping FlutterResult) {
-    switch AVCaptureDevice.authorizationStatus(for: .video) {
+    cameraGeneration += 1
+    let expected = cameraGeneration
+    func begin(_ granted: Bool) {
+      guard expected == self.cameraGeneration else {
+        result(["started": false, "error": "辨識已取消，請重新開始"]); return
+      }
+      if granted { self.startSession(result, expected: expected) }
+      else { result(["started": false, "error": "相機權限已被拒絕；可在設定的私隱與保安中重新允許"]) }
+    }
+    switch cameraAuthorizationStatus() {
     case .authorized:
-      startSession(result)
+      begin(true)
     case .notDetermined:
-      AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-        guard let self else { return }
-        if granted {
-          self.startSession(result)
-        } else {
-          DispatchQueue.main.async {
-            result(["started": false, "error": "相機權限已被拒絕；可在設定的私隱與保安中重新允許"])
-          }
-        }
+      requestCameraAccess { [weak self] granted in
+        guard self != nil else { return }
+        DispatchQueue.main.async { begin(granted) }
       }
     case .denied, .restricted:
       result(["started": false, "error": "沒有相機權限；請到設定 → 私隱與保安 → 相機允許領路通"])
@@ -157,7 +213,19 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     }
   }
 
-  private func startSession(_ result: @escaping FlutterResult) {
+  private func startSession(_ result: @escaping FlutterResult, expected: Int) {
+    func begin() {
+      guard expected == self.cameraGeneration else {
+        result(["started": false, "error": "辨識已取消，請重新開始"]); return
+      }
+      DepthPlugin.active?.stop()
+      self.startCaptureSession(result)
+    }
+    if let menu = MenuPlugin.active { menu.releaseCamera(completion: begin) }
+    else { begin() }
+  }
+
+  private func startCaptureSession(_ result: @escaping FlutterResult) {
     sessionQueue.async { [weak self] in
       guard let self else { return }
       do {
@@ -205,7 +273,8 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     sessionConfigured = true
   }
 
-  private func release(_ result: @escaping FlutterResult) {
+  func release(_ result: @escaping FlutterResult) {
+    cameraGeneration += 1
     let group = DispatchGroup()
     group.enter()
     sessionQueue.async { [weak self] in
@@ -214,6 +283,10 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     }
     group.enter()
     inferenceQueue.async { [weak self] in
+      if let pending = self?.pendingPhoto {
+        self?.pendingPhoto = nil
+        DispatchQueue.main.async { pending.result(nil) }
+      }
       self?.interpreter = nil
       self?.modelPath = nil
       self?.busy = false
@@ -353,7 +426,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
         anchors: anchorCount,
         classes: modelClassCount,
         transposed: transposed,
-        threshold: threshold,
+        threshold: pendingPhoto == nil ? threshold : min(threshold, 0.20),
         inputSize: inputSize,
         sourceWidth: prepared.uprightWidth,
         sourceHeight: prepared.uprightHeight,
@@ -363,11 +436,66 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
         padY: prepared.padY,
         classIds: classIds
       )
-      let detections = IOSYoloDecoder.nonMaximumSuppression(
+      let candidates = IOSYoloDecoder.nonMaximumSuppression(
         decoded.detections,
         iouThreshold: 0.45,
         maximum: 100
       )
+
+      let detections = candidates.filter { $0.score >= threshold }
+      if let pending = pendingPhoto {
+        let now = CFAbsoluteTimeGetCurrent()
+        var ready = pending.trigger != "low_confidence"
+        if pending.trigger == "low_confidence" {
+          if let low = candidates.first(where: { $0.score >= 0.20 && $0.score <= 0.60 }) {
+            if let previous = lowCandidate, previous.id == low.id,
+              abs(previous.cx - low.cx) < 0.1, abs(previous.cy - low.cy) < 0.1 {
+              if let start = lowSince { ready = now - start >= 1 }
+            } else { lowSince = now }
+            lowCandidate = low
+          } else { lowCandidate = nil; lowSince = nil }
+        }
+        if now > pending.deadline {
+          pendingPhoto = nil
+          DispatchQueue.main.async { pending.result(nil) }
+        } else if ready {
+          pendingPhoto = nil
+          // Rotate the full camera frame clockwise exactly as the inference's
+          // sourcePoint transform. Re-encode a CGImage; no camera EXIF/GPS is copied.
+          let capturedAt = ISO8601DateFormatter().string(from: Date())
+          photoQueue.async { [weak self] in
+            guard let self else { DispatchQueue.main.async { pending.result(nil) }; return }
+            let image = CIImage(cvPixelBuffer: pixelBuffer).oriented(.right)
+            if let cg = self.photoContext.createCGImage(image, from: image.extent),
+              let data = UIImage(cgImage: cg).jpegData(compressionQuality: 0.85), data.count <= 2 * 1024 * 1024 {
+              var gray = [UInt8](repeating: 0, count: 72)
+              gray.withUnsafeMutableBytes { buffer in
+                if let ctx = CGContext(data: buffer.baseAddress, width: 9, height: 8, bitsPerComponent: 8,
+                  bytesPerRow: 9, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) {
+                  ctx.draw(cg, in: CGRect(x: 0, y: 0, width: 9, height: 8))
+                }
+              }
+              let mean = gray.reduce(0) { $0 + Int($1) } / 72
+              if pending.trigger != "manual_report" && (mean < 8 || mean > 247) {
+                DispatchQueue.main.async { pending.result(nil) }; return
+              }
+              var fingerprint: UInt64 = 0
+              for y in 0..<8 { for x in 0..<8 {
+                fingerprint = (fingerprint << 1) | (gray[y * 9 + x] > gray[y * 9 + x + 1] ? 1 : 0)
+              } }
+              let payload: [String: Any] = ["jpeg": FlutterStandardTypedData(bytes: data),
+                "width": cg.width, "height": cg.height, "capturedAtClient": capturedAt,
+                "perceptualHash": String(format: "%016llx", fingerprint),
+                "predictions": candidates.map { d in ["projectClassId": d.id,
+                  "score": Double(d.score), "cx": Double(d.cx), "cy": Double(d.cy),
+                  "w": Double(d.width), "h": Double(d.height)] as [String: Any] }]
+              DispatchQueue.main.async { pending.result(payload) }
+            } else {
+              DispatchQueue.main.async { pending.result(FlutterError(code: "jpeg_failed", message: "未能編碼照片", details: nil)) }
+            }
+          }
+        }
+      }
 
       frameWidth = prepared.rawWidth
       frameHeight = prepared.rawHeight
@@ -526,7 +654,19 @@ enum IOSFramePreprocessor {
     rotationDegrees: Int
   ) throws -> IOSPreparedFrame {
     guard inputSize > 0 else { throw VisionError.inputSize }
+    let rotation = ((rotationDegrees % 360) + 360) % 360
+    guard [0, 90, 180, 270].contains(rotation) else { throw VisionError.pixelFormat }
     guard CVPixelBufferGetPlaneCount(pixelBuffer) >= 2 else { throw VisionError.pixelFormat }
+    let formatType = CVPixelBufferGetPixelFormatType(pixelBuffer)
+    guard formatType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange ||
+      formatType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange else { throw VisionError.pixelFormat }
+    let fullRange = formatType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+    let matrix = CVBufferCopyAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, nil) as? String
+    // ARKit normally supplies an explicit matrix; reject unknown matrices
+    // rather than silently applying a different colour conversion.
+    guard matrix == nil || matrix == kCVImageBufferYCbCrMatrix_ITU_R_601_4 as String ||
+      matrix == kCVImageBufferYCbCrMatrix_ITU_R_709_2 as String else { throw VisionError.pixelFormat }
+    let bt709 = matrix == kCVImageBufferYCbCrMatrix_ITU_R_709_2 as String
     CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
     defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
 
@@ -546,47 +686,57 @@ enum IOSFramePreprocessor {
     let uv = uvAddress.assumingMemoryBound(to: UInt8.self)
     let yStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
     let uvStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1)
-    let scale = min(Float(inputSize) / Float(uprightWidth), Float(inputSize) / Float(uprightHeight))
-    let scaledWidth = max(1, Int(Float(uprightWidth) * scale))
-    let scaledHeight = max(1, Int(Float(uprightHeight) * scale))
+    // Match the export/evaluation letterbox: rounded dimensions and a bilinear
+    // resize with half-pixel centres. Picking only the top-left source pixel
+    // aliases fine structures, especially in ARKit's larger camera frames.
+    let scale = min(Double(inputSize) / Double(uprightWidth), Double(inputSize) / Double(uprightHeight))
+    let scaledWidth = max(1, Int((Double(uprightWidth) * scale).rounded(.toNearestOrEven)))
+    let scaledHeight = max(1, Int((Double(uprightHeight) * scale).rounded(.toNearestOrEven)))
     let padX = (inputSize - scaledWidth) / 2
     let padY = (inputSize - scaledHeight) / 2
     let pad = Float32(114.0 / 255.0)
     var values = [Float32](repeating: pad, count: inputSize * inputSize * 3)
 
+    func sample(_ ux: Int, _ uy: Int) -> (Float32, Float32, Float32) {
+      let (sx, sy) = sourcePoint(uprightX: ux, uprightY: uy,
+        rawWidth: width, rawHeight: height, degrees: rotation)
+      let chroma = (sy / 2) * uvStride + (sx / 2) * 2
+      return CameraImageMath.rgb(y: Double(y[sy * yStride + sx]), cb: Double(uv[chroma]),
+        cr: Double(uv[chroma + 1]), fullRange: fullRange, bt709: bt709)
+    }
+    func position(_ index: Int, _ source: Int, _ destination: Int) -> (Int, Int, Float32) {
+      let coordinate = max(0, min(Double(source - 1),
+        (Double(index) + 0.5) * Double(source) / Double(destination) - 0.5))
+      let lower = Int(coordinate)
+      return (lower, min(source - 1, lower + 1), Float32(coordinate - Double(lower)))
+    }
+    let columns = (0..<scaledWidth).map { position($0, uprightWidth, scaledWidth) }
     var minimum = Float32.greatestFiniteMagnitude
     var maximum = -Float32.greatestFiniteMagnitude
     for dy in 0..<scaledHeight {
-      let uy = min(uprightHeight - 1, dy * uprightHeight / scaledHeight)
+      let (y0, y1, ty) = position(dy, uprightHeight, scaledHeight)
       for dx in 0..<scaledWidth {
-        let ux = min(uprightWidth - 1, dx * uprightWidth / scaledWidth)
-        var (sx, sy) = sourcePoint(
-          uprightX: ux,
-          uprightY: uy,
-          rawWidth: width,
-          rawHeight: height,
-          degrees: rotationDegrees
-        )
-        sx = min(width - 1, max(0, sx))
-        sy = min(height - 1, max(0, sy))
-        let yy = Float32(y[sy * yStride + sx])
-        let chroma = (sy / 2) * uvStride + (sx / 2) * 2
-        let cb = Float32(uv[chroma]) - 128
-        let cr = Float32(uv[chroma + 1]) - 128
-        let luma = 1.164 * (yy - 16)
-        let r = clamp01((luma + 1.596 * cr) / 255)
-        let g = clamp01((luma - 0.392 * cb - 0.813 * cr) / 255)
-        let b = clamp01((luma + 2.017 * cb) / 255)
+        let (x0, x1, tx) = columns[dx]
+        let a = sample(x0, y0), b = sample(x1, y0)
+        let c = sample(x0, y1), d = sample(x1, y1)
+        func interpolate(_ a: Float32, _ b: Float32, _ c: Float32, _ d: Float32) -> Float32 {
+          let top = a + (b - a) * tx
+          let bottom = c + (d - c) * tx
+          return top + (bottom - top) * ty
+        }
+        let r = interpolate(a.0, b.0, c.0, d.0)
+        let g = interpolate(a.1, b.1, c.1, d.1)
+        let bValue = interpolate(a.2, b.2, c.2, d.2)
         let index = ((padY + dy) * inputSize + padX + dx) * 3
         values[index] = r
         values[index + 1] = g
-        values[index + 2] = b
-        minimum = min(minimum, min(r, min(g, b)))
-        maximum = max(maximum, max(r, max(g, b)))
+        values[index + 2] = bValue
+        minimum = min(minimum, min(r, min(g, bValue)))
+        maximum = max(maximum, max(r, max(g, bValue)))
       }
     }
     if minimum == Float32.greatestFiniteMagnitude { minimum = pad; maximum = pad }
-    let format = "NV12 \(width)x\(height) rot=\(rotationDegrees) yStride=\(yStride) uvStride=\(uvStride)"
+    let format = "NV12 \(width)x\(height) rot=\(rotation) full=\(fullRange) 709=\(bt709) resize=bilinear yStride=\(yStride) uvStride=\(uvStride)"
     let stats = String(format: "count=%d [%.3f,%.3f]", values.count, minimum, maximum)
     return IOSPreparedFrame(
       values: values,

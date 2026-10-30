@@ -50,28 +50,16 @@ class Announcement {
   final String reason;
 }
 
-/// 播报调度器：两级冷却 + 优先级插队。
-///
-/// ## 为什么要两级冷却
-///
-/// 相机每秒几十帧，同一个垃圾桶会在连续很多帧里被检出。只有单级冷却时：
-/// - 冷却太短 -> 同一个桶被反复念，用户听不到别的东西；
-/// - 冷却太长 -> 真正的新障碍物被压掉。
-///
-/// 所以分成「**同一个类** 的冷却」与「**全局** 的冷却」两级：
-/// 前者防止同一目标刷屏，后者保证话不被切碎（一句播报还没说完就换下一句）。
-///
-/// ## 优先级
-///
-/// `P0`（可能危险：台阶、楼梯、天桥入口等）可以**插队**并打断当前播报；
-/// `P1`（信息类：垃圾桶、单车等）在全局冷却内**直接丢弃**而不是排队——
-/// 排队会让播报越来越滞后于眼前的画面，比不说更危险。
+/// Select a short summary from the latest frame; never queue camera results.
+/// New classes bypass the repeat cooldown. An in-flight utterance finishes
+/// before another frame is considered, so results cannot interrupt each other.
 class Announcer {
   Announcer({
     required Speaker speaker,
-    this.perClassCooldown = const Duration(seconds: 2),
+    this.perClassCooldown = const Duration(seconds: 5),
     this.globalCooldown = const Duration(seconds: 5),
     this.minSpeakScore = kMinSpeakScore,
+    this.maxLabelsPerAnnouncement = 3,
     DateTime Function()? clock,
     // prefer_initializing_formals 建议改成 `required this._speaker`，
     // 但那会把下划线私有名暴露成公开参数标签，宁可保留显式赋值。
@@ -84,8 +72,9 @@ class Announcer {
   /// 同一个类别的重复播报冷却。
   final Duration perClassCooldown;
 
-  /// 任意两次播报之间的最小间隔。
+  /// Repeat pacing; a newly observed class bypasses this interval.
   final Duration globalCooldown;
+  final int maxLabelsPerAnnouncement;
 
   /// 低于此分数的检出**不播报**（仍会画在屏幕上）。见 [kMinSpeakScore]。
   double minSpeakScore;
@@ -119,12 +108,19 @@ class Announcer {
     _enabled = value;
   }
 
+  /// Withdraw both pending and playing observations when their evidence expires.
+  Future<void> cancel() {
+    enabled = false;
+    ++_speechGeneration;
+    return _speaker.stop();
+  }
+
   /// 处理一帧检测结果，决定是否播报。
   ///
   /// 返回值是**本帧实际发起播报**的那一条（没有则为 null）。
   /// 判定顺序：类别可播报 -> 同类冷却 -> 全局冷却 -> 优先级裁决。
   Announcement? onFrame(List<Detection> detections, {bool force = false}) {
-    if (detections.isEmpty) return null;
+    if (detections.isEmpty || _speaking) return null;
 
     // 按分数取最高的若干个候选，再按播报优先级排序。
     final candidates =
@@ -140,23 +136,28 @@ class Announcer {
           });
 
     final now = _clock();
+    final selected = <({Detection detection, Label label})>[];
+    final seen = <int>{};
     for (final c in candidates) {
       final label = c.label!;
+      if (!seen.add(label.id)) continue;
       final reason = _rejectReason(label, c.detection.score, now, force);
       if (reason != null) {
         _record(label, c.detection.score, '-', now, '跳過：$reason');
         continue;
       }
-      final text = announceTextFor(label);
-      _lastByClass[label.id] = now;
-      _lastAny = now;
-      _record(label, c.detection.score, text, now, force ? '強製播報' : '正常播報');
-      // 记下 future 供调用方/测试等待。不 await 是刻意的：onFrame 由相机
-      // 帧回调调用，阻塞它会让掉帧；但必须让「说完了」这件事可被观察。
-      _lastSpeech = _speak(text, interrupt: _isP0(label));
-      return history.last;
+      selected.add((detection: c.detection, label: label));
+      if (selected.length >= maxLabelsPerAnnouncement) break;
     }
-    return null;
+    if (selected.isEmpty) return null;
+    final text = selected.map((c) => announceTextFor(c.label)).join('、');
+    for (final c in selected) {
+      _lastByClass[c.label.id] = now;
+      _record(c.label, c.detection.score, text, now, force ? '強制播報' : '正常播報');
+    }
+    _lastAny = now;
+    _lastSpeech = _speak(text);
+    return history.last;
   }
 
   String? _rejectReason(Label label, double score, DateTime now, bool force) {
@@ -166,7 +167,7 @@ class Announcer {
     // 属于**时机**问题；而分数门槛管的是「这个东西到底是不是真的」，
     // 属于**正确性**问题。让 force 绕过它，等于给了一个「逢低分也照念」的后门，
     // 而那正是要防的事。
-    if (score < minSpeakScore) {
+    if (!score.isFinite || score > 1 || score < minSpeakScore) {
       return '分數 ${score.toStringAsFixed(2)} 低於播報門檻 '
           '${minSpeakScore.toStringAsFixed(2)}';
     }
@@ -176,13 +177,11 @@ class Announcer {
       return '同類冷卻未過';
     }
     final any = _lastAny;
-    if (any != null && now.difference(any) < globalCooldown) {
+    if (last != null && any != null && now.difference(any) < globalCooldown) {
       return '全局冷卻未過';
     }
     return null;
   }
-
-  static bool _isP0(Label label) => label.priority == 'P0';
 
   /// 排序权重：P0 先，其次 P1，最后其余。与 `kAnnouncementOrder` 同源。
   static int _rank(Label label) => switch (label.priority) {
@@ -210,12 +209,12 @@ class Announcer {
     if (history.length > 50) history.removeAt(0);
   }
 
-  Future<void> _speak(String text, {required bool interrupt}) async {
+  Future<void> _speak(String text) async {
     if (!enabled) return;
     final generation = _speechGeneration;
     _speaking = true;
     try {
-      if (interrupt) await _speaker.stop();
+      await _speaker.stop();
       // 暫停後即使重新啟用，也不能把上一個場景的待播語音讀出。
       if (!enabled || generation != _speechGeneration) return;
       await _speaker.speak(text);

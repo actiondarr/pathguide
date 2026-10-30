@@ -1,21 +1,30 @@
 {
   "format": 1,
-  "version": "2026-10-19.hk9.1",
+  "version": "2026-10-27.mixed10.experimental.1",
   "file": "detector.tflite",
-  "bytes": 10694183,
-  "sha256": "8bbfa43b1fe2b440e608652e75fa86d15e571031c45b7b21f30689852468e3c9",
+  "bytes": 10695172,
+  "sha256": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0",
   "inputSize": 640,
-  "modelClassCount": 9,
+  "modelClassCount": 10,
   "modelClassIds": [
+    6,
     11,
     7,
     8,
-    50,
-    49,
-    6,
     9,
-    51,
-    24
+    24,
+    1,
+    49,
+    26,
+    18
   ],
-  "trainedAt": "2026-10-19"
+  "trainedAt": "2026-10-26",
+  "experimental": true,
+  "map50": 0.7825363278727946,
+  "validationGatePassed": false,
+  "userRequestedTrial": true,
+  "limitations": [
+    "Door precision 28.6%, recall 11.1% at conf0.30 on small foreign validation set.",
+    "No independent fence validation; not an HKDI field benchmark."
+  ]
 }
