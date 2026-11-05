@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CE3300012FA1000000000001 /* RouteStoragePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE3300022FA1000000000001 /* RouteStoragePlugin.swift */; };
 		CE2200012FA1000000000001 /* RouteCameraPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2200022FA1000000000001 /* RouteCameraPlugin.swift */; };
 		CE1100012FA1000000000001 /* CameraCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1100022FA1000000000001 /* CameraCoordinator.swift */; };
 		DE0000022F8A000100000003 /* CameraImageMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0000012F8A000100000003 /* CameraImageMath.swift */; };
@@ -53,6 +54,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		CE3300022FA1000000000001 /* RouteStoragePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteStoragePlugin.swift; sourceTree = "<group>"; };
 		CE2200022FA1000000000001 /* RouteCameraPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteCameraPlugin.swift; sourceTree = "<group>"; };
 		CE1100022FA1000000000001 /* CameraCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCoordinator.swift; sourceTree = "<group>"; };
 		DE0000012F8A000100000003 /* CameraImageMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraImageMath.swift; sourceTree = "<group>"; };
@@ -177,6 +179,7 @@
 		97C146F01CF9000F007C117D /* Runner */ = {
 			isa = PBXGroup;
 			children = (
+				CE3300022FA1000000000001 /* RouteStoragePlugin.swift */,
 				CE2200022FA1000000000001 /* RouteCameraPlugin.swift */,
 				CE1100022FA1000000000001 /* CameraCoordinator.swift */,
 				DE0000012F8A000100000003 /* CameraImageMath.swift */,
@@ -417,6 +420,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CE3300012FA1000000000001 /* RouteStoragePlugin.swift in Sources */,
 				CE2200012FA1000000000001 /* RouteCameraPlugin.swift in Sources */,
 				CE1100012FA1000000000001 /* CameraCoordinator.swift in Sources */,
 				DE0000022F8A000100000003 /* CameraImageMath.swift in Sources */,

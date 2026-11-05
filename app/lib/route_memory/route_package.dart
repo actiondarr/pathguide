@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import 'cross_floor_contract.dart';
+import 'route_media.dart';
+export 'route_media.dart';
 
 enum RouteProblem {
   invalid,
@@ -47,7 +49,9 @@ class RouteSegment {
   final bool confirmed;
 }
 
-/// P1 stores synthetic route structure only. No photographs/feature blobs yet.
+enum RouteContentSource { synthetic, captured }
+
+/// Schema 1 remains synthetic; schema 2 explicitly references captured media.
 /// 'Complete' means structurally checked; never human/field approved.
 class RouteDocument {
   RouteDocument({
@@ -56,22 +60,48 @@ class RouteDocument {
     required this.buildingId,
     required List<RoutePoint> nodes,
     required List<RouteSegment> edges,
+    this.source = RouteContentSource.synthetic,
+    List<CapturedRouteView> views = const [],
     this.featureRevision = 'p0-synthetic-v1',
     this.preprocessRevision = 'none-synthetic',
-  }) : nodes = List.unmodifiable(nodes),
+  }) : views = List.unmodifiable(views),
+       nodes = List.unmodifiable(nodes),
        edges = List.unmodifiable(edges) {
     validate();
   }
   final String id, name, buildingId, featureRevision, preprocessRevision;
+  final RouteContentSource source;
+  final List<CapturedRouteView> views;
   final List<RoutePoint> nodes;
   final List<RouteSegment> edges;
   static bool validId(String id) =>
       RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(id);
-  bool get compatible =>
-      featureRevision == 'p0-synthetic-v1' &&
-      preprocessRevision == 'none-synthetic';
+  bool get compatible => source == RouteContentSource.synthetic
+      ? featureRevision == 'p0-synthetic-v1' &&
+            preprocessRevision == 'none-synthetic'
+      : featureRevision == 'vision-featureprint-v1' &&
+            preprocessRevision == 'upright-jpeg-v1';
 
   void validate() {
+    if ((source == RouteContentSource.synthetic && views.isNotEmpty) ||
+        (source == RouteContentSource.captured &&
+            (featureRevision == 'p0-synthetic-v1' ||
+                preprocessRevision == 'none-synthetic')) ||
+        views.length > RouteMediaBounds.viewsPerRoute) {
+      throw const RouteStoreFailure(RouteProblem.invalid);
+    }
+    final identities = <String>{}, images = <String>{};
+    final perNode = <String, int>{};
+    for (final view in views) {
+      view.validate(id);
+      perNode[view.nodeId] = (perNode[view.nodeId] ?? 0) + 1;
+      if (!nodes.any((n) => n.id == view.nodeId) ||
+          !identities.add('${view.nodeId}/${view.viewId}') ||
+          !images.add('${view.nodeId}/${view.imageSha}') ||
+          perNode[view.nodeId]! > RouteMediaBounds.viewsPerNode) {
+        throw const RouteStoreFailure(RouteProblem.invalid);
+      }
+    }
     if (!validId(id) ||
         !validId(buildingId) ||
         name.trim().isEmpty ||
@@ -115,6 +145,13 @@ class RouteDocument {
         nodes.any((n) => n.floor == null)) {
       return false;
     }
+    if (source == RouteContentSource.captured &&
+        nodes.any(
+          (node) =>
+              !views.any((v) => v.nodeId == node.id && v.featureSha != null),
+        )) {
+      return false;
+    }
     for (var i = 0; i < edges.length; i++) {
       final e = edges[i];
       if (!e.confirmed ||
@@ -128,8 +165,10 @@ class RouteDocument {
   }
 
   Map<String, Object?> toMap() => {
-    'schemaVersion': 1,
-    'source': 'synthetic',
+    'schemaVersion': source == RouteContentSource.synthetic ? 1 : 2,
+    'source': source.name,
+    if (source == RouteContentSource.captured)
+      'views': [for (final view in views) view.toMap()],
     'direction': 'recorded',
     'id': id,
     'name': name,
@@ -164,12 +203,26 @@ class RouteDocument {
   };
 
   factory RouteDocument.fromMap(Map<String, dynamic> v) {
-    if (v['schemaVersion'] != 1 ||
-        v['source'] != 'synthetic' ||
-        v['direction'] != 'recorded') {
+    final synthetic =
+        v['schemaVersion'] == 1 &&
+        v['source'] == 'synthetic' &&
+        !v.containsKey('views');
+    final captured = v['schemaVersion'] == 2 && v['source'] == 'captured';
+    if ((!synthetic && !captured) || v['direction'] != 'recorded') {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
     return RouteDocument(
+      source: captured
+          ? RouteContentSource.captured
+          : RouteContentSource.synthetic,
+      views: captured
+          ? [
+              for (final view in v['views'] as List)
+                CapturedRouteView.fromMap(
+                  Map<String, dynamic>.from(view as Map),
+                ),
+            ]
+          : const [],
       id: v['id'] as String,
       name: v['name'] as String,
       buildingId: v['buildingId'] as String,

@@ -27,6 +27,9 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PathGuideDepthPlugin") {
       DepthPlugin.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PathGuideRouteStoragePlugin") {
+      RouteStoragePlugin.register(with: registrar)
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PathGuideRouteCameraPlugin") {
       RouteCameraPlugin.register(with: registrar)
     }

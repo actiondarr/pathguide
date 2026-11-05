@@ -88,13 +88,25 @@ P2四個依賴包各兩次／US$0.10／20分鐘，整階段US$0.40／八次候�
 
 #### P1本機加密版本庫（2026-11-05，合成結構已驗）
 
-使用App support下獨立`route_memory_v1`及`pathguide.route_memory.library.aes.v1`裝置金鑰，與照片佇列／UID及其清理規則分開。AES-256-GCM的AAD綁device-local用途、catalog或routeId／version；路線名稱／樓層及catalog內容加密，版本檔另核cipher SHA及明文manifest SHA。RouteDocument schema1固定synthetic／recorded方向；draft可缺floor，完整結構需building、樓層、有向連接及確認旗標齊備，仍不是實地核准。真實影像／特徵blob及其引用留P2–P3擴充，不把此schema冒充完整相機格式。
+使用App support下獨立`route_memory_v1`及`pathguide.route_memory.library.aes.v1`裝置金鑰，與照片佇列／UID及其清理規則分開。AES-256-GCM的AAD綁device-local用途、catalog或routeId／version；路線名稱／樓層及catalog內容加密，版本檔另核cipher SHA及明文manifest SHA。RouteDocument schema1固定synthetic／recorded方向；draft可缺floor，完整結構需building、樓層、有向連接及確認旗標齊備，仍不是實地核准。P1當時只存合成結構；真實媒體由下節P3-A schema2擴充，不改標schema1。
 
 同目錄temp寫入、flush、rename後最後切加密catalog；不可變版本與active／draft pointer分開。CAS revision防止舊列表覆寫新內容；epoch綁定store owner，刪除另作廢同route舊寫入。持久刪除紀錄先於清檔；重開只信catalog，不掃孤兒檔恢復路線。catalog損壞不自動倒回舊catalog，避免恢復已刪路線；單一版本損壞保留並可明確回退至核實版本。寫入結果未知只重新讀取，不自動重送；金鑰遺失不重建覆蓋原資料。
 
-每份JSON256 KiB、每route8版本、整庫32 MiB，連暫存計算；超限拒寫，清理須明確操作，保留active／一個有效回退／當前draft，不重用舊version號。actor在同一main isolate按實體路徑串行，另用非阻塞OS檔鎖拒絕其他process；不支援不同isolate獨立writer。[Dart檔鎖](https://api.dart.dev/dart-io/RandomAccessFile/lock.html)在POSIX是process層級，不能當isolate互斥；[rename](https://api.dart.dev/dart-io/File/rename.html)要求同檔案系統的流程，真機斷電耐久性尚未驗證。OS備份排除／Keychain真機行為亦未驗；目前只證明本機故障注入及fake vault重開，不承諾重裝／跨裝置還原。
+P1當時每份JSON256 KiB、每route8版本、整庫32 MiB，P3-A擴為下節有界媒體政策；均連暫存計算；超限拒寫，清理須明確操作，保留active／一個有效回退／當前draft，不重用舊version號。actor在同一main isolate按實體路徑串行，另用非阻塞OS檔鎖拒絕其他process；不支援不同isolate獨立writer。[Dart檔鎖](https://api.dart.dev/dart-io/RandomAccessFile/lock.html)在POSIX是process層級，不能當isolate互斥；[rename](https://api.dart.dev/dart-io/File/rename.html)要求同檔案系統的流程，真機斷電耐久性尚未驗證。OS備份排除／Keychain真機行為亦未驗；目前只證明本機故障注入及fake vault重開，不承諾重裝／跨裝置還原。
 
 21項store／adapter、6項controller、6項UI、2項screen及全App415項通過，analyze無問題。未新增endpoint、App雲端上傳、訓練資料或權重；見[P1證據](../verification/dsh-p1-route-store-20261105.json)。
+
+#### P3-A媒體版本、容量與裝置政策（2026-11-05）
+
+新增schema2 captured及獨立加密JPEG／feature blob，schema1 synthetic、原目錄／路線金鑰／既有AAD保持可讀，既有route身份不改source。node/view引用綁明文SHA及byte count、JPEG實際尺寸、保存UTC、捕捉來源元資料與feature/preprocess revision；catalog綁每個版本／blob的cipher SHA，媒體AAD另綁route/version/media SHA。Feature在本票視為有revision的有界opaque bytes，尚未接Vision提取或定位；結構啟用不等於可實地導航。
+
+明確錄製／更新才寫媒體，重行read/readMedia不增加影像。先作完整引用／JPEG／SHA及配額預檢，再寫各加密暫存／版本，最後切catalog；中斷、取消、刪除及未知提交結果沿用CAS／epoch／tombstone語意。刪除涵蓋所有媒體版本；明確歷史清理保留active／有效fallback／draft的blob引用，損壞但仍被引用的檔案不靜默清走。
+
+固定JPEG512KiB、feature64KiB、node4視角、route64視角、JSON256KiB、route8版本；route磁碟64MiB、整庫256MiB，連加密開銷、草稿／歷史／暫存／catalog計算。整庫上限內留最多2MiB供catalog維護；額滿保留穩定pointer、拒絕新增，沒有自動上雲或刪歷史。凍結設定見[媒體儲存政策](../configs/planning/codex-p3a-storage-20261105.json)。
+
+iOS原生通道只接受App support路線／隔離probe命名空間及已知檔名，拒絕路徑穿越、symlink、任意穩定檔覆寫及超大寫入。新檔建立即Complete保護，寫入／rename後重設備份排除，既有P1只補政策不改密文。金鑰沿用WhenUnlockedThisDeviceOnly／不同步；資料屬裝置本機且排除OS備份，不承諾重裝／跨裝置還原。依據Apple [檔案加密與保護](https://developer.apple.com/documentation/uikit/encrypting-your-app-s-files)及[備份排除屬性](https://developer.apple.com/documentation/foundation/urlresourcevalues/isexcludedfrombackup)，仍須用真機檢查實際屬性，不用Simulator不可用的保護等級冒充通過。
+
+工程probe只用人工生成JPEG及opaque feature fixture，目錄與Keychain purpose均獨立，分app process寫入／重開／刪除後清理probe；只回報屬性／計數及結果，不讀取或上傳私人照片／金鑰。此票沒有endpoint、雲端部署、照片訓練或新權重。實際結果見[P3-A證據](../verification/codex-p3a-route-media-20261105.json)，完整錄路／定位／導航及人手驗收留P3-B～P5。
 
 #### 跨樓層步行導航資料與服務契約（P0合成子集已實作）
 
@@ -354,7 +366,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
 | S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理已有；問題／覆核API及本機工作台已有；Emulator與合成瀏覽器流程通過；預設關閉，正式部署／真人案例未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
 | S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；私人效益未驗證，付費GPU預算未定 | 私人／共用對照支持額外效益；mock工作及效果退化回退通過，真實工作受配額控制 | 先問題修正案例與對照，再mock；資料／權限／預算具備才開真實服務 |
-| S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；真實路線記憶與雲端看圖未實作／部署  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口亦已過工程測試，手機人工驗收待完成。| 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
+| S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；P3-A媒體schema／加密儲存候選已有454項Flutter／49原生及analyze證據、真機待驗；定位／雲端看圖未實作／部署  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口亦已過工程測試，手機人工驗收待完成。| 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
 | S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
 | S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
 | S7 多場地、複雜樓層網絡與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 本機typed graph／觀察原型已有；雲端及真實場地服務未實作 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
@@ -379,7 +391,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B12 發佈、診斷與預算／S0–S6 | 1.4.1+6工程／簽署建置與遠端核對通過；之後安裝及啟動成功，舊版保留，場景覆驗待補 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依「部署、設定與版本回退」先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
 | B13 室內即時資料邊界／S4 | 1.4.1+6辨識框與深度已本機處理，無雲端服務 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
 | B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
-| B15 路線錄製／場景理解與選填同步／S1–S4 | P0跨層mock及P1加密樣例庫已有；真實觀察待P2–P3 | 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。SceneAnalyzer／備份／同步及圖像blob未接 | F17；下一步真相機／功能閉環，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
+| B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機待驗；定位留P3-B/C | 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接 | F17；下一步真相機／功能閉環，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
 
 管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
@@ -559,6 +571,8 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 </details>
 
 ### 維護紀錄
+
+2026-11-05 P3-A工程候選：schema2／加密媒體引用、quota、原子切換／取消／刪除／回退及iOS檔案政策已接，保留P1 synthetic v1及原key／目錄。454項Flutter、49項原生Simulator及analyze通過；真機Keychain／Complete／備份排除及跨process重開／刪除待獨立probe，不以Simulator缺少保護屬性當硬件通過。未新增endpoint、上傳、部署、訓練或權重。見[P3-A證據](../verification/codex-p3a-route-media-20261105.json)。
 
 2026-11-05 1.5.0+9 prerelease published from immutable tag b620ec4, remote verified before iPhone install and launch (both succeeded). Human camera/VoiceOver results remain pending. [Release and installation receipt](../verification/release-receipts/app-1.5.0+9.json).
 

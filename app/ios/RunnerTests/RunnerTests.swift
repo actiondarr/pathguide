@@ -10,6 +10,66 @@ import UIKit
 import XCTest
 
 class RunnerTests: XCTestCase {
+  func testRouteStorageAppliesPolicyWithoutChangingExistingV1Bytes() throws {
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: base) }
+    try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    let original = Data([7, 8, 9])
+    try original.write(to: base.appendingPathComponent("catalog.enc"))
+    let storage = RouteProtectedFiles(root: base); try storage.prepare()
+    XCTAssertEqual(try Data(contentsOf: base.appendingPathComponent("catalog.enc")), original)
+    XCTAssertEqual(try storage.inspect()["allExcludedFromBackup"] as? Bool, true)
+  }
+
+  func testRouteStorageRejectsTraversalAndImmutableOverwrite() throws {
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: base) }
+    let files = RouteProtectedFiles(root: base); try files.prepare()
+    for path in ["../outside", "/tmp/outside", "catalog.enc", "a/../../outside", String(repeating: "a", count: 64) + "/../x.tmp"] {
+      XCTAssertThrowsError(try files.write(path: path, data: Data([1])))
+    }
+    let temp = String(repeating: "b", count: 32) + ".tmp"
+    try files.write(path: temp, data: Data([1]))
+    XCTAssertThrowsError(try files.write(path: temp, data: Data([2])))
+    try files.move(from: temp, to: "catalog.enc")
+    XCTAssertEqual(try Data(contentsOf: base.appendingPathComponent("catalog.enc")), Data([1]))
+  }
+
+  func testRouteStorageRejectsSymlinkDirectoriesAndOversizedWrites() throws {
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let outside = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: base); try? FileManager.default.removeItem(at: outside) }
+    let files = RouteProtectedFiles(root: base); try files.prepare()
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+    let folder = String(repeating: "c", count: 64)
+    try FileManager.default.createSymbolicLink(at: base.appendingPathComponent(folder), withDestinationURL: outside)
+    XCTAssertThrowsError(try files.write(path: folder + "/" + String(repeating: "d", count: 32) + ".enc.tmp", data: Data([1])))
+    XCTAssertThrowsError(try files.prepare())
+    XCTAssertThrowsError(try files.write(path: String(repeating: "d", count: 32) + ".tmp", data: Data(count: 2 * 1024 * 1024 + 1)))
+    XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: outside.path).isEmpty)
+  }
+
+  func testRouteStorageProtectsTemporaryAndRenamedEncryptedFiles() throws {
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: base) }
+    let storage = RouteProtectedFiles(root: base)
+    try storage.prepare()
+    try storage.write(path: String(repeating: "a", count: 32) + ".tmp", data: Data([1, 2, 3]))
+    try storage.move(from: String(repeating: "a", count: 32) + ".tmp", to: "catalog.enc")
+    let audit = try storage.inspect()
+    #if targetEnvironment(simulator)
+    // Simulator has no Data Protection class metadata. Do not report a real
+    // protection pass; the device probe must verify the hardware separately.
+    XCTAssertEqual(audit["protectionClasses"] as? [String], ["unavailable"])
+    XCTAssertEqual(audit["allProtected"] as? Bool, false)
+    #else
+    XCTAssertEqual(audit["allProtected"] as? Bool, true, "\(audit)")
+    #endif
+    XCTAssertEqual(audit["allExcludedFromBackup"] as? Bool, true)
+    XCTAssertEqual(audit["files"] as? Int, 2) // lock and catalog
+  }
+
+
 
   func testRouteOldEventSubscriberCannotStopNewCameraSession() {
     let driver = RouteTestDriver(), plugin = routePlugin(driver)

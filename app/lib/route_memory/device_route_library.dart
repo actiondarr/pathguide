@@ -50,6 +50,25 @@ class DeviceRouteLibrary implements RouteLibraryBackend {
     );
   }
 
+  /// Called only by an explicit recording/update workflow. Replay uses read APIs.
+  Future<RouteSnapshot> saveCaptured(
+    RouteDocument document, {
+    required Map<String, List<int>> media,
+    required int expectedRevision,
+    required bool activate,
+  }) async {
+    if (document.source != RouteContentSource.captured) {
+      throw const RouteStoreFailure(RouteProblem.invalid);
+    }
+    return store.save(
+      document,
+      token: store.capture(document.id),
+      expectedRevision: expectedRevision,
+      activate: activate,
+      media: media,
+    );
+  }
+
   @override
   Future<void> rollback(String id, int version, int expectedRevision) =>
       store.rollback(id, version, expectedRevision: expectedRevision);
