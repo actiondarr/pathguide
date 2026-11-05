@@ -23,11 +23,11 @@
     "visual_review": "390x844 home, developer list, settings inspected locally; generated previews excluded from repository"
   },
   "review": {
-    "standards": "pending",
-    "spec": "pending"
+    "standards": "no findings on initial 08987e9...2085a8c; final help-copy delta pending",
+    "spec": "no actionable findings on initial 08987e9...2085a8c; stale help-copy observation corrected; delta pending"
   },
   "phone_build": {
-    "status": "signed_release_build_passed",
+    "status": "rebuilding_after_help_copy_correction",
     "version": "1.5.1",
     "build": "10",
     "bundle_id": "hk.pathguide.pathguide",
