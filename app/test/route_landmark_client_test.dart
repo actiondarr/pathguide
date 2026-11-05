@@ -129,4 +129,28 @@ void main() {
       c.dispose();
     },
   );
+  test(
+    'cancel acknowledgement cannot block lifecycle shutdown indefinitely',
+    () async {
+      final entered = Completer<void>(),
+          reply = Completer<Object?>(),
+          cancelReply = Completer<Object?>();
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'cancel') return cancelReply.future;
+        entered.complete();
+        return reply.future;
+      });
+      final c = RouteLandmarkClient();
+      final pending = c.compare(Uint8List.fromList([1]), [
+        Uint8List.fromList([2]),
+      ]);
+      final checked = expectLater(pending, throwsA(isA<LandmarkFailure>()));
+      await entered.future;
+      await c.cancel().timeout(const Duration(seconds: 1));
+      reply.complete(null);
+      await checked;
+      cancelReply.complete(null);
+      c.dispose();
+    },
+  );
 }

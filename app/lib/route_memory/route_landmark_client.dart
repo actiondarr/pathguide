@@ -126,7 +126,9 @@ class RouteLandmarkClient {
 
   Future<void> _cancelNative(String id) async {
     try {
-      await _channel.invokeMethod<void>('cancel', {'requestId': id});
+      await _channel
+          .invokeMethod<void>('cancel', {'requestId': id})
+          .timeout(const Duration(milliseconds: 500));
     } catch (_) {}
   }
 

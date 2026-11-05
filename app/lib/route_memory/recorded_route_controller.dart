@@ -238,15 +238,19 @@ class RecordedRouteController extends ChangeNotifier {
     }
   }
 
+  String _normalizedFloor(String value) =>
+      value.trim().toUpperCase().replaceAll(RegExp(r'[\s/]'), '');
+
   FloorRef? _floor(String label, bool confirmed) {
     if (!confirmed || label.trim().isEmpty) return null;
     if (label.trim().length > 40) {
       throw const RouteStoreFailure(RouteProblem.invalid);
     }
-    String key(String value) =>
-        value.trim().toUpperCase().replaceAll(RegExp(r'[\s/]'), '');
     for (final n in _nodes) {
-      if (n.floor != null && key(n.floor!.label) == key(label)) return n.floor;
+      if (n.floor != null &&
+          _normalizedFloor(n.floor!.label) == _normalizedFloor(label)) {
+        return n.floor;
+      }
     }
     return FloorRef(_building, 'f-${_newId()}', label.trim());
   }
@@ -555,10 +559,8 @@ class RecordedRouteController extends ChangeNotifier {
     } else {
       _localizer!.expectFloor(null);
     }
-    String normalized(String v) =>
-        v.trim().toUpperCase().replaceAll(RegExp(r'[\s/]'), '');
     if (node.floor == null ||
-        normalized(floor) != normalized(node.floor!.label) ||
+        _normalizedFloor(floor) != _normalizedFloor(node.floor!.label) ||
         !directionConfirmed) {
       notice = !directionConfirmed ? 'wrongDirection' : 'wrongFloor';
       _changed();
@@ -666,8 +668,9 @@ class RecordedRouteController extends ChangeNotifier {
     store.cancelPending();
     notice = 'paused';
     _changed();
+    final stopping = source.stop();
     await analyzer.cancel();
-    final status = await source.stop();
+    final status = await stopping;
     _stopping = false;
     if (_disposed || op != _epoch) return;
     if (status == RouteCaptureStatus.stopUnconfirmed) {

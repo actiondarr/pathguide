@@ -440,7 +440,9 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(
-                entry.activeVersion != null
+                entry.problem != null
+                    ? t('資料未能核對，暫不可重行', 'Data unverified; replay unavailable')
+                    : entry.activeVersion != null
                     ? t('已有可重行版本', 'Replay version available')
                     : t('草稿，尚未可重行', 'Draft, not ready to replay'),
               ),
