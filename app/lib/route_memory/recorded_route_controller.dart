@@ -474,8 +474,9 @@ class RecordedRouteController extends ChangeNotifier {
       _changed();
       return false;
     }
-    if ((_recordingConnector ?? mode) != ConnectorMode.walk)
+    if ((_recordingConnector ?? mode) != ConnectorMode.walk) {
       _withdrawFloorContext();
+    }
     final op = _epoch;
     _busy = true;
     problem = null;
@@ -550,8 +551,9 @@ class RecordedRouteController extends ChangeNotifier {
                 (!confirmed && floor.trim().isEmpty)) &&
             _recordingFloor != null;
         final f = inherited ? _recordingFloor : _floor(floor, confirmed);
-        if (!inherited && _recordingFloor != null && f != _recordingFloor)
+        if (!inherited && _recordingFloor != null && f != _recordingFloor) {
           _withdrawFloorContext();
+        }
         _nodes.add(
           RoutePoint(
             id,
@@ -639,12 +641,13 @@ class RecordedRouteController extends ChangeNotifier {
         floorAnchorId: preserve ? previous.floorAnchorId : null,
         isFloorContextAnchor: previous.isFloorContextAnchor && f != null,
       );
-      if (index > 0)
+      if (index > 0) {
         _edges[index - 1] = _edge(
           index,
           mode,
           confirmed && (previous.floor == null || previous.floor == f),
         );
+      }
       if (previous.floor != f || previousMode != mode) {
         _withdrawFloorContext();
         for (var j = index + 1; j < _nodes.length; j++) {

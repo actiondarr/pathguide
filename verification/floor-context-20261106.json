@@ -13,7 +13,10 @@
     ]
   },
   "schema": "captured3 provenance; legacy1/2 retained; old reader rejects3",
-  "review": "manual continuity and anchor incoming-edge issues fixed with red/green regressions; re-review pending",
+  "review": {
+    "standards": "no blockers after manual continuity fix; re-reviewed 2aa7059...35da1d2",
+    "spec": "no blockers after UI inheritance and edited incoming connector fix; re-reviewed 2aa7059...35da1d2"
+  },
   "release": "1.8.0+15 candidate, not delivered",
   "human_acceptance": "pending, prior1.7.1+14 also unconfirmed",
   "privacy": "no user media, keys, location or screenshots included; no model/training/cloud changes"
