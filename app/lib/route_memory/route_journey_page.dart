@@ -231,6 +231,11 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
           ? ('選擇路線，或開始錄製新路線。', 'Choose a route or record a new one.')
           : controller.mode == RecordedRouteMode.replay
           ? ('請停下並確認身處的路標。', 'Stop and confirm the landmark where you are.')
+          : controller.automaticRecording
+          ? (
+              '自動取樣中；重要位置可手動補記。',
+              'Automatic sampling; mark important points manually.',
+            )
           : ('可以記錄路標。', 'Ready to record a landmark.'),
       'paused': (
         '已暫停；按繼續才會再開相機。',
@@ -268,6 +273,22 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       'failed': (
         '相機未有回應。請按停止，再繼續重試。',
         'Camera did not respond. Press Stop, then resume to retry.',
+      ),
+      'automaticLowDetail': (
+        '這張畫面細節或光線不足，未加入；仍在自動取樣。',
+        'This frame lacked detail or exposure. Not added; sampling continues.',
+      ),
+      'automaticDuplicate': (
+        '畫面與已有候選相近，未重複保存。',
+        'Similar to a saved candidate; not saved again.',
+      ),
+      'automaticFailed': (
+        '自動取樣已暫停，未加入失敗畫面。可按繼續重試或結束保存已有草稿。',
+        'Automatic sampling paused; failed frame was not added. Resume explicitly or finish and save the existing draft.',
+      ),
+      'automaticCapacity': (
+        '自動取樣已達試驗上限48張；仍可手動補記重要位置，或結束保存。',
+        'Automatic sampling reached the pilot limit of 48 views. Add important points manually or finish and save.',
       ),
       'checking': ('正在比對路標。', 'Matching landmark.'),
       'confirmed': (
@@ -328,6 +349,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   Future<void> _editLandmark({int? index, bool addView = false}) async {
     if (_pendingLandmark != null) return;
     final controller = c!;
+    controller.setManualEntryPending(true);
     final existing = index == null ? null : controller.nodes[index];
     final name = TextEditingController(text: existing?.nameZh ?? '');
     final floor = TextEditingController(text: existing?.floor?.label ?? '');
@@ -468,9 +490,13 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       }),
     );
     if (accepted != true && submitting) unawaited(controller.pause());
-    if (accepted != true || !mounted) return;
+    if (accepted != true || !mounted) {
+      controller.setManualEntryPending(false);
+      return;
+    }
     if (index != null && !addView) {
       controller.updateNode(index, n, f, mode, confirmed);
+      controller.setManualEntryPending(false);
     } else {
       _pendingLandmark = (
         name: n,
@@ -497,6 +523,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     );
     if (mounted && added && _pendingLandmark == pending) {
       setState(() => _pendingLandmark = null);
+      c!.setManualEntryPending(false);
     }
   }
 
@@ -623,14 +650,67 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             },
     ),
   ];
+  Future<void> _finishAutomaticDraft() async {
+    await c!.pause();
+    if (!mounted || c!.notice == 'stopUnconfirmed') return;
+    _name.text = c!.name;
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        scrollable: true,
+        title: Text(t('結束並保存草稿', 'Finish and save draft')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              t(
+                '未知樓層及未確認路段保留草稿，尚未可重行。',
+                'Unknown floors and unconfirmed connections remain a draft, unavailable for replay.',
+              ),
+            ),
+            TextField(
+              controller: _name,
+              maxLength: 120,
+              decoration: InputDecoration(labelText: t('整條路線名稱', 'Route name')),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t('稍後保存', 'Save later')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t('保存草稿', 'Save draft')),
+          ),
+        ],
+      ),
+    );
+    if (save == true && mounted) {
+      await c!.save(activate: false, name: _name.text);
+    }
+  }
+
   List<Widget> _record() => [
     Text(
       t(
-        '到達每個路標後停下拍攝。此版本記錄實際走過的順序，不記錄 GPS 軌跡；未提供即時避障或連續轉向語音。',
-        'Stop at each landmark to capture it. This version records the order you walked, not a GPS track. Live obstacle avoidance and continuous spoken turns are not connected.',
+        c!.automaticRecording
+            ? '自動錄路中：試驗設定約每5秒取候選畫面，選低重複且有細節的畫面作候選路標。樓層未知會保留草稿，重要轉角或轉層請停下手動補記；不保證完整覆蓋。'
+            : '到達每個路標後停下拍攝。此版本記錄實際走過的順序，不記錄 GPS 軌跡；未提供即時避障或連續轉向語音。',
+        c!.automaticRecording
+            ? 'Automatic recording: pilot sampling about every 5 seconds, selecting detailed, less repetitive candidate landmarks. Unknown floors remain drafts. Stop and mark important corners or floor changes manually; coverage is not guaranteed.'
+            : 'Stop at each landmark to capture it. This version records the order you walked, not a GPS track. Live obstacle avoidance and continuous spoken turns are not connected.',
       ),
     ),
     heading(c!.name),
+    if (c!.automaticRecording)
+      button(
+        '結束錄路並命名保存',
+        'Finish, name and save',
+        c!.busy || c!.nodes.isEmpty ? null : _finishAutomaticDraft,
+        primary: true,
+      ),
     if (_pendingLandmark != null) ...[
       Text(
         t('相片尚未加入，已保留輸入：', 'Photo not added. Input kept: ') +
@@ -657,6 +737,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                     ) &&
                     mounted) {
                   setState(() => _pendingLandmark = null);
+                  c!.setManualEntryPending(false);
                 }
               },
       ),
@@ -695,8 +776,10 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         ),
       ),
     button(
-      '記錄下一個路標',
-      'Record next landmark',
+      c!.automaticRecording ? '手動補記重要位置' : '記錄下一個路標',
+      c!.automaticRecording
+          ? 'Mark important point manually'
+          : 'Record next landmark',
       c!.canCapture ? () => _editLandmark() : null,
       primary: true,
     ),
@@ -922,13 +1005,23 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                       controller: _name,
                       maxLength: 120,
                       decoration: InputDecoration(
-                        labelText: t('路線名稱', 'Route name'),
+                        labelText: t(
+                          '路線名稱（可在結束後填寫）',
+                          'Route name (can be named at the end)',
+                        ),
                       ),
                     ),
                     button(
                       '開始錄路',
                       'Start recording',
-                      c!.busy ? null : () => c!.startRecording(_name.text),
+                      c!.busy
+                          ? null
+                          : () => c!.startRecording(
+                              _name.text.trim().isEmpty
+                                  ? t('未命名路線', 'Untitled route')
+                                  : _name.text,
+                              automatic: true,
+                            ),
                       primary: true,
                     ),
                   ] else if (c!.mode == RecordedRouteMode.library)

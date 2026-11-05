@@ -99,6 +99,80 @@ void main() {
     await c.resume();
   }
 
+  void useDetailedFrame() {
+    final jpeg = File('test/fixtures/route_camera/synthetic-detail-grid.jpg')
+        .readAsBytesSync();
+    native.changeCapture = (v) {
+      v['jpeg'] = jpeg;
+      v['sha256'] = sha256.convert(jpeg).toString();
+      v['byteCount'] = jpeg.length;
+      v['width'] = 64;
+      v['height'] = 64;
+      (v['header'] as Map<String, Object?>).addAll({
+        'rawWidth': 64,
+        'rawHeight': 64,
+        'uprightWidth': 64,
+        'uprightHeight': 64,
+      });
+      return v;
+    };
+  }
+
+  testWidgets(
+    'start once creates an automatic draft and pause prevents later additions',
+    (t) async {
+      useDetailedFrame();
+      await c.startRecording('automatic', automatic: true);
+      await t.pump(const Duration(seconds: 5));
+      for (var i = 0; i < 30; i++) {
+        await t.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        });
+        await t.pump();
+      }
+      expect(c.nodes.length, 1);
+      expect(c.nodes.first.floor, isNull);
+      await c.pause();
+      await t.pump(const Duration(seconds: 15));
+      expect(c.nodes.length, 1);
+      expect(c.running, isFalse);
+    },
+  );
+  test('low detail candidate is not added and manual pending input suspends sampling', () async {
+    await c.startRecording('automatic', automatic: true);
+    c.setManualEntryPending(true);
+    await c.sampleAutomatically();
+    expect(c.nodes, isEmpty);
+    c.setManualEntryPending(false);
+    await c.sampleAutomatically();
+    // Existing tiny camera fixture has insufficient detail at the engineering screen.
+    expect(c.nodes, isEmpty);
+    expect(c.notice, 'automaticLowDetail');
+    await c.pause();
+  });
+  test(
+    'automatic recording adds numbered unknown drafts without a landmark form',
+    () async {
+      useDetailedFrame();
+      await c.startRecording('automatic', automatic: true);
+      await c.sampleAutomatically();
+      expect(
+        c.nodes.length,
+        1,
+        reason: '${c.notice}/${c.problem} candidates=${c.automaticCandidates}',
+      );
+      expect(c.nodes.first.nameZh, '路標 1');
+      expect(c.nodes.first.floor, isNull);
+      await c.sampleAutomatically();
+      expect(c.nodes.length, 1); // repeated photo is not a new landmark.
+      await c.save(activate: false);
+      final entry = (await store.list()).routes.single;
+      expect(entry.activeVersion, isNull);
+      await c.open(entry, recording: true);
+      expect(c.nodes.length, 1);
+      expect(c.document!.complete, isFalse);
+    },
+  );
   test('empty library records G lift 3F room, saves and reopens for confirmed replay', () async {
     await replay();
     expect(c.document!.complete, isTrue);

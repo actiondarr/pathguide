@@ -96,6 +96,14 @@ P1當時每份JSON256 KiB、每route8版本、整庫32 MiB，P3-A擴為下節有
 
 21項store／adapter、6項controller、6項UI、2項screen及全App415項通過，analyze無問題。未新增endpoint、App雲端上傳、訓練資料或權重；見[P1證據](../verification/dsh-p1-route-store-20261105.json)。
 
+### #16／#17 自動草稿錄路第一片（2026-11-06，來源候選，未交付手機）
+
+使用者已確認：樓層無法確認時繼續未確認草稿，稍後補資料。#17先接開始一次→試驗每5秒候選→光線／細節篩選及去重→自動編號候選路標→結束命名→明確保存／重開。本片所有自動樓層及路段保留未知／未確認，不能啟用為完整重行路線；相似度不是位置證明。品質screen只在最長邊64px評估曝光15–240及鄰接亮度差≥4，與上一保留特徵distance<2或同JPEG則略過；這些是未校準工程參數，不是已凍結選幀政策、清晰度或轉角覆蓋保證。
+
+沿用單相機／單工作、取消與世代隔離；不追補忙碌期間取樣。自動最多48視角，沿用原64上限並預留16視角手動補記；達上限明示停止自動取樣。手動表單及待重試輸入暫停自動取樣，背景／離頁／暫停／保存／dispose停止排程，失敗停下供明確繼續；沒有自動刪除／上雲。僅保留選中候選JPEG／特徵，重行仍不存新照片。自動名稱非AI語意名稱，正式路標／必要事件與繼承樓層證據介面仍屬#16後續；重要轉角／轉層仍須手動補記。不是只增加Timer便稱自動建路完成。
+
+本片尚未發布App，手機仍為1.7.1+14修正版，該版真人複測仍待回報。S4／F17（Backend B15）自動草稿為來源候選；尚未有連續樓層上下文、必要確認語音、實地轉角覆蓋、模型比較或本地VLM性能證據。未下載模型、訓練、採集私人資料或部署服務。驗證詳見verification/automatic-draft-20261106.json。
+
 #### P3-B特徵及候選資料契約（2026-11-05，工程及手機fixture已驗）
 
 P3-B原生核心產生真正Vision feature print revision1，固定upright JPEG／scaleFit；有界secure archive外包schema1、featureRevision=vision-featureprint-v1、preprocessRevision=upright-jpeg-v1及Vision revision，整包≤64KiB。比較驗包內／呼叫版本及VN observation實際revision，損壞或不相容不回部分結果；距離不是正確率。P3-A仍把完整feature blob作opaque bytes加密並綁SHA，未更改已存synthetic v1或金鑰。
@@ -668,3 +676,7 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 2026-11-06 #15交付：493項Flutter、54項原生、analyze及兩軸覆核通過，1.7.1+14簽署建置／簽章／模型雜湊核對後已commit/push、發布不可變tag/prerelease並核對遠端。裝機嘗試因CoreDevice連線重設失敗，待USB連接解鎖後更新；手機仍為舊版，沒有清空資料。見verification/codex-p3c-hotfix-20261106.json。
 
 2026-11-06 #15裝機收據更新：首次連線中斷後，使用者接USB及解鎖；1.7.1+14更新安裝／正常啟動成功，本機資料保留，真人複測待回報。前述「尚未安裝」為第一次失敗嘗試歷史，不是目前交付狀態。
+
+#17自動未知草稿已有來源候選：496項Flutter及analyze通過，尚待覆核；未發布／裝機。完整#16的樓層上下文／必要確認及模型工作未完成。
+
+2026-11-06 #16樓層分支已確認；#17自動未知草稿來源候選，未發布手機。

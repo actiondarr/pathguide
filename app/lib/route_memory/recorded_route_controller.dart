@@ -10,6 +10,7 @@ import 'route_package.dart';
 import 'route_observation_source.dart';
 import 'route_landmark_client.dart';
 import 'route_localizer.dart';
+import 'route_frame_quality.dart';
 
 enum RecordedRouteMode { library, record, replay }
 
@@ -64,6 +65,59 @@ class RecordedRouteController extends ChangeNotifier {
       _dirty = false,
       _reloadRequired = false;
   bool finished = false;
+  bool automaticRecording = false;
+  Timer? _automaticTimer;
+  bool _automaticWorking = false;
+  bool _manualEntryPending = false;
+  void setManualEntryPending(bool pending) {
+    if (_disposed) return;
+    _manualEntryPending = pending;
+    if (pending) {
+      _automaticTimer?.cancel();
+    } else {
+      _armAutomatic();
+    }
+  }
+
+  int automaticCandidates = 0;
+  static const automaticInterval = Duration(seconds: 5);
+
+  void _armAutomatic() {
+    _automaticTimer?.cancel();
+    if (_disposed ||
+        !_foreground ||
+        _manualEntryPending ||
+        !automaticRecording ||
+        !_running ||
+        mode != RecordedRouteMode.record) {
+      return;
+    }
+    _automaticTimer = Timer.periodic(automaticInterval, (_) {
+      unawaited(sampleAutomatically());
+    });
+  }
+
+  Future<void> sampleAutomatically() async {
+    if (!automaticRecording ||
+        !canCapture ||
+        _automaticWorking ||
+        _manualEntryPending) {
+      return;
+    }
+    if (_views.length >= 48) {
+      _automaticTimer?.cancel();
+      notice = 'automaticCapacity';
+      _changed();
+      return;
+    }
+    _automaticWorking = true;
+    try {
+      await recordLandmark('路標 ${_nodes.length + 1}', '', automatic: true);
+    } finally {
+      _automaticWorking = false;
+    }
+  }
+
   int? _index, _transition;
   String notice = 'ready';
   String? problem;
@@ -170,7 +224,7 @@ class RecordedRouteController extends ChangeNotifier {
     }
   }
 
-  Future<void> startRecording(String name) async {
+  Future<void> startRecording(String name, {bool automatic = false}) async {
     if (_disposed ||
         !_foreground ||
         _busy ||
@@ -182,6 +236,9 @@ class RecordedRouteController extends ChangeNotifier {
     if (_disposed || !_foreground || notice == 'stopUnconfirmed') return;
     _localizer?.dispose();
     _localizer = null;
+    _manualEntryPending = false;
+    automaticRecording = automatic;
+    automaticCandidates = 0;
     _id = _newId();
     _building = 'b-$_id';
     _name = name.trim();
@@ -229,6 +286,7 @@ class RecordedRouteController extends ChangeNotifier {
       if (!_current(op)) return;
       _running = status == RouteCaptureStatus.running;
       notice = _running ? 'ready' : status.name;
+      if (_running) _armAutomatic();
     } catch (e) {
       if (_current(op)) _error(e);
     } finally {
@@ -287,13 +345,14 @@ class RecordedRouteController extends ChangeNotifier {
     ConnectorMode mode = ConnectorMode.walk,
     bool confirmed = false,
     String? nodeId,
+    bool automatic = false,
   }) async {
     if (!canCapture || name.trim().isEmpty || name.length > 120) return false;
     final existing = nodeId == null
         ? null
         : _nodes.indexWhere((n) => n.id == nodeId);
     if (existing != null && existing < 0) return false;
-    if (_views.length >= 64 ||
+    if (_views.length >= (automatic ? 48 : 64) ||
         (nodeId != null &&
             _views.where((v) => v.nodeId == nodeId).length >= 4)) {
       problem = 'capacity';
@@ -304,10 +363,32 @@ class RecordedRouteController extends ChangeNotifier {
     final op = _epoch;
     _busy = true;
     problem = null;
-    notice = 'capturing';
+    if (!automatic) notice = 'capturing';
     _changed();
     try {
       final (frame, value) = await _capture(op);
+      if (automatic) {
+        automaticCandidates++;
+        if (!await RouteFrameQuality.usable(frame)) {
+          if (_current(op)) notice = 'automaticLowDetail';
+          return false;
+        }
+        if (!_current(op) || !_running) return false;
+        if (_views.any((v) => v.imageSha == value.imageSha)) {
+          notice = 'automaticDuplicate';
+          return false;
+        }
+        if (_views.isNotEmpty) {
+          final last = _media[_views.last.featureSha];
+          if (last == null) throw const LandmarkFailure('invalid');
+          final distances = await analyzer.compare(value.feature, [last]);
+          if (!_current(op) || !_running) return false;
+          if (distances.single < 2) {
+            notice = 'automaticDuplicate';
+            return false;
+          }
+        }
+      }
       final id = nodeId ?? 'n-${_nodes.length + 1}';
       if (_views.any((v) => v.nodeId == id && v.imageSha == value.imageSha)) {
         notice = 'duplicate';
@@ -329,7 +410,14 @@ class RecordedRouteController extends ChangeNotifier {
       view.validate(_id!);
       if (nodeId == null) {
         final f = _floor(floor, confirmed);
-        _nodes.add(RoutePoint(id, name.trim(), name.trim(), floor: f));
+        _nodes.add(
+          RoutePoint(
+            id,
+            name.trim(),
+            automatic ? 'Landmark ${_nodes.length + 1}' : name.trim(),
+            floor: f,
+          ),
+        );
         if (_nodes.length > 1) {
           _edges.add(_edge(_nodes.length - 1, mode, confirmed));
         }
@@ -342,7 +430,18 @@ class RecordedRouteController extends ChangeNotifier {
       notice = 'captured';
       return true;
     } catch (e) {
-      if (_current(op)) _error(e);
+      if (_current(op)) {
+        if (automatic) {
+          _error(e);
+          await pause();
+          if (!_disposed && _foreground && notice != 'stopUnconfirmed') {
+            notice = 'automaticFailed';
+            _changed();
+          }
+        } else {
+          _error(e);
+        }
+      }
     } finally {
       if (_current(op)) {
         _busy = false;
@@ -400,6 +499,7 @@ class RecordedRouteController extends ChangeNotifier {
       if (name.trim().isEmpty || name.length > 120) return;
       _name = name.trim();
     }
+    _automaticTimer?.cancel();
     final op = ++_epoch;
     _busy = true;
     _running = false;
@@ -663,6 +763,7 @@ class RecordedRouteController extends ChangeNotifier {
   }
 
   Future<void> pause() async {
+    _automaticTimer?.cancel();
     if (_disposed) return;
     final op = ++_epoch;
     _busy = false;
@@ -749,6 +850,8 @@ class RecordedRouteController extends ChangeNotifier {
   }
 
   void _clearSelection() {
+    _automaticTimer?.cancel();
+    automaticRecording = false;
     _localizer?.dispose();
     _localizer = null;
     _id = null;
@@ -806,6 +909,7 @@ class RecordedRouteController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _automaticTimer?.cancel();
     _disposed = true;
     _epoch++;
     store.cancelPending();

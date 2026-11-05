@@ -1,0 +1,23 @@
+{
+  "issue": 17,
+  "parent_issue": 16,
+  "baseline_commit": "b0fae5f",
+  "scope": "automatic unknown-floor draft pilot only; source checkpoint, no phone release",
+  "user_floor_decision": "continue unconfirmed draft and complete metadata later",
+  "pilot": {
+    "interval_seconds": 5,
+    "automatic_view_limit": 48,
+    "route_view_limit": 64,
+    "detail_screen": "max64px, mean15..240, neighbor gradient>=4",
+    "dedupe": "same image SHA or last retained feature distance<2",
+    "calibrated": false
+  },
+  "checks": {
+    "controller_scenarios": 11,
+    "full_suite": 496,
+    "review": "pending",
+    "analyze": "passed"
+  },
+  "phone": "unchanged 1.7.1+14; retest pending",
+  "private_data": "synthetic generated detail-grid test JPEG only; no user images"
+}
