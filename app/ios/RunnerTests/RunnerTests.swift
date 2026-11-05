@@ -11,6 +11,30 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
+  func testCameraApplicationLifecycleBlocksLateStartsAndDoesNotAutoResume() {
+    let coordinator = CameraCoordinator(), center = NotificationCenter()
+    let lifecycle = CameraApplicationLifecycle(coordinator: coordinator, center: center, initiallyActive: true)
+    var permissions = 0, starts = 0
+    let plugin = VisionPlugin(messenger: NavigationTestMessenger(),
+      cameraAuthorizationStatus: { .notDetermined },
+      requestCameraAccess: { _ in permissions += 1 }, cameraCoordinator: coordinator,
+      captureStart: { starts += 1; return true }, captureStop: {})
+    center.post(name: UIApplication.didEnterBackgroundNotification, object: nil)
+    var replies = 0
+    plugin.handle(FlutterMethodCall(methodName: "startPreview", arguments: nil)) {
+      replies += 1
+      XCTAssertEqual(($0 as? [String: Any])?["started"] as? Bool, false)
+    }
+    XCTAssertTrue(coordinator.isBackgrounded)
+    XCTAssertEqual(replies, 1)
+    XCTAssertEqual(permissions, 0)
+    center.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+    XCTAssertFalse(coordinator.isBackgrounded)
+    XCTAssertEqual(starts, 0)
+    XCTAssertEqual(permissions, 0)
+    withExtendedLifetime(lifecycle) {}
+  }
+
   private func routeArgs(generation: Int = 1, request: String = "request") -> [String: Any] {
     ["requestId": request, "session": "route-session", "generation": generation,
       "routeId": "local-route", "routeVersion": 3]

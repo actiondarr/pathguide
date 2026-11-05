@@ -1,7 +1,7 @@
 # Frontend：PathGuide 整體流程、規格與裝置端
 
 更新：2026年11月5日。此文件是整體規格入口；產品介紹、Backend及Dataset各自維護所屬內容。
-**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，43項原生Simulator測試、415項Flutter測試及analyze通過。P2-D Flutter入口未實作；真機／VoiceOver驗收未做。**
+**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，44項原生Simulator測試、415項Flutter測試及analyze通過。P2-D Flutter入口未實作；真機／VoiceOver驗收未做。**
 
 
 規格快照及待定事項：[整體規格 #13](https://github.com/actiondarr/pathguide/issues/13)。既有導航P2–P5仍由[總票 #2](https://github.com/actiondarr/pathguide/issues/2)及其子票追蹤；本次重整不改寫其範圍或狀態。
@@ -890,6 +890,8 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 </details>
 
 ### 維護紀錄
+
+2026-11-05 GitHub checkpoint review: connected the shared camera coordinator to application background/foreground before registering camera plugins. Late background starts are blocked; foreground never resumes a camera automatically. All 44 native Simulator tests passed; the isolated source checkpoint also reproduced 415 Flutter tests and clean analyze. Historical P2-C receipt remains a snapshot of its earlier 43-test run. Evidence: [lifecycle check](../verification/codex-camera-lifecycle-20261105.json).
 
 2026-11-05 保存及手機實測節點確認：使用者指定全部依建議執行，每票通過檢查／覆核即同步來源、文件及證據到GitHub；手機主要節點為P2-D、P3-C、P4-B、P5，P3-A另做儲存工程真機檢查。每次裝機前均保留可回退的tag／prerelease及遠端收據；本條僅記錄已確認安排，不冒充已推送或已裝機結果。
 
