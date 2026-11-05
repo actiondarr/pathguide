@@ -32,5 +32,17 @@
     "app/assets/models/detector-hk9.tflite": "8bbfa43b1fe2b440e608652e75fa86d15e571031c45b7b21f30689852468e3c9",
     "app/assets/models/detector.json": "172db9ff4f637fd4d6188a736d436533577a9ca015775961cdb0bb637f2ed327",
     "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
+  },
+  "release": {
+    "source_commit": "9348517942e307acbf0b06be1bf9dc3f3f45b377",
+    "isPrerelease": true,
+    "tagName": "v1.7.1+14",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.7.1%2B14"
+  },
+  "installation": {
+    "status": "pending",
+    "attempt": "failed CoreDevice connection reset by peer, transport error 4000",
+    "data_preservation": "no uninstall or clear performed",
+    "human_retest": "pending"
   }
 }

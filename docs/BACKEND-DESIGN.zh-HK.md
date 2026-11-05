@@ -664,3 +664,5 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 2026-11-06 P3-C修正（#15）：使用者回報1.7.0+13首次相機後卡住、照片未保存，該版新流程真人驗收未通過。已重現busy指示器令預覽重建，以及對話框關閉期間controller過早釋放。候選修正保持預覽與捲動／暫停生命週期，native在開始完成才綁session、停止前解除；輸入controller等DialogRoute overlay移除才dispose。native等待上限8秒，舊start逾時不能停止新owner；停止未確認不假稱已停。inactive輸入不等於背景，真背景仍暫停，重新拍攝須明確操作。新增測試驗相機中斷→拍攝→兩路標→保存→重開；1.7.1+14完整檢查／覆核／發布及真人複測準備中，沒有清空本機資料或上傳私照。S4／F17（Backend B15）仍屬工程流程，實地品質未驗。
 
 #15覆核修正：拍攝途中背景／native中斷時保留已提交名稱、樓層及確認資料；顯示尚未加入並提供明確重試／捨棄，不自動拍攝。對話框以DialogRoute.completed而非首個frame作釋放界線。
+
+2026-11-06 #15交付：493項Flutter、54項原生、analyze及兩軸覆核通過，1.7.1+14簽署建置／簽章／模型雜湊核對後已commit/push、發布不可變tag/prerelease並核對遠端。裝機嘗試因CoreDevice連線重設失敗，待USB連接解鎖後更新；手機仍為舊版，沒有清空資料。見verification/codex-p3c-hotfix-20261106.json。
