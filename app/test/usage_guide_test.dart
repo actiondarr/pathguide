@@ -10,11 +10,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const newChineseSafety = '基本辨識只提示物件名稱，沒有辨識結果不代表前方安全；不提供扶手電梯方向或避障指令。';
-  const newChineseRange = '測距試驗：站定後才開始';
+  const newChineseRange = '站定後才開始';
   const newChineseUnknown = '缺乏可靠深度時顯示「距離未知」，不可用作避障。';
   const newEnglishSafety =
       'Basic recognition names objects; it does not determine escalator direction or provide obstacle avoidance.';
-  const newEnglishRange = 'Range trial: stand still before starting.';
+  const newEnglishRange = 'stand still before starting.';
   const newEnglishUnknown =
       'Without reliable depth, the result is Range unknown.';
   const staleChinese = '沒有辨識結果不代表前方安全；本版不提供距離、扶手電梯方向或避障指令。';
@@ -67,6 +67,7 @@ void main() {
     final text = joinedText(tester);
     expect(text, contains(newChineseSafety));
     expect(text, contains(newChineseRange));
+    expect(text, contains('設定 → 開發測試'));
     expect(text, contains(newChineseUnknown));
     expect(text, isNot(contains(staleChinese)));
     expect(text, contains(closeLabel(AppLanguage.chinese)));
@@ -80,13 +81,11 @@ void main() {
     final text = joinedText(tester);
     expect(text, contains(newEnglishSafety));
     expect(text, contains(newEnglishRange));
+    expect(text, contains('Settings → Developer testing'));
     expect(text, contains(newEnglishUnknown));
     expect(text, isNot(contains(staleEnglish)));
     expect(text, isNot(contains(newChineseSafety)));
-    expect(
-      text,
-      isNot(contains(newEnglishRange.replaceFirst('Range trial', '測距試驗'))),
-    );
+    expect(text, isNot(contains('測距試驗')));
     expect(find.text(closeLabel(AppLanguage.english)), findsOneWidget);
   });
 
