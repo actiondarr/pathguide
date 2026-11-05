@@ -578,7 +578,7 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 
 ### 維護紀錄
 
-2026-11-06 P3-C候選接通本機首次錄路與重行：RouteLandmark原生通道只收有界JPEG／feature，回覆綁requestId、SHA及revision；精確取消及單一工作排空。store新增batch讀取，完整核驗版本／所有媒體而只留所需特徵，重行不寫照片。沿用本機Keychain、保護／備份排除及容量；沒有新增API、同步、訓練或部署。490項Flutter、53項原生及analyze通過；兩軸覆核／發布及真人實測待完成，見[P3-C證據](../verification/codex-p3c-journey-20261106.json)。
+2026-11-06 P3-C候選接通本機首次錄路與重行：RouteLandmark原生通道只收有界JPEG／feature，回覆綁requestId、SHA及revision；精確取消及單一工作排空。store新增batch讀取，完整核驗版本／所有媒體而只留所需特徵，重行不寫照片。沿用本機Keychain、保護／備份排除及容量；沒有新增API、同步、訓練或部署。490項Flutter、53項原生及analyze通過；兩軸覆核及簽署建置已過，發布／真人實測待完成，見[P3-C證據](../verification/codex-p3c-journey-20261106.json)。
 
 2026-11-05 P3-B核心工程檢查：471項Flutter、51項原生Simulator及analyze通過，兩軸覆核指出的出口綁定已先紅後綠修正並重驗；1.6.1+12最終簽署建置／簽章／模型雜湊通過，不可變tag／prerelease遠端核對後已安裝及啟動；手機generated-fixture真實feature12902bytes、自距離0及zh-Hant／en-US OCR能力通過；正常模式已重啟，並非實地導航驗收。新增Vision feature print／版本封裝、runtime OCR能力及人工確認回退；樓層localizer區分預期／候選／實際，合併同node多視角，拒絕歧義、錯層、方向未確認及舊／過期回覆。相機、儲存與平台／UI接線留P3-C；本輪不稱已能實地導航，實際檢查及發布狀態見[P3-B證據](../verification/codex-p3b-landmarks-20261105.json)。
 

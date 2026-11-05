@@ -431,7 +431,7 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
-目前手機試驗版：**[1.6.1+12 P3-B核心工程版](https://github.com/actiondarr/pathguide/releases/tag/v1.6.1%2B12)**，沿用已整理UI及P3-A儲存。471項Flutter、51項原生Simulator、analyze及簽署建置通過；覆核指出的出口綁定已先紅後綠修正並重驗，兩軸覆核無剩餘阻塞。不可變tag／prerelease遠端核對後安裝，iPhone以生成小圖產生12902bytes真正Vision特徵並完成archive／自距離0核對，確認繁中／英文OCR能力及人工樓層確認政策；已重開正常App模式。沒有讀取私人照片，這不是實地定位或真人導航驗收。P3-C相機／儲存／平台通道及首次錄路／重行介面已有候選，490項Flutter／53項原生與analyze通過，待兩軸覆核及1.7.0+13發布／手機實測；P4障礙／語音及P5整趟場測未完成。模型品質及原場景等逐項驗收仍待補。見[裝機及fixture收據](../verification/release-receipts/app-1.6.1+12.json)。
+目前手機試驗版：**[1.6.1+12 P3-B核心工程版](https://github.com/actiondarr/pathguide/releases/tag/v1.6.1%2B12)**，沿用已整理UI及P3-A儲存。471項Flutter、51項原生Simulator、analyze及簽署建置通過；覆核指出的出口綁定已先紅後綠修正並重驗，兩軸覆核無剩餘阻塞。不可變tag／prerelease遠端核對後安裝，iPhone以生成小圖產生12902bytes真正Vision特徵並完成archive／自距離0核對，確認繁中／英文OCR能力及人工樓層確認政策；已重開正常App模式。沒有讀取私人照片，這不是實地定位或真人導航驗收。P3-C相機／儲存／平台通道及首次錄路／重行介面已有候選，490項Flutter／53項原生與analyze通過，兩軸覆核及1.7.0+13簽署建置／模型雜湊已過，發布／手機實測待完成；P4障礙／語音及P5整趟場測未完成。模型品質及原場景等逐項驗收仍待補。見[裝機及fixture收據](../verification/release-receipts/app-1.6.1+12.json)。
 
 <a id="1-目標目前-app-與原計劃差距"></a>
 
@@ -851,7 +851,7 @@ graph LR
 | P2-D Flutter相機入口；依賴C | RouteObservationSource、capture controller／page、現有路線入口及Dart測試 | 明確開始→真實preview／狀態→一次取幀→停止；拒權／重試／背景／慢回覆可操作。模型未載不阻錄路取幀，暫停／離頁不復活；A–D合併才驗P2，相機真機結果另記 |
 | P3-A 有上限的媒體儲存；依賴P2 | RoutePackage/store／device adapter、native檔案保護及測試 | 保留P1 synthetic v1，新增captured schema與加密圖片／特徵引用及SHA。錄路／明確更新才存關鍵幀，重行不存幀；每張／每node／每route／整庫連草稿、歷史、暫存有硬限。額滿保舊版、刪除涵蓋全部媒體，先定備份政策 |
 | P3-B 路標／樓層定位；依賴A | native Vision features／OCR、localizer及原生／Dart測試 | building/floor/node穩定ID、多視角同node；特徵revision、預處理、方向及序列排歧義。預期≠實際樓層；升降機跳層／樓梯平台／相似出口／錯層與3F中途恢復均驗。iOS15語言能力不足有人工確認，不硬升最低OS |
-| P3-C 首次錄路及重行；依賴B | 正式controller／page及native Vision通道、三入口已有工程候選；490項Flutter／53原生及analyze已過，覆核／手機待完成 | 空庫可錄App未有的G→3F路線，不要求使用者已熟悉；未知段留draft。命名保存→重開→確認起點／方向→跨層→出口重定位→終點；未驗反向不自動認證，無地圖／路線不虛構室內尋路 |
+| P3-C 首次錄路及重行；依賴B | 正式controller／page及native Vision通道、三入口已有工程候選；490項Flutter／53原生及analyze已過，兩軸覆核及簽署建置已過，手機驗收待完成 | 空庫可錄App未有的G→3F路線，不要求使用者已熟悉；未知段留draft。命名保存→重開→確認起點／方向→跨層→出口重定位→終點；未驗反向不自動認證，無地圖／路線不虛構室內尋路 |
 | P4-A 行走感知；依賴P3 | route native取幀／Vision adapter、WalkingPerception及測試 | 最新幀障礙不等OCR；同幀模型／時間／session／可選深度配對，缺深度不報米數，無框不說安全。權重／class不改，品質gate=false的真實危險模式保持關閉；站定深度不直接取消門檻冒充行走可靠 |
 | P4-B 真語音與仲裁；依賴A | SpeechCoordinator、GuidanceArbiter、capture介面及測試 | 有效急需事件／感知失效優先，撤回續行，解除只重算現況；停止／背景／刪除不補播舊queue。每事件VO或TTS一路，按需麥克風，緊急事件取消收音；真機VoiceOver另驗 |
 | P5 整趟功能與人工驗收；依賴P4 | NavigationPage／AppShell／旅程controller及整合測試；DSH交人工腳本 | 室外→入口確認→G→升降機／樓梯→3F課室，同一旅程、斷網／中斷／恢復。一般iPhone／Pro Max及真人／視障驗收分報；AI不得自行標human_approved，未測不得放行 |
@@ -987,7 +987,7 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 
 ### 維護紀錄
 
-2026-11-06 P3-C工程候選：接通首次相機錄路、加密媒體版本及逐點重認／跨層出口流程，三入口及中英大字檢查已過；490項Flutter、53項原生及analyze通過。兩軸覆核與1.7.0+13發布／裝機準備中，真人導航與障礙／語音未驗收。
+2026-11-06 P3-C工程候選：接通首次相機錄路、加密媒體版本及逐點重認／跨層出口流程，三入口及中英大字檢查已過；490項Flutter、53項原生及analyze通過。兩軸覆核及1.7.0+13簽署建置／簽章／模型雜湊已過，發布／裝機準備中，真人導航與障礙／語音未驗收。
 
 2026-11-05 P3-B核心工程檢查：471項Flutter、51項原生Simulator及analyze通過，兩軸覆核指出的出口綁定已先紅後綠修正並重驗；1.6.1+12最終簽署建置／簽章／模型雜湊通過，不可變tag／prerelease遠端核對後已安裝及啟動；手機generated-fixture真實feature12902bytes、自距離0及zh-Hant／en-US OCR能力通過；正常模式已重啟，並非實地導航驗收。新增Vision feature print／版本封裝、runtime OCR能力及人工確認回退；樓層localizer區分預期／候選／實際，合併同node多視角，拒絕歧義、錯層、方向未確認及舊／過期回覆。相機、儲存與平台／UI接線留P3-C；本輪不稱已能實地導航，實際檢查及發布狀態見[P3-B證據](../verification/codex-p3b-landmarks-20261105.json)。
 
