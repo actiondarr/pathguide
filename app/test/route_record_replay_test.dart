@@ -234,6 +234,53 @@ void main() {
     expect(c.document!.complete, isFalse);
     await c.pause();
   });
+  test('manual blank floor inherits valid context and later automatic draft remains saveable', () async {
+    useDetailedFrame();
+    await c.startRecording('manual context', automatic: true);
+    await c.confirmCurrentFloor('G');
+    await c.recordLandmark('手動角位', '');
+    expect(c.nodes.last.floorEvidence, FloorEvidence.inherited);
+    useDetailedFrame('synthetic-detail-grid-alt.jpg');
+    match = 1;
+    await c.sampleAutomatically();
+    expect(c.nodes.length, 3);
+    expect(c.document!.complete, isFalse);
+    await c.save(activate: false);
+    expect(c.notice, 'saved');
+    await c.open((await store.list()).routes.single, recording: true);
+    expect(c.nodes.length, 3);
+  });
+  test(
+    'changing confirmed exit floor withdraws incoming connector confirmation',
+    () async {
+      useDetailedFrame();
+      await c.startRecording('lift', automatic: true);
+      await c.confirmCurrentFloor('G');
+      await c.beginFloorChange(ConnectorMode.elevator);
+      await c.confirmCurrentFloor('3F');
+      c.updateNode(2, '出口', '3F', ConnectorMode.elevator, true);
+      expect(c.incomingConfirmed(2), isTrue);
+      c.updateNode(2, '出口', '4F', ConnectorMode.elevator, true);
+      expect(c.incomingConfirmed(2), isFalse);
+      expect(c.recordingFloor, isNull);
+      await c.pause();
+    },
+  );
+  test('manual non-walk checkpoint breaks context and following draft remains valid', () async {
+    useDetailedFrame();
+    await c.startRecording('manual device', automatic: true);
+    await c.confirmCurrentFloor('G');
+    await c.recordLandmark('設備', '', mode: ConnectorMode.elevator);
+    expect(c.recordingFloor, isNull);
+    expect(c.nodes.last.floor, isNull);
+    useDetailedFrame('synthetic-detail-grid-alt.jpg');
+    match = 1;
+    await c.sampleAutomatically();
+    expect(c.nodes.last.floor, isNull);
+    expect(c.document!.complete, isFalse);
+    await c.save(activate: false);
+    expect(c.notice, 'saved');
+  });
   testWidgets(
     'start once creates an automatic draft and pause prevents later additions',
     (t) async {

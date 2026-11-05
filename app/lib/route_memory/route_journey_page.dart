@@ -549,6 +549,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             mode: pending.mode,
             confirmed: pending.confirmed,
             nodeId: pending.nodeId,
+            inheritContext: !pending.confirmed && pending.floor.trim().isEmpty,
           );
     if (mounted && added && _pendingLandmark == pending) {
       setState(() => _pendingLandmark = null);
@@ -853,10 +854,10 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     Text(
       t(
         c!.automaticRecording
-            ? '自動錄路中：試驗設定約每5秒取候選畫面，選低重複且有細節的畫面作候選路標。樓層未知會保留草稿，重要轉角或轉層請停下手動補記；不保證完整覆蓋。'
+            ? '自動錄路中，唔使逐張拍照。未知資料保留草稿；重要轉角或轉層請停下補記。'
             : '到達每個路標後停下拍攝。此版本記錄實際走過的順序，不記錄 GPS 軌跡；未提供即時避障或連續轉向語音。',
         c!.automaticRecording
-            ? 'Automatic recording: pilot sampling about every 5 seconds, selecting detailed, less repetitive candidate landmarks. Unknown floors remain drafts. Stop and mark important corners or floor changes manually; coverage is not guaranteed.'
+            ? 'Recording automatically. Unconfirmed data stays in a draft. Stop to mark important corners or floor changes.'
             : 'Stop at each landmark to capture it. This version records the order you walked, not a GPS track. Live obstacle avoidance and continuous spoken turns are not connected.',
       ),
     ),
@@ -864,12 +865,12 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     heading(t('樓層紀錄', 'Recording floor')),
     Text(
       t(
-        '上下文只供錄路沿用，唔代表已定位或每點已核實。轉層請記錄入口及出口。',
+        '之後路標會沿用本段樓層，唔代表每點已核實。轉層請記錄入口及出口。',
         'Context is for recording continuity, not a verified location at every point. Mark floor-change entrances and exits.',
       ),
     ),
     Text(
-      '${t('目前上下文', 'Current context')}: ${c!.recordingFloor?.label ?? t('未知', 'Unknown')}',
+      '${t('本段樓層', 'Floor for this segment')}: ${c!.recordingFloor?.label ?? t('未知', 'Unknown')}',
     ),
     button(
       c!.recordingConnector != null ? '確認出口樓層' : '確認／更新目前樓層',
@@ -910,13 +911,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                 }
               : null,
         ),
-    if (c!.automaticRecording)
-      button(
-        '結束錄路並命名保存',
-        'Finish, name and save',
-        c!.busy || c!.nodes.isEmpty ? null : _finishAutomaticDraft,
-        primary: true,
-      ),
+
     if (_pendingLandmark != null) ...[
       Text(
         t('相片尚未加入，已保留輸入：', 'Photo not added. Input kept: ') +
@@ -1141,6 +1136,16 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (c!.mode == RecordedRouteMode.record &&
+                        c!.automaticRecording)
+                      button(
+                        '結束錄路並命名保存',
+                        'Finish, name and save',
+                        c!.busy || c!.nodes.isEmpty
+                            ? null
+                            : _finishAutomaticDraft,
+                        primary: true,
+                      ),
                     if (!c!.running &&
                         c!.notice != 'stopUnconfirmed' &&
                         !c!.finished &&

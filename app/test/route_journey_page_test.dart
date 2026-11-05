@@ -106,6 +106,12 @@ void main() {
         await progress(() => c.recordingFloor != null);
         expect(c.recordingFloor!.label, 'G');
         expect(c.nodes.last.floorEvidence, FloorEvidence.confirmed);
+        await tap(label('記錄下一個路標', 'Record next landmark'));
+        await t.enterText(find.byType(TextField).at(0), 'Corner');
+        await tap(label('拍攝並加入', 'Capture and add'), dialog: true);
+        await progress(() => c.nodes.length == 2 && !c.busy);
+        expect(c.nodes.last.floorEvidence, FloorEvidence.inherited);
+        expect(c.nodes.last.floor!.label, 'G');
         await tap(label('記錄轉層入口', 'Mark floor-change entrance'));
         await tap(label('升降機', 'Lift'), dialog: true);
         await progress(() => c.recordingConnector == ConnectorMode.elevator);
