@@ -31,7 +31,15 @@
   "installation": "success",
   "launch": "success",
   "device_family": "iPhone",
-  "human_camera_VoiceOver_acceptance": "pending",
+  "human_camera_VoiceOver_acceptance": "partial_user_report; VoiceOver and image orientation pending",
   "raw_device_receipts": "retained locally outside repository; identifiers omitted",
-  "next": "User completes first 10-15 minute P2-D phone session; P3-A follows this milestone"
+  "next": "User completes first 10-15 minute P2-D phone session; P3-A follows this milestone",
+  "user_feedback_20261105": {
+    "report": "Other operations have no reported problems; user asks how to test VoiceOver and what orientation error means",
+    "confirmed_scope": "general basic-operation feedback only; individual scenarios not separately enumerated",
+    "pending": [
+      "VoiceOver",
+      "preview and captured-photo orientation"
+    ]
+  }
 }
