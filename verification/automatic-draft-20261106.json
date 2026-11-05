@@ -16,7 +16,9 @@
     "controller_scenarios": 11,
     "full_suite": 496,
     "review": "pending",
-    "analyze": "passed"
+    "analyze": "passed",
+    "widget_acceptance": "actual start button -> automatic candidate -> finish/name/save -> encrypted reopen passed",
+    "additional_cases": "feature similarity of distinct synthetic JPEGs; interruption error notice epoch fencing"
   },
   "phone": "unchanged 1.7.1+14; retest pending",
   "private_data": "synthetic generated detail-grid test JPEG only; no user images"

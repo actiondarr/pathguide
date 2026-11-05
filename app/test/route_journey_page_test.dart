@@ -19,6 +19,125 @@ import 'route_camera_fixture.dart';
 
 void main() {
   testWidgets(
+    'automatic entry needs no point form, finish names and reopens a real draft',
+    (t) async {
+      final root = (await t.runAsync(
+        () => Directory.systemTemp.createTemp('automatic-ui-'),
+      ))!;
+      final store = (await t.runAsync(
+        () => EncryptedRouteStore.open(root: root, vault: Vault()),
+      ))!;
+      final native = RouteNativeFixture()..attach();
+      final image = File('test/fixtures/route_camera/synthetic-detail-grid.jpg')
+          .readAsBytesSync();
+      native.changeCapture = (v) {
+        v.addAll({
+          'jpeg': image,
+          'sha256': sha256.convert(image).toString(),
+          'byteCount': image.length,
+          'width': 64,
+          'height': 64,
+        });
+        (v['header'] as Map<String, Object?>).addAll({
+          'rawWidth': 64,
+          'rawHeight': 64,
+          'uprightWidth': 64,
+          'uprightHeight': 64,
+        });
+        return v;
+      };
+      const channel = MethodChannel('hk.pathguide/route_landmark');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'cancel') return null;
+        final f = Uint8List.fromList([1]);
+        return {
+          ...Map<String, Object?>.from(call.arguments as Map),
+          'status': 'ok',
+          'feature': f,
+          'featureSha': sha256.convert(f).toString(),
+          'text': <String>[],
+          'ocrRevision': 3,
+          'manualFloorConfirmationRequired': true,
+        };
+      });
+      final c = RecordedRouteController(
+        store: store,
+        source: RouteObservationSource(supported: true),
+      );
+      Future<void> progress([bool Function()? done]) async {
+        for (var i = 0; i < 200; i++) {
+          await t.runAsync(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+          });
+          await t.pump();
+          if (done?.call() == true) break;
+        }
+      }
+
+      await t.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: RouteJourneyPage(
+            settings: AppSettings.memory(),
+            initialRecording: true,
+            createController: () async => c,
+            previewBuilder: (_) => const SizedBox(),
+          ),
+        ),
+      );
+      await progress(() => find.text('開始錄路').evaluate().isNotEmpty);
+      await t.scrollUntilVisible(
+        find.text('開始錄路'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await t.ensureVisible(find.text('開始錄路'));
+      await t.tap(find.text('開始錄路'));
+      await progress(() => c.running);
+      expect(c.automaticRecording, isTrue);
+      await t.pump(const Duration(seconds: 5));
+      await progress(() => c.nodes.isNotEmpty);
+      expect(c.nodes.length, 1);
+      expect(c.nodes.first.floor, isNull);
+      expect(find.text('記錄路標'), findsNothing);
+      final finish = find.text('結束錄路並命名保存');
+      await t.scrollUntilVisible(
+        finish,
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await t.ensureVisible(finish);
+      await t.tap(finish);
+      await progress(() => find.text('結束並保存草稿').evaluate().isNotEmpty);
+      await t.pumpAndSettle();
+      await t.enterText(find.byType(TextField), '屋企到大堂');
+      final save = find.widgetWithText(FilledButton, '保存草稿');
+      await t.ensureVisible(save);
+      await t.tap(save);
+      await progress(() => c.notice == 'saved');
+      expect(c.notice, 'saved');
+      var reopened = false;
+      c
+          .showLibrary()
+          .then((_) => c.open(c.entries.single, recording: true))
+          .then((_) => reopened = true);
+      await progress(() => reopened);
+      expect(reopened, isTrue);
+      expect(c.name, '屋企到大堂');
+      expect(c.nodes.length, 1);
+      expect(c.document!.complete, isFalse);
+      await t.pumpWidget(const SizedBox());
+      await t.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+        await root.delete(recursive: true);
+      });
+      native.detach();
+      messenger.setMockMethodCallHandler(channel, null);
+    },
+  );
+  testWidgets(
     'landmark dialog submits typed floor and closes safely while capture is pending',
     (t) async {
       final root = (await t.runAsync(

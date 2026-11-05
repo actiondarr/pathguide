@@ -433,8 +433,12 @@ class RecordedRouteController extends ChangeNotifier {
       if (_current(op)) {
         if (automatic) {
           _error(e);
+          final pauseEpoch = _epoch + 1;
           await pause();
-          if (!_disposed && _foreground && notice != 'stopUnconfirmed') {
+          if (!_disposed &&
+              _foreground &&
+              _epoch == pauseEpoch &&
+              notice != 'stopUnconfirmed') {
             notice = 'automaticFailed';
             _changed();
           }

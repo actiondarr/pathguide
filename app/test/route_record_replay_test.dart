@@ -99,9 +99,8 @@ void main() {
     await c.resume();
   }
 
-  void useDetailedFrame() {
-    final jpeg = File('test/fixtures/route_camera/synthetic-detail-grid.jpg')
-        .readAsBytesSync();
+  void useDetailedFrame([String file = 'synthetic-detail-grid.jpg']) {
+    final jpeg = File('test/fixtures/route_camera/$file').readAsBytesSync();
     native.changeCapture = (v) {
       v['jpeg'] = jpeg;
       v['sha256'] = sha256.convert(jpeg).toString();
@@ -118,6 +117,25 @@ void main() {
     };
   }
 
+  test(
+    'feature similarity rejects different JPEGs of a similar candidate',
+    () async {
+      useDetailedFrame();
+      await c.startRecording('automatic', automatic: true);
+      await c.sampleAutomatically();
+      expect(c.nodes.length, 1);
+      useDetailedFrame('synthetic-detail-grid-alt.jpg');
+      match = 0;
+      await c.sampleAutomatically();
+      expect(c.nodes.length, 1);
+      expect(c.notice, 'automaticDuplicate');
+      match = 1;
+      await c.sampleAutomatically();
+      expect(c.nodes.length, 2);
+      expect(c.document!.complete, isFalse);
+      await c.pause();
+    },
+  );
   testWidgets(
     'start once creates an automatic draft and pause prevents later additions',
     (t) async {
