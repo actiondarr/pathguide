@@ -924,7 +924,7 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 
 ### 維護紀錄
 
-2026-11-05 #14 UI整理：將樣例、相機／測距試驗及模型診斷集中在設定 → 開發測試；移除重複底部導航、未提供功能佔位及合成頁的真相機入口。三個日常任務各有一句用途，首次提示可取消／略過／開始並逐任務保存。442項Flutter、analyze及390×844畫面核對通過；320×568兩倍文字涵蓋中英文提示及樣例返回。已記錄1.5.0+9使用者「基本操作、旁白無問題」及附圖直立的有限證據，未推定逐項硬件情境或室內導航驗收完成。1.5.1+10簽署建置、覆核及發布狀態見[UI證據](../verification/codex-ui-cleanup-20261105.json)。
+2026-11-05 #14 UI整理：將樣例、相機／測距試驗及模型診斷集中在設定 → 開發測試；移除重複底部導航、未提供功能佔位及合成頁的真相機入口。三個日常任務各有一句用途，首次提示可取消／略過／開始並逐任務保存。442項Flutter、analyze及390×844畫面核對通過；320×568兩倍文字涵蓋中英文提示及樣例返回。已記錄1.5.0+9使用者「基本操作、旁白無問題」及附圖直立的有限證據，未推定逐項硬件情境或室內導航驗收完成。1.5.1+10最終簽署建置、簽章及包內模型雜湊已核對，規格／程式規範兩項覆核無未解決問題；發布狀態見[UI證據](../verification/codex-ui-cleanup-20261105.json)。
 
 2026-11-05 1.5.0+9 prerelease published from immutable tag b620ec4, remote verified before iPhone install and launch (both succeeded). Human camera/VoiceOver results remain pending. [Release and installation receipt](../verification/release-receipts/app-1.5.0+9.json).
 

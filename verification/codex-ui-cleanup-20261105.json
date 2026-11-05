@@ -20,19 +20,21 @@
     "first_red": "dataset_pipeline/review_artifacts/ui-entry-red.log",
     "help_red": "dataset_pipeline/review_artifacts/ui-help-red.log",
     "accessibility": "home automated tap target/labels/contrast; Chinese/English 320x568 double text help and mock navigation",
-    "visual_review": "390x844 home, developer list, settings inspected locally; generated previews excluded from repository"
+    "visual_review": "390x844 home, developer list, settings inspected locally; generated previews excluded from repository",
+    "final_run": "442 passed after final usage-guide correction; five scoped guide tests also passed"
   },
   "review": {
-    "standards": "no findings on initial 08987e9...2085a8c; final help-copy delta pending",
-    "spec": "no actionable findings on initial 08987e9...2085a8c; stale help-copy observation corrected; delta pending"
+    "standards": "no findings; 08987e9...2085a8c plus final 00e3fb6 and 82eb757 deltas reviewed",
+    "spec": "no actionable findings; stale help copy corrected and final source/test deltas re-reviewed",
+    "scope": "read-only independent agents; unrelated backend/dataset changes excluded"
   },
   "phone_build": {
-    "status": "rebuilding_after_help_copy_correction",
+    "status": "signed_release_build_passed",
     "version": "1.5.1",
     "build": "10",
     "bundle_id": "hk.pathguide.pathguide",
     "codesign_verify_exit": 0,
-    "executable_sha256": "e5ea9b4bf70d2c03b2b6bce310d56bc67cfeb8fa27c87b840d41df93b479582a",
+    "executable_sha256": "4d7e36af7bbc9f0e8e01c7bd2a706671fe94debb68c50939e61bc3c464e9f048",
     "log": "dataset_pipeline/review_artifacts/ui-1.5.1-iphone-release.log"
   },
   "release": "pending",
