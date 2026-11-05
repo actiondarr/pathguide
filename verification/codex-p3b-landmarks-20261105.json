@@ -25,10 +25,27 @@
     "spec": "recorded exit/connector binding and unknown-floor OCR conflict fixed/re-reviewed; no remaining blockers",
     "fixed_point": "93b9b8f...c7e350e; c7e350e...4c2f664 fix re-reviewed"
   },
-  "device_probe": "pending generated fixture; no private media",
+  "device_probe": {
+    "status": "passed",
+    "device_family": "iPhone",
+    "result": {
+      "featureBytes": 12902,
+      "featureSha256": "6d45655842efd2c945687bb77fba130e755f8735c2496ebdd63cfb1d8d82e70c",
+      "fixtureOnly": true,
+      "manualFloorConfirmationRequired": true,
+      "ocrLanguages": [
+        "zh-Hant",
+        "en-US"
+      ],
+      "ocrRevision": 3,
+      "passed": true,
+      "selfDistance": 0
+    },
+    "scope": "generated 320x240 fixture, no camera/private media; no field localization acceptance"
+  },
   "human_navigation_acceptance": "not claimed",
   "profile": "configs/planning/codex-p3b-landmarks-20261105.json",
-  "phone_current": "1.6.0+11; no new install yet",
+  "phone_current": "1.6.1+12; installed and restarted without probe arguments",
   "phone_build": {
     "status": "signed_release_build_passed",
     "version": "1.6.1",
@@ -42,5 +59,14 @@
     "app/assets/models/detector-hk9.tflite": "8bbfa43b1fe2b440e608652e75fa86d15e571031c45b7b21f30689852468e3c9",
     "app/assets/models/detector.json": "172db9ff4f637fd4d6188a736d436533577a9ca015775961cdb0bb637f2ed327",
     "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
-  }
+  },
+  "release": {
+    "tag": "v1.6.1+12",
+    "source_commit": "4e46e687972852e8808e02bc470fd3718252986c",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.6.1%2B12",
+    "remote_verified_before_install": true
+  },
+  "installation": "success",
+  "normal_launch": "success",
+  "engineering_status": "accepted_engineering"
 }
