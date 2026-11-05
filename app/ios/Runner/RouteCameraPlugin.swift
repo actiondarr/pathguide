@@ -287,7 +287,10 @@ final class RouteCameraPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
   }
   func attach(_ view: RouteCameraPreviewView) {
-    preview = view; view.captureLayer.session = driver.previewSession
+    preview = view
+    // A retained view may be created before start finishes. Bind only after
+    // configuration/start has drained, and detach on main before physical stop.
+    view.captureLayer.session = state == "running" ? driver.previewSession : nil
     view.orientationChanged = { [weak self] rotation in self?.mailbox.orient(rotation) }
   }
 
@@ -388,6 +391,7 @@ final class RouteCameraPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     guard context?.epoch == next.epoch else { client.cancel(); return }
     client.acquire(stop: { [weak self] acknowledge in
       guard let self else { acknowledge(true); return }
+      self.preview?.captureLayer.session = nil
       self.sessionQueue.async {
         self.driver.stop()
         self.imageQueue.async { DispatchQueue.main.async { acknowledge(true) } }
@@ -413,6 +417,7 @@ final class RouteCameraPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             }
             DispatchQueue.main.async {
               guard client.isCurrent, self.context?.epoch == next.epoch else { return }
+              self.preview?.captureLayer.session = running ? self.driver.previewSession : nil
               self.preview?.setNeedsLayout()
               self.preview?.layoutIfNeeded()
               self.publish(running ? "running" : "unavailable")

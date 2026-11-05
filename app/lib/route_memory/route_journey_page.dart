@@ -80,7 +80,14 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    c?.setForeground(state == AppLifecycleState.resumed);
+    // Inactive also includes system input/permission surfaces. Native camera
+    // interruption events still revoke the session; real background never resumes.
+    if (state == AppLifecycleState.resumed) c?.setForeground(true);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      c?.setForeground(false);
+    }
   }
 
   @override
@@ -237,6 +244,20 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         '按開始重行，再確認你身處的路標。',
         'Start replay, then confirm the landmark where you are.',
       ),
+      'starting': ('正在開啟相機；可按停止取消。', 'Opening camera. Press Stop to cancel.'),
+      'capturing': (
+        '正在取得及分析相片；可按停止取消。',
+        'Capturing and analyzing. Press Stop to cancel.',
+      ),
+      'stopping': ('正在停止相機，請稍候。', 'Stopping camera. Please wait.'),
+      'captureFailed': (
+        '未能取得或分析相片，尚未加入路標。請停止相機，再按繼續重試。',
+        'Could not capture or analyze the photo. No landmark was added. Stop the camera, then resume to retry.',
+      ),
+      'failed': (
+        '相機未有回應。請按停止，再繼續重試。',
+        'Camera did not respond. Press Stop, then resume to retry.',
+      ),
       'checking': ('正在比對路標。', 'Matching landmark.'),
       'confirmed': (
         '路標已確認；位置證據短暫有效。',
@@ -302,7 +323,10 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         ? ConnectorMode.walk
         : controller.incomingMode(index);
     var confirmed = index != null && controller.incomingConfirmed(index);
-    final accepted = await showDialog<bool>(
+    var submitting = false;
+    String? captureWarning;
+    final needsCamera = existing == null || addView;
+    final dialog = DialogRoute<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, update) => AlertDialog(
@@ -324,6 +348,8 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                     'Stay at the same physical landmark and change angle.',
                   ),
                 ),
+              if (submitting) Text(t('正在準備相機…', 'Preparing camera…')),
+              if (captureWarning != null) Text(captureWarning!),
               TextField(
                 controller: name,
                 readOnly: addView,
@@ -375,13 +401,40 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: () {
+                if (submitting) unawaited(controller.pause());
+                Navigator.pop(ctx, false);
+              },
               child: Text(t('取消', 'Cancel')),
             ),
             FilledButton(
-              onPressed: () {
-                if (name.text.trim().isNotEmpty) Navigator.pop(ctx, true);
-              },
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      if (name.text.trim().isEmpty) return;
+                      FocusScope.of(ctx).unfocus();
+                      update(() {
+                        submitting = true;
+                        captureWarning = null;
+                      });
+                      // This tap explicitly authorizes resuming after a native input
+                      // interruption. Keep typed fields if the camera cannot resume.
+                      if (needsCamera && !controller.canCapture) {
+                        await controller.resume();
+                      }
+                      if (!ctx.mounted) return;
+                      if (needsCamera && !controller.canCapture) {
+                        update(() {
+                          submitting = false;
+                          captureWarning = t(
+                            '相機未能準備好；輸入仍保留。請取消後按停止，再繼續重試。',
+                            'Camera is not ready. Your input is kept. Cancel, press Stop, then resume and retry.',
+                          );
+                        });
+                        return;
+                      }
+                      Navigator.pop(ctx, true);
+                    },
               child: Text(
                 existing == null || addView
                     ? t('拍攝並加入', 'Capture and add')
@@ -392,12 +445,17 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         ),
       ),
     );
+    final accepted = await Navigator.of(context).push(dialog);
     final n = name.text, f = floor.text;
-    // Dialog animations can retain TextFields for a frame after completion.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      name.dispose();
-      floor.dispose();
-    });
+    // The popped Future precedes the reverse animation. Dispose only once the
+    // route overlay (including focused TextFields) has actually been removed.
+    unawaited(
+      dialog.completed.then((_) {
+        name.dispose();
+        floor.dispose();
+      }),
+    );
+    if (accepted != true && submitting) unawaited(controller.pause());
     if (accepted != true || !mounted) return;
     if (index != null && !addView) {
       controller.updateNode(index, n, f, mode, confirmed);
@@ -777,10 +835,15 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                 padding: const EdgeInsets.all(20),
                 children: [
                   _status(),
-                  if (c!.busy) const LinearProgressIndicator(),
-                  if (c!.running)
-                    SizedBox(
-                      height: 180,
+                  // Keep sibling positions stable while capture changes busy.
+                  SizedBox(
+                    height: 4,
+                    child: c!.busy ? const LinearProgressIndicator() : null,
+                  ),
+                  if (c!.mode != RecordedRouteMode.library)
+                    _RetainedRoutePreview(
+                      key: const ValueKey('recorded-route-camera-preview'),
+                      visible: c!.running,
                       child:
                           widget.previewBuilder?.call(context) ??
                           const UiKitView(
@@ -819,4 +882,33 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       ),
     ),
   );
+}
+
+/// Keep the native layer through busy, pause and list scrolling. Native owns
+/// session attachment and detaches before physical stop; UI disposal cannot race it.
+class _RetainedRoutePreview extends StatefulWidget {
+  const _RetainedRoutePreview({
+    super.key,
+    required this.visible,
+    required this.child,
+  });
+  final bool visible;
+  final Widget child;
+  @override
+  State<_RetainedRoutePreview> createState() => _RetainedRoutePreviewState();
+}
+
+class _RetainedRoutePreviewState extends State<_RetainedRoutePreview>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Visibility(
+      visible: widget.visible,
+      maintainState: true,
+      child: SizedBox(height: 180, child: widget.child),
+    );
+  }
 }

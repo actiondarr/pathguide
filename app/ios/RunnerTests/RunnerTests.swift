@@ -10,6 +10,23 @@ import UIKit
 import XCTest
 
 class RunnerTests: XCTestCase {
+  func testRoutePreviewBindsOnlyRunningSessionAndDetachesBeforeStop() {
+    let driver = RouteTestDriver()
+    driver.previewSession = AVCaptureSession()
+    let plugin = RouteCameraPlugin(messenger: NavigationTestMessenger(), coordinator: CameraCoordinator(), driver: driver,
+      authorization: { .authorized }, isActive: { true })
+    let preview = RouteCameraPreviewView(frame: .zero)
+    plugin.attach(preview)
+    XCTAssertNil(preview.captureLayer.session)
+    let started = expectation(description: "start binds preview")
+    plugin.handle(FlutterMethodCall(methodName: "start", arguments: routeArgs())) { _ in started.fulfill() }
+    wait(for: [started], timeout: 5)
+    XCTAssertTrue(preview.captureLayer.session === driver.previewSession)
+    let stopped = expectation(description: "stop detaches preview")
+    plugin.handle(FlutterMethodCall(methodName: "stop", arguments: routeArgs())) { _ in stopped.fulfill() }
+    XCTAssertNil(preview.captureLayer.session)
+    wait(for: [stopped], timeout: 5)
+  }
   func testLandmarkRejectsInvalidFeatureRevisionAndCancelledImage() throws {
     XCTAssertThrowsError(try RouteLandmarkAnalyzer.distance(Data([1]), Data([1]), feature: "other"))
     XCTAssertThrowsError(try RouteLandmarkAnalyzer.distance(Data([1]), Data([1])))
@@ -1085,7 +1102,7 @@ class RunnerTests: XCTestCase {
 }
 
 private final class RouteTestDriver: RouteCaptureDriving {
-  var previewSession: AVCaptureSession? { nil }
+  var previewSession: AVCaptureSession?
   var starts = 0
   var stops = 0
   var frames: [(CVPixelBuffer, CMTime, CMTime?) -> Void] = []

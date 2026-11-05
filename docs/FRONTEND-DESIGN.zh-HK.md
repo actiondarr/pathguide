@@ -1073,3 +1073,5 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 2026-11-03 iPhone重新安裝：核對GitHub最新已發布版本仍為1.4.3+8及原不可變tag／source；舊包因描述檔過期被拒。以該tag隔離副本執行既有run_iphone.sh，Xcode Release建置通過並自動更新描述檔至2026-11-10 UTC。腳本安裝／啟動階段失敗後，直接以devicectl安裝新簽署包及啟動成功。App程式／模型版本未變，未發布教學修改保留原工作區；裝機不等於模型或實地品質驗收。見[重新裝機收據](../verification/release-receipts/app-1.4.3+8-reinstall-20261103.json)。
 
 </details>
+
+2026-11-06 P3-C修正（#15）：使用者回報1.7.0+13首次相機後卡住、照片未保存，該版新流程真人驗收未通過。已重現busy指示器令預覽重建，以及對話框關閉期間controller過早釋放。候選修正保持預覽與捲動／暫停生命週期，native在開始完成才綁session、停止前解除；輸入controller等DialogRoute overlay移除才dispose。native等待上限8秒，舊start逾時不能停止新owner；停止未確認不假稱已停。inactive輸入不等於背景，真背景仍暫停，重新拍攝須明確操作。新增測試驗相機中斷→拍攝→兩路標→保存→重開；1.7.1+14完整檢查／覆核／發布及真人複測準備中，沒有清空本機資料或上傳私照。S4／F17（Backend B15）仍屬工程流程，實地品質未驗。

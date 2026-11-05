@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -14,6 +15,54 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+  testWidgets('timeout from cancelled start cannot stop a newer camera session', (t) async {
+    final native=RouteNativeFixture()..delayStart=true;native.attach();
+    final source=RouteObservationSource(supported:true);
+    final old=source.start(routeId:'old',routeVersion:1);
+    await t.pump();
+    await source.stop();native.delayStart=false;
+    expect(await source.start(routeId:'new',routeVersion:1),RouteCaptureStatus.running);
+    await t.pump(const Duration(seconds:9));await old;
+    expect((await t.runAsync(source.capture))!.status,RouteCaptureStatus.captured);
+    await source.stop();native.startReply!.complete(null);native.detach();
+  });
+  testWidgets(
+    'unanswered start and stop are bounded and never report hardware stopped',
+    (t) async {
+      final never = Completer<Object?>();
+      var stopCalls = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'stop') stopCalls++;
+        return never.future;
+      });
+      final source = RouteObservationSource(supported: true);
+      RouteCaptureStatus? started, stopped;
+      unawaited(
+        source
+            .start(routeId: 'timeout', routeVersion: 1)
+            .then((s) => started = s),
+      );
+      await t.pump(const Duration(seconds: 9));
+      expect(
+        started,
+        isNotNull,
+        reason: 'start must leave busy after native silence',
+      );
+      unawaited(source.stop().then((s) => stopped = s));
+      await t.pump(const Duration(seconds: 9));
+      expect(stopped, RouteCaptureStatus.stopUnconfirmed);
+      expect(stopCalls, greaterThan(0));
+      messenger.setMockMethodCallHandler(
+        channel,
+        (call) async => {
+          ...Map<String, Object?>.from(call.arguments as Map),
+          'status': 'stopped',
+        },
+      );
+      expect(await source.stop(), RouteCaptureStatus.stopped);
+      never.complete(null);
+    },
+  );
   test(
     'disposing an older source listener preserves newer camera events',
     () async {

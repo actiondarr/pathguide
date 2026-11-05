@@ -1,0 +1,16 @@
+{
+  "issue": 15,
+  "baseline": "d1f2ea0d581c3ab07df05298bf749af61bbcab1f",
+  "regressions": [
+    "preview reconstructed on busy",
+    "TextEditingController disposed during dialog reverse animation",
+    "old start timeout stops newer owner"
+  ],
+  "red_logs": [
+    "p3c-hotfix-preview-red2.log",
+    "p3c-hotfix-ui-cycles3.log",
+    "p3c-hotfix-old-timeout-red.log"
+  ],
+  "verification": "full suite, native, review and signed build pending",
+  "human_acceptance": "1.7.0+13 failed user report; hotfix pending retest"
+}

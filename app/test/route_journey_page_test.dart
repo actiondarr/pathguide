@@ -1,5 +1,8 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+import 'package:crypto/crypto.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pathguide/navigation/navigation_hub_page.dart';
@@ -15,6 +18,137 @@ import 'captured_route_store_test.dart' show capturedDocument, capturedMedia;
 import 'route_camera_fixture.dart';
 
 void main() {
+  testWidgets(
+    'landmark dialog submits typed floor and closes safely while capture is pending',
+    (t) async {
+      final root = (await t.runAsync(
+        () => Directory.systemTemp.createTemp('route-dialog-'),
+      ))!;
+      final store = (await t.runAsync(
+        () => EncryptedRouteStore.open(root: root, vault: Vault()),
+      ))!;
+      final native = RouteNativeFixture()..delayCapture = true;
+      native.attach();
+      const channel = MethodChannel('hk.pathguide/route_landmark');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'cancel') return null;
+        final feature = Uint8List.fromList([1]);
+        return {
+          ...Map<String, Object?>.from(call.arguments as Map),
+          'status': 'ok',
+          'feature': feature,
+          'featureSha': sha256.convert(feature).toString(),
+          'text': <String>[],
+          'ocrRevision': 3,
+          'manualFloorConfirmationRequired': true,
+        };
+      });
+      final c = RecordedRouteController(
+        store: store,
+        source: RouteObservationSource(supported: true),
+      );
+      var previewMounts = 0;
+      await c.startRecording('test route');
+      await t.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: RouteJourneyPage(
+            settings: AppSettings.memory(),
+            createController: () async => c,
+            previewBuilder: (_) =>
+                PreviewLifetime(onMount: () => previewMounts++),
+          ),
+        ),
+      );
+      for (var i = 0; i < 20; i++) {
+        await t.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        });
+        await t.pump();
+      }
+      await t.scrollUntilVisible(
+        find.text('記錄下一個路標'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await t.tap(find.text('記錄下一個路標'));
+      await t.pumpAndSettle();
+      await t.enterText(find.byType(TextField).at(0), '門口');
+      await t.enterText(find.byType(TextField).at(1), '1');
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await t.pump();
+      expect(
+        c.running,
+        isTrue,
+        reason: 'System input inactivity is not app background',
+      );
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      native.sendEvent('paused');
+      await t.pumpAndSettle();
+      expect(c.running, isFalse);
+      expect(find.text('門口'), findsOneWidget);
+      await t.tap(find.text('拍攝並加入'));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 100));
+      await t.pump(const Duration(milliseconds: 250));
+      expect(t.takeException(), isNull);
+      expect(
+        previewMounts,
+        1,
+        reason: 'Busy indicator must not replace the native camera preview',
+      );
+      native.captureReply!.complete(native.capturedResponse);
+      for (var i = 0; i < 10; i++) {
+        await t.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        });
+        await t.pump();
+      }
+      expect(c.nodes.length, 1);
+      expect(c.busy, isFalse);
+      Future<void> complete(Future<void> task) async {
+        var done = false;
+        task.whenComplete(() => done = true);
+        for (var i = 0; i < 300 && !done; i++) {
+          await t.runAsync(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+          });
+          await t.pump();
+        }
+        expect(done, isTrue);
+      }
+
+      await complete(c.pause());
+      await t.pump();
+      await complete(c.resume());
+      await t.pump();
+      expect(
+        previewMounts,
+        1,
+        reason: 'Pause/resume must reuse the same native preview',
+      );
+      native.delayCapture = false;
+      await complete(c.recordLandmark('下一點', '1', confirmed: true));
+      expect(c.nodes.length, 2);
+      await complete(c.save(activate: false));
+      expect(c.notice, 'saved');
+      expect(c.dirty, isFalse);
+      await complete(c.showLibrary());
+      final saved = c.entries.single;
+      await complete(c.open(saved, recording: true));
+      expect(c.nodes.length, 2);
+      expect(c.running, isFalse);
+      await t.pumpWidget(const SizedBox());
+      await t.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+        await root.delete(recursive: true);
+      });
+      native.detach();
+      messenger.setMockMethodCallHandler(channel, null);
+    },
+  );
   testWidgets('corrupt captured route never advertises replay availability', (
     t,
   ) async {
@@ -195,4 +329,22 @@ void main() {
       },
     );
   }
+}
+
+class PreviewLifetime extends StatefulWidget {
+  const PreviewLifetime({super.key, required this.onMount});
+  final VoidCallback onMount;
+  @override
+  State<PreviewLifetime> createState() => _PreviewLifetimeState();
+}
+
+class _PreviewLifetimeState extends State<PreviewLifetime> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onMount();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
 }

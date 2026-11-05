@@ -133,7 +133,9 @@ class RouteObservationSource {
     String method,
     Map<String, Object> args,
   ) async {
-    final value = await _methods.invokeMapMethod<String, Object?>(method, args);
+    final value = await _methods
+        .invokeMapMethod<String, Object?>(method, args)
+        .timeout(const Duration(seconds: 8));
     if (value == null) throw const FormatException('Missing native response');
     return value;
   }
@@ -161,6 +163,11 @@ class RouteObservationSource {
         return RouteCaptureStatus.invalid;
       }
       return RouteCaptureStatus.parse(value['status']);
+    } on TimeoutException {
+      // Retire this owner immediately. A missing reply never proves the camera
+      // stopped; stop retains its unconfirmed identity until an exact retry ack.
+      if (_current == current) unawaited(stop());
+      return RouteCaptureStatus.failed;
     } on MissingPluginException {
       if (_current == current) _current = null;
       return RouteCaptureStatus.unsupported;

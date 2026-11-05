@@ -69,7 +69,7 @@ class RecordedRouteController extends ChangeNotifier {
   String? problem;
   RouteLibraryEntry? selected;
   RouteLocalizer? _localizer;
-  bool get busy => _busy;
+  bool get busy => _busy || _stopping;
   bool get running => _running;
   bool get dirty => _dirty;
   bool get canEdit =>
@@ -125,7 +125,7 @@ class RecordedRouteController extends ChangeNotifier {
         : error is LandmarkFailure
         ? error.code
         : 'failed';
-    notice = 'error';
+    notice = error is LandmarkFailure ? 'captureFailed' : 'error';
   }
 
   Future<void> refresh() async {
@@ -219,6 +219,7 @@ class RecordedRouteController extends ChangeNotifier {
     final op = ++_epoch;
     _busy = true;
     problem = null;
+    notice = 'starting';
     _changed();
     try {
       final status = await source.start(
@@ -303,6 +304,7 @@ class RecordedRouteController extends ChangeNotifier {
     final op = _epoch;
     _busy = true;
     problem = null;
+    notice = 'capturing';
     _changed();
     try {
       final (frame, value) = await _capture(op);
@@ -666,16 +668,16 @@ class RecordedRouteController extends ChangeNotifier {
     _stopping = true;
     _localizer?.pause();
     store.cancelPending();
-    notice = 'paused';
+    notice = 'stopping';
     _changed();
     final stopping = source.stop();
     await analyzer.cancel();
     final status = await stopping;
     _stopping = false;
     if (_disposed || op != _epoch) return;
-    if (status == RouteCaptureStatus.stopUnconfirmed) {
-      notice = 'stopUnconfirmed';
-    }
+    notice = status == RouteCaptureStatus.stopUnconfirmed
+        ? 'stopUnconfirmed'
+        : 'paused';
     _changed();
   }
 
