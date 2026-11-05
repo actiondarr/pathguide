@@ -123,6 +123,19 @@ Tesla FSD是空間資訊呈現的參考，希望讓人、障礙、地面及短�
 | 本機與雲端 | 基本辨識及已錄室內路線重行本機處理；複雜問答可選雲端，分析／回報／訓練分開同意 |
 | 實作責任 | 後續程式／測試／修正交DSH，Codex固定規格、覆核及機械驗證整合；人工驗收不由AI核准 |
 
+### 導航、定位與環境感知的分工（2026-11-05程式核對）
+
+本文件的「定位」指確認使用者目前位置、樓層及面向；「路線導航」指依位置及目的地提供路線／轉向指示；「環境感知」指眼前物件及障礙的當下觀察；「看圖問答」指按問題解釋一張影像。辨識到「門」不等於確認是哪一道門、所在樓層或應轉方向。
+
+| 功能 | 目前實際依據／狀態 | 現有YOLO不準的影響 |
+|---|---|---|
+| 戶外路線及轉彎指示 | NavigationPlugin以MapKit的MKDirections取得步行路線，Core Location位置交NavigationController更新路線進度及重算 | YOLO結果不直接決定路線；地圖／定位的可靠性仍須另行驗證 |
+| 導航期間環境辨識 | NavigationPage另外啟動RecognitionSession，以environment語音通道播報現有十類模型結果 | 會誤認或漏認周邊物件；不能因此宣稱已具可靠障礙／可通行判斷 |
+| 室內取相 | P2-D已有獨立RouteCameraPlugin及Flutter相機試驗入口，不要求YOLO偵測成功；該頁相片暫存不等於已錄成路線 | 取相不依賴十類模型，但取相成功不代表室內定位／導航已完成 |
+| 室內定位及真實重行 | 目前重行仍是明示模擬；影像路標／OCR、次序、方向及可用相對追蹤定位尚待整合及實地驗收 | 不能描述為現有室內導航全靠YOLO，亦不能把未完成的定位方案當已可用 |
+
+程式依據：`app/ios/Runner/NavigationPlugin.swift`、`app/lib/navigation/navigation_controller.dart`、`app/lib/navigation/navigation_page.dart`、`app/ios/Runner/RouteCameraPlugin.swift`及`app/lib/route_memory/`。本地看圖模型仍待選型與實測；加入模型不自動完成定位或障礙驗收。
+
 ### 已確認：簡化介面與iOS輔助操作（2026-11-05）
 
 使用者接受全部本輪建議，並指定DSH負責程式／測試／修正、Codex負責驗收與機械整合；此節是開發要求，尚非交付能力。
@@ -536,7 +549,7 @@ P1 schema1固定synthetic，原有目錄、裝置路線金鑰及AAD不改；新�
 
 iPhone使用新RouteStoragePlugin，建立暫存檔時設定Complete保護，寫後及rename後均設／核備份排除；原P1內容只補檔案政策，不改密文或搬移。原生只接受已知路線子目錄／檔名，拒絕絕對路徑、穿越、symlink、穩定檔覆寫及過大單次寫入。金鑰沿用WhenUnlockedThisDeviceOnly／不同步，遺失時不覆寫舊資料。Simulator沒有真實保護等級屬性，原生測試只證明政策操作、備份排除、路徑限制及原檔不變；真機另以明確launch argument啟用隔離probe目錄／金鑰，使用人工生成JPEG／opaque特徵fixture分process寫入、重開、刪除及清理，沒有讀取私人照片或將fixture放入正式路線庫。工程檢查、實際錄路及真人驗收分開。
 
-來源見route_package／route_media／encrypted_route_store／device_route_library／route_file_policy／route_storage_probe及iOS RouteStoragePlugin。上限及檢查政策見[凍結設定](../configs/planning/codex-p3a-storage-20261105.json)；實際檢查、發布及真機結果見[P3-A證據](../verification/codex-p3a-route-media-20261105.json)。454項Flutter、49項原生Simulator及analyze通過；簽署建置／獨立覆核／真機probe待完成。現行手機導航UI仍以交付版為準，本層儲存不產生已定位或可導航狀態。
+來源見route_package／route_media／encrypted_route_store／device_route_library／route_file_policy／route_storage_probe及iOS RouteStoragePlugin。上限及檢查政策見[凍結設定](../configs/planning/codex-p3a-storage-20261105.json)；實際檢查、發布及真機結果見[P3-A證據](../verification/codex-p3a-route-media-20261105.json)。454項Flutter、49項原生Simulator及analyze通過；1.6.0+11簽署建置、簽章及包內模型核對通過，兩項獨立覆核無阻塞問題；真機probe待完成。現行手機導航UI仍以交付版為準，本層儲存不產生已定位或可導航狀態。
 
 <a id="2-現行操作與裝置生命週期"></a>
 
@@ -947,6 +960,8 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 </details>
 
 ### 維護紀錄
+
+2026-11-05 grill-with-docs導航依賴澄清：依實際程式區分定位、路線導航、環境感知與看圖問答；補記戶外MapKit／Core Location與並行YOLO播報的責任，以及室內取相已有、真實定位／重行未完成的界線。本輪只澄清文件，未改App、模型、訓練或驗收狀態。
 
 2026-11-05 P3-A工程候選：保留synthetic v1，新增captured schema2、影像／特徵SHA引用及有界AES媒體版本，實際JPEG／來源校驗、quota預檢、取消／刪除／corrupt回退與全部媒體清理；iOS新增Complete保護及逐檔備份排除通道。454項Flutter、49項原生Simulator及analyze通過；Simulator保護等級不可用，真機獨立probe待驗，尚未宣稱錄路／定位可用。使用者三張參考畫面已納入導航三入口目標，明確排除大眾運輸及叫車；截圖不入repo。見[P3-A證據](../verification/codex-p3a-route-media-20261105.json)。
 
