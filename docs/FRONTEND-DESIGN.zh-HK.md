@@ -431,7 +431,7 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
-目前手機試驗版：**[1.6.0+11 P3-A儲存工程版](https://github.com/actiondarr/pathguide/releases/tag/v1.6.0%2B11)**，保留1.5.1+10整理後UI。454項Flutter、49項原生Simulator、analyze及簽署建置通過，規格／程式規範兩項覆核無阻塞問題；不可變tag／prerelease遠端核對後安裝及啟動iPhone。隔離fixture跨三個process寫入／重開／刪除通過，檔案Complete／備份排除及Keychain本機解鎖／不同步屬性已核；probe目錄與key已清除。這是儲存工程檢查，未讀取私人照片，沒有把fixture當真實路線或實地導航驗收。P3-B特徵／OCR定位及P3-C完整錄路／重行UI仍待完成，下一步先接P3-B。既有模型品質、量尺及原場景／跨任務逐項驗收仍待補；上一版UI／旁白回饋與本版工程檢查分開。見[裝機及儲存收據](../verification/release-receipts/app-1.6.0+11.json)。
+目前手機試驗版：**[1.6.0+11 P3-A儲存工程版](https://github.com/actiondarr/pathguide/releases/tag/v1.6.0%2B11)**，保留1.5.1+10整理後UI。454項Flutter、49項原生Simulator、analyze及簽署建置通過，規格／程式規範兩項覆核無阻塞問題；不可變tag／prerelease遠端核對後安裝及啟動iPhone。隔離fixture跨三個process寫入／重開／刪除通過，檔案Complete／備份排除及Keychain本機解鎖／不同步屬性已核；probe目錄與key已清除。這是儲存工程檢查，未讀取私人照片，沒有把fixture當真實路線或實地導航驗收。P3-B特徵／OCR及樓層候選核心已有候選實作；P3-C相機／儲存接線及完整錄路／重行UI仍待完成，下一步先接P3-B。既有模型品質、量尺及原場景／跨任務逐項驗收仍待補；上一版UI／旁白回饋與本版工程檢查分開。見[裝機及儲存收據](../verification/release-receipts/app-1.6.0+11.json)。
 
 <a id="1-目標目前-app-與原計劃差距"></a>
 
@@ -534,6 +534,18 @@ header綁requestId／startRequestId、session／generation／sequence、routeId�
 現階段結構資料每份上限256 KiB、整庫32 MiB（包括暫存）、每條路線最多8版本；額滿停止寫入並保留原穩定版。使用者明確清理才保留啟用版、最近一個經核實的完整回退版及當前草稿，移除其他歷史／未引用暫存；刪除會先保存刪除紀錄，舊回覆與殘留檔案不能重新入庫。這是基本容量保護，並非照片大小的實測預算。
 
 **接相機後的保存規則：** 平常重行只在記憶體即時分析並釋放幀，不按使用次數累積照片／影片；首次錄路或明確更新才保存必要的壓縮、清晰、去重關鍵幀及特徵。P3-A已凍結並實作以下媒體上限，連草稿／舊版／暫存一起計；額滿停新增並提供明確清理，不靜默錄全程影片、不自動上傳。App沒有雲端路線上傳／同步；本機金鑰不跨裝置同步，路線排除OS備份，不能當作重裝或跨裝置備份方案。
+
+### P3-B路標分析及樓層候選核心（2026-11-05，驗證中）
+
+新增原生RouteLandmarkAnalyzer及Dart RouteLocalizer，供P3-C錄路／重行流程接用；相機／儲存／平台通道及正式導航UI的接線仍屬P3-C，未宣稱已能實地定位。原生不開相機、不保存影像、不連網：有界upright JPEG核實格式、方向與實際尺寸後，以VNGenerateImageFeaturePrintRequest revision1及明確scaleFit產生特徵。secure archive外包schema／feature／preprocess／Vision revision，完整feature blob最多64KiB；比較先核包內版本及實際VN observation revision，不相容或損壞不交距離。
+
+OCR在iOS15選revision2、iOS16以上選revision3，逐次查supportedRecognitionLanguages再選zh-Hant／en-US；缺語言或OCR失敗保留視覺特徵及人工樓層確認。文字最多32行、每行120字，僅為候選，不把樓層字樣、升降機預期層或樓梯平台當實際位置。
+
+Localizer以building/floor/node穩定身份及最多4視角／node、64視角／route分組；同node多視角先合併最小距離，再與其他node比較，不能把另一視角當第二個實體路標。缺比較、重複、非有限／負距離或不相容版本均不產生位置。固定工程候選門檻distance≤8、不同node gap≥2、證據≤5秒；不是正確率，也未經行走場測。呼叫端須明確傳入含捕捉往返及分析耗時的保守frameAge，不混算Swift／Dart時鐘。
+
+預期／候選／實際樓層分開；候選新鮮且唯一，先明確確認同一樓層，再確認出口方向，才記actual node/floor。錯層、相似出口、OCR衝突及方向未確認保持未知；可在已存3F中途路標重新確認，不強制回G。每輪ticket綁localizer instance／世代／序列，回覆只接收一次；新觀察、暫停、背景或版本換實例清掉舊位置。這個核心不產生自動步行指令，未錄反向路線仍不可推斷回程。
+
+Simulator第一次Vision inference context失敗，明確CPU-only後真實特徵／archive／距離測試通過；硬件另以明確launch flag、人工生成小圖測試，沒有收集私人照片。完整結果、覆核及發布狀態見[P3-B證據](../verification/codex-p3b-landmarks-20261105.json)，設定見[候選profile](../configs/planning/codex-p3b-landmarks-20261105.json)。官方API依據：[Feature print](https://developer.apple.com/documentation/vision/vngenerateimagefeatureprintrequest)、[OCR語言能力](https://developer.apple.com/documentation/vision/vnrecognizetextrequest/supportedrecognitionlanguages())；API可用不等於實地定位品質已通過。
 
 ### P3-A真實錄路媒體格式及儲存（2026-11-05，工程及真機儲存檢查已過）
 
@@ -655,7 +667,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | F14 個人路標重行、場地graph與跨樓層／S4–S7 | 12-node／10情境／47觀察樣例已回放；真實重定位未開始，現升為主線 | 先對照私人已錄路線的固定node、多觀察與有向路段，確認起點／方向再重行；既有無向BFS只保留樣例用途。圖片／OCR、路線次序與可用追蹤產生候選，歧義保留未知；跨樓層連接列P0–P3，全場地自動建圖後續 | B14／D09；P0–P5見導航主線，首次錄製可為App尚未有的新路線；不由一張門／欄杆照片確認位置或推導未走通路 |
 | F15 扶手電梯方向與門推拉／S7 | 研究，未開始 | 扶手電梯以同設備追蹤、上下端幾何、入口標誌及補償手機移動的梯級光流交叉判斷，衝突拒答；門推拉只在可確認文字／標示證據時描述，不能只看門把或門框 | Dataset D11時間序列與文字真值；上／下端、相鄰設備、啟停、反射及持機移動均測，不叫使用者試踏設備驗證 |
 | F16 懸空障礙與近身提醒／S7 | 研究，未開始 | 在地面／重力校準及使用者通行範圍設定後，檢查深度佔用是否侵入身體／頭部高度；動態碰撞風險需可靠距離、相對運動及時序證據。初版只描述觀測，不把物件在中央當碰撞預警 | Dataset D09／D11的高度、細物與時序資料；不能由未標註或稀疏深度聲稱全面覆蓋 |
-| F17 路線錄製、路標記憶與場景理解／S1–S4 | N0／P0及P1已隨來源保存；P2-C/D已交付；P3-A schema2／加密媒體候選已有工程檢查，1.6.0+11真機儲存probe已過；完整建路UI／定位未接 | 明確開始／停止，首次錄路保存有上限的關鍵幀／特徵／樓層及有向連接；平常重行只即時分析，不累積影片。P1可保存／重開／回退／刪除結構樣例，真實媒體由P2–P3擴充 | B15；先P2相機、P3首次錄路／跨層及P4障礙／語音，系統調校後置；路線用途與訓練照片分開 |
+| F17 路線錄製、路標記憶與場景理解／S1–S4 | N0／P0及P1已隨來源保存；P2-C/D已交付；P3-A schema2／加密媒體候選已有工程檢查，1.6.0+11真機儲存probe已過；P3-B候選核心驗證中，完整建路UI／旅程接線未接 | 明確開始／停止，首次錄路保存有上限的關鍵幀／特徵／樓層及有向連接；平常重行只即時分析，不累積影片。P1可保存／重開／回退／刪除結構樣例，真實媒體由P2–P3擴充 | B15；先P2相機、P3首次錄路／跨層及P4障礙／語音，系統調校後置；路線用途與訓練照片分開 |
 | F18 一般iPhone、Android與更多登入方式／S1–S7 | 一般iPhone列首輪目標；無LiDAR真機與Android新導航未驗證 | 基本路標流程不要求LiDAR／登入；按能力選普通相機或ARKit觀察來源，追蹤不足降為路標確認而非假米數。Android保留adapter後續驗證，帳戶連結仍保留UID | B16；至少一部無LiDAR一般iPhone另測；A9／iOS版本門檻不等於效能驗收，不承諾Android同步交付 |
 | F19 空間音效／S4–S7 | 參考產品引出的候選，未實作 | 在F09–F10提供有效方位／距離後，原生AVAudioEngine搭配AVAudioEnvironmentNode產生單聲道定位提示音，設定listener／source座標；與TTS／VoiceOver共同排程。先校準左／右／前後與近遠，未知不合成假距離 | 先幾何可信再做聲音，耳機／揚聲器／讀屏及外界聲音負擔均測；不把現有普通TTS標作空間音效 |
 | F20 路口燈號與斑馬線／S7 | 新研究候選，不列現有十類能力 | 先定行人燈／車燈、斑馬線與對應路口／方向的真值，另建資料與相容模型；時序檢查遮擋與狀態變化，只描述可確認觀測，不由單一框發可過路指令 | Dataset D13；陌生路口、錯燈、反光、閃爍與未知要測，未通過維持關閉 |
@@ -962,6 +974,8 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 </details>
 
 ### 維護紀錄
+
+2026-11-05 P3-B候選核心：新增Vision feature print／版本封裝、runtime OCR能力及人工確認回退；樓層localizer區分預期／候選／實際，合併同node多視角，拒絕歧義、錯層、方向未確認及舊／過期回覆。相機、儲存與平台／UI接線留P3-C；本輪不稱已能實地導航，實際檢查及發布狀態見[P3-B證據](../verification/codex-p3b-landmarks-20261105.json)。
 
 2026-11-05導航物件提示需求收窄：記錄使用者本輪優先解決導航期間的物件提示及替代模型的速度問題；模型種類、更新率與可接受延遲尚待對齊。只更新需求／評估界線，未接入模型或宣稱達到候選性能目標。
 

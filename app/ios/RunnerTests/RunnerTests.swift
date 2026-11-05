@@ -10,6 +10,25 @@ import UIKit
 import XCTest
 
 class RunnerTests: XCTestCase {
+  func testLandmarkRejectsInvalidFeatureRevisionAndCancelledImage() throws {
+    XCTAssertThrowsError(try RouteLandmarkAnalyzer.distance(Data([1]), Data([1]), feature: "other"))
+    XCTAssertThrowsError(try RouteLandmarkAnalyzer.distance(Data([1]), Data([1])))
+    XCTAssertThrowsError(try RouteLandmarkAnalyzer.analyze(jpeg: Data([1]), width: 1, height: 1, cancelled: { true }))
+  }
+  func testLandmarkFeatureArchiveSelfDistanceAndRuntimeOCRProfile() throws {
+    let jpeg = RouteLandmarkProbe.fixtureJPEG()
+    let analysis = try RouteLandmarkAnalyzer.analyze(jpeg: jpeg, width: 320, height: 240)
+    XCTAssertFalse(analysis.feature.isEmpty)
+    XCTAssertLessThanOrEqual(analysis.feature.count, 65536)
+    XCTAssertEqual(try RouteLandmarkAnalyzer.distance(analysis.feature, analysis.feature), 0, accuracy: 0.001)
+    var incompatible = try XCTUnwrap(JSONSerialization.jsonObject(with:analysis.feature) as? [String:Any])
+    incompatible["preprocessRevision"] = "different-crop"
+    XCTAssertThrowsError(try RouteLandmarkAnalyzer.distance(analysis.feature, JSONSerialization.data(withJSONObject:incompatible)))
+    XCTAssertTrue(analysis.ocr.manualFloorConfirmationRequired)
+    XCTAssertTrue([2, 3].contains(analysis.ocr.revision))
+  }
+
+
   func testRouteStorageAppliesPolicyWithoutChangingExistingV1Bytes() throws {
     let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: base) }

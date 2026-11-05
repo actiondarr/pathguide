@@ -1,0 +1,25 @@
+{
+  "issue": 8,
+  "baseline_commit": "93b9b8f3dae826a83fb5cd1e1c9745fc90e04e3b",
+  "scope": "native feature/OCR and Dart floor-candidate core; P3-C owns camera/store/channel/UI integration",
+  "checks": {
+    "Flutter_tests": "468 passed; final additional oversized-OCR case running",
+    "native_Simulator_tests": 51,
+    "analyze": "clean before final bound check; final run ongoing",
+    "native_execution": "default Vision inference context failed; CPU-only Simulator fix passed all51, including true feature generation, secure wrapper, self-distance and revision rejection",
+    "logs": [
+      "dataset_pipeline/review_artifacts/p3b-full-tests-final.log",
+      "dataset_pipeline/review_artifacts/p3b-native-final-verified.log",
+      "dataset_pipeline/review_artifacts/p3b-analyze-final.log"
+    ],
+    "red_logs": [
+      "p3b-native-red.log",
+      "p3b-localizer-red.log"
+    ]
+  },
+  "review": "pending",
+  "device_probe": "pending generated fixture; no private media",
+  "human_navigation_acceptance": "not claimed",
+  "profile": "configs/planning/codex-p3b-landmarks-20261105.json",
+  "phone_current": "1.6.0+11; no new install yet"
+}
