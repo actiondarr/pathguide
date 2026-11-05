@@ -13,6 +13,7 @@ class TaskHomePage extends StatelessWidget {
     required this.onSettings,
     required this.onAccount,
     required this.onMenu,
+    this.onOpenRouteMemory,
   });
 
   final VoidCallback onExplore;
@@ -20,6 +21,7 @@ class TaskHomePage extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback onAccount;
   final VoidCallback onMenu;
+  final VoidCallback? onOpenRouteMemory;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -42,6 +44,8 @@ class TaskHomePage extends StatelessWidget {
         _task('菜單閱讀與語音搜尋', Icons.restaurant_menu, onMenu),
         _task('設定與使用教學', Icons.settings_outlined, onSettings),
         AccountEntry(onManage: onAccount),
+        if (onOpenRouteMemory != null)
+          _task('熟路錄製與重行（模擬）', Icons.route_outlined, onOpenRouteMemory!),
         const SizedBox(height: 8),
         TextButton(
           onPressed: () => showUsageGuide(context),

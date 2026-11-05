@@ -23,10 +23,14 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private let inferenceQueue = DispatchQueue(label: "hk.pathguide.vision.inference")
   private let cameraAuthorizationStatus: () -> AVAuthorizationStatus
   private let requestCameraAccess: (@escaping (Bool) -> Void) -> Void
+  private let captureStart: (() throws -> Bool)?
+  private let captureStop: (() -> Void)?
 
   private var sessionConfigured = false
   // Main-queue generation invalidates permission and handoff completions.
   private var cameraGeneration = 0
+  private var cameraAccess: CameraLeaseClient?
+  private let cameraCoordinator: CameraCoordinator
   private weak var previewView: VisionPreviewUIView?
   private var eventSink: FlutterEventSink?
   private var interpreter: TFLiteModelRunner?
@@ -67,7 +71,13 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
 
   init(messenger: FlutterBinaryMessenger,
        cameraAuthorizationStatus: @escaping () -> AVAuthorizationStatus = { AVCaptureDevice.authorizationStatus(for: .video) },
-       requestCameraAccess: @escaping (@escaping (Bool) -> Void) -> Void = { AVCaptureDevice.requestAccess(for: .video, completionHandler: $0) }) {
+       requestCameraAccess: @escaping (@escaping (Bool) -> Void) -> Void = { AVCaptureDevice.requestAccess(for: .video, completionHandler: $0) },
+       cameraCoordinator: CameraCoordinator = .shared,
+       captureStart: (() throws -> Bool)? = nil,
+       captureStop: (() -> Void)? = nil) {
+    self.captureStart = captureStart
+    self.captureStop = captureStop
+    self.cameraCoordinator = cameraCoordinator
     self.cameraAuthorizationStatus = cameraAuthorizationStatus
     self.requestCameraAccess = requestCameraAccess
     methodChannel = FlutterMethodChannel(name: Channel.method, binaryMessenger: messenger)
@@ -189,52 +199,74 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   // MARK: Camera
 
   private func requestPermissionAndStart(_ result: @escaping FlutterResult) {
+    cameraAccess?.cancel()
     cameraGeneration += 1
     let expected = cameraGeneration
-    func begin(_ granted: Bool) {
-      guard expected == self.cameraGeneration else {
-        result(["started": false, "error": "辨識已取消，請重新開始"]); return
-      }
-      if granted { self.startSession(result, expected: expected) }
-      else { result(["started": false, "error": "相機權限已被拒絕；可在設定的私隱與保安中重新允許"]) }
+    let reply = CameraOnceReply<Any?>(result)
+    let access = CameraLeaseClient(owner: .vision, coordinator: cameraCoordinator) {
+      reply.finish(["started": false, "error": "辨識已取消，請重新開始"])
     }
-    switch cameraAuthorizationStatus() {
-    case .authorized:
-      begin(true)
-    case .notDetermined:
-      requestCameraAccess { [weak self] granted in
-        guard self != nil else { return }
-        DispatchQueue.main.async { begin(granted) }
+    cameraAccess = access
+    func begin(_ granted: Bool) {
+      guard expected == self.cameraGeneration, access.isCurrent else {
+        reply.finish(["started": false, "error": "辨識已取消，請重新開始"]); return
       }
-    case .denied, .restricted:
-      result(["started": false, "error": "沒有相機權限；請到設定 → 私隱與保安 → 相機允許領路通"])
-    @unknown default:
-      result(["started": false, "error": "無法確認相機權限狀態"])
+      if granted {
+        self.startSession({ value in
+          reply.finish(value)
+          if (value as? [String: Any])?["started"] as? Bool != true { access.cancel() }
+        }, expected: expected)
+      } else {
+        reply.finish(["started": false, "error": "相機權限已被拒絕；可在設定的私隱與保安中重新允許"])
+        access.cancel()
+      }
+    }
+    access.acquire(stop: { [weak self] acknowledge in
+      guard let self else { acknowledge(true); return }
+      self.stopCaptureHardware { acknowledge(true) }
+    }) { [weak self] acquired in
+      guard let self, acquired, access.isCurrent else { return }
+      switch self.cameraAuthorizationStatus() {
+      case .authorized:
+        begin(true)
+      case .notDetermined:
+        self.requestCameraAccess { [weak self] granted in
+          guard self != nil else { return }
+          DispatchQueue.main.async { begin(granted) }
+        }
+      case .denied, .restricted:
+        begin(false)
+      @unknown default:
+        begin(false)
+      }
     }
   }
 
   private func startSession(_ result: @escaping FlutterResult, expected: Int) {
-    func begin() {
-      guard expected == self.cameraGeneration else {
-        result(["started": false, "error": "辨識已取消，請重新開始"]); return
-      }
-      DepthPlugin.active?.stop()
-      self.startCaptureSession(result)
+    guard expected == self.cameraGeneration, self.cameraAccess?.isCurrent == true else {
+      result(["started": false, "error": "辨識已取消，請重新開始"]); return
     }
-    if let menu = MenuPlugin.active { menu.releaseCamera(completion: begin) }
-    else { begin() }
+    self.startCaptureSession(result)
   }
 
   private func startCaptureSession(_ result: @escaping FlutterResult) {
+    let access = cameraAccess
     sessionQueue.async { [weak self] in
       guard let self else { return }
+      let authorized = DispatchQueue.main.sync { access?.isCurrent == true }
+      guard authorized else {
+        DispatchQueue.main.async { result(["started": false, "error": "辨識已取消，請重新開始"]) }
+        return
+      }
       do {
-        try self.configureSessionIfNeeded()
-        if !self.captureSession.isRunning {
-          self.captureSession.startRunning()
+        let started: Bool
+        if let captureStart = self.captureStart { started = try captureStart() }
+        else {
+          try self.configureSessionIfNeeded()
+          if !self.captureSession.isRunning { self.captureSession.startRunning() }
+          started = self.captureSession.isRunning
         }
-        let started = self.captureSession.isRunning
-        DispatchQueue.main.async { result(["started": started]) }
+        DispatchQueue.main.async { result(["started": started && access?.isCurrent == true]) }
       } catch {
         DispatchQueue.main.async {
           result(["started": false, "error": error.localizedDescription])
@@ -275,10 +307,22 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
 
   func release(_ result: @escaping FlutterResult) {
     cameraGeneration += 1
+    if let access = cameraAccess {
+      cameraAccess = nil
+      access.cancel { confirmed in
+        result(confirmed ? nil : FlutterError(code: "camera_stop_unconfirmed", message: "相機停止尚未確認", details: nil))
+      }
+    } else {
+      stopCaptureHardware { result(nil) }
+    }
+  }
+
+  private func stopCaptureHardware(_ completion: @escaping () -> Void) {
     let group = DispatchGroup()
     group.enter()
     sessionQueue.async { [weak self] in
-      if self?.captureSession.isRunning == true { self?.captureSession.stopRunning() }
+      if let captureStop = self?.captureStop { captureStop() }
+      else if self?.captureSession.isRunning == true { self?.captureSession.stopRunning() }
       group.leave()
     }
     group.enter()
@@ -295,7 +339,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
       self?.skippedReason = "相機已停止"
       group.leave()
     }
-    group.notify(queue: .main) { result(nil) }
+    group.notify(queue: .main, execute: completion)
   }
 
   // MARK: Model and files

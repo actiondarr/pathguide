@@ -15,6 +15,8 @@ import '../menu/menu_page.dart';
 import '../navigation/navigation_page.dart';
 import '../indoor/graph_replay_page.dart';
 import '../depth/depth_page.dart';
+import '../route_memory/route_memory_contract.dart';
+import '../route_memory/route_memory_mock_page.dart';
 
 enum AppSection { home, explore, navigation, settings }
 
@@ -42,13 +44,23 @@ class _AppShellState extends State<AppShell> {
   bool _menuVisible = false;
   bool _graphVisible = false;
   bool _depthVisible = false;
+  bool _routeMemoryVisible = false;
+  final _routeMemory = RouteMemoryController();
+
+  @override
+  void dispose() {
+    _routeMemory.dispose();
+    super.dispose();
+  }
+
   bool _navigationTask = false, _confirmingNavigationExit = false;
   Future<void> _select(AppSection section) async {
     if (_section == section &&
         !_accountVisible &&
         !_menuVisible &&
         !_graphVisible &&
-        !_depthVisible) {
+        !_depthVisible &&
+        !_routeMemoryVisible) {
       return;
     }
     if (_section == AppSection.navigation &&
@@ -77,12 +89,14 @@ class _AppShellState extends State<AppShell> {
       if (leave != true || !mounted) return;
     }
     _navigationTask = false;
+    _routeMemory.pause();
     setState(() {
       _section = section;
       _accountVisible = false;
       _menuVisible = false;
       _graphVisible = false;
       _depthVisible = false;
+      _routeMemoryVisible = false;
     });
   }
 
@@ -95,6 +109,7 @@ class _AppShellState extends State<AppShell> {
       onSettings: () => _select(AppSection.settings),
       onAccount: _openAccount,
       onMenu: () => setState(() => _menuVisible = true),
+      onOpenRouteMemory: () => setState(() => _routeMemoryVisible = true),
     ),
     AppSection.explore => DemoPage(
       initialMode: widget.initialVisionMode,
@@ -123,7 +138,9 @@ class _AppShellState extends State<AppShell> {
       // keep it alive (and potentially speaking) during its exit animation.
       body: KeyedSubtree(
         key: ValueKey(
-          _depthVisible
+          _routeMemoryVisible
+              ? 'route-memory-mock'
+              : _depthVisible
               ? 'depth'
               : _graphVisible
               ? 'graph-replay'
@@ -133,7 +150,13 @@ class _AppShellState extends State<AppShell> {
               ? 'account'
               : _section,
         ),
-        child: _depthVisible
+        child: _routeMemoryVisible
+            ? RouteMemoryMockPage(
+                controller: _routeMemory,
+                settings: widget.settings,
+                onBack: () => setState(() => _routeMemoryVisible = false),
+              )
+            : _depthVisible
             ? DepthPage(
                 settings: widget.settings,
                 onBack: () => setState(() => _depthVisible = false),

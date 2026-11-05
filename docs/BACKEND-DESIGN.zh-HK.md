@@ -1,67 +1,32 @@
-# 領路通 PathGuide 後端與雲端資料流程方案
+# Backend：PathGuide 資料、服務契約與交付
 
-更新：2026年10月31日。唯一Backend文件；[Frontend](FRONTEND-DESIGN.zh-HK.md)管理App，[Dataset Review](DATASET-REVIEW.zh-HK.md)管理資料與品質。功能／接口／部署改動必須同一提交同步更新本檔，不另開交接。
-
-**後端把已同意的問題，經覆核、修正與獨立評估，轉成可追溯、可回退的改善。** 共用模型與私人微調分開授權及驗證；私人服務須先證明額外效益。上傳成功只代表收到照片，不代表已學會、變準或可以更新。
-
-
-## 目前問題：A10改善流程與發佈界線（2026-10-31）
-
-本機兩個4 epoch候選及免費T4的6 epoch候選均未通過品質比較；訓練／保存／評估可完成，不等於模型變準。現階段問題是資料及驗收證據不足，未有可發佈的新權重；沒有新registry／offer、App模型更新或私人訓練服務。詳細問題及數字見[Dataset目前問題總結](DATASET-REVIEW.zh-HK.md#目前問題總結2026-10-31)。
-
-Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成，候選、設定、evaluation及summary保存在原擁有者的`PathGuide/a10-repair-20261030-v1/runs`。只新增56張既有CC BY 2公開來源照片；私人legacy影像沿用已有壓縮檔，未重新上傳、未進共享Git。原run及B11未操作；這次掛載授權不等於私人訓練服務的永久授權。
-
-後續先完成資料覆核與獨立驗收定義，再決定下一個修正實驗。Colab只作互動實驗，不能冒充B06可靠無人worker；付費GPU仍停用。LLM用量主要來自改程式、看圖及讀工具輸出，訓練迴圈不呼叫LLM；雲端運算不會自動減少token，採批量執行／最後摘要以減少中途讀取。本次review整理沒有新增訓練或部署。
-
-## 1.4.3+8 相機前處理修正版（GitHub已保存，iPhone已安裝／啟動）
-
-裝置端共用前處理由最近鄰／截斷尺寸改為雙線性／取最近整數（恰半取偶數）的letterbox，影響普通辨識及ARKit同幀辨識輸入；模型SHA、bytes、十類ID、下載／上傳及後端契約不變。14項原生XCTest、328項Flutter、33項數值檢查、analyze及iOS簽署建置／包內核對通過；遠端版本／交付狀態另依[工程證據](../verification/app-1.4.3+8.json)及收據核對。自然圖仍大量漏門及誤認行人，不能把此版記作新共用權重或品質gate通過。
-
-原十類checkpoint及原run資料紀錄已按限定授權經Drive連接下載到ignored本機目錄；來源checkpoint／訓練報告SHA與原匯出一致，42個自然圖PT↔TFLite對照通過，誤認存在於原權重。未進行雲端部署或私人資料傳送，亦未操作B11。D04／D08後續須完成覆核反例／修正候選的獨立比較，再依B08／S0保存模型＋manifest＋設定。前處理版source 7f1d270、不可變tag及prerelease核對後，已成功安裝／啟動iPhone，見[交付收據](../verification/release-receipts/app-1.4.3+8.json)。
-
-## 1.4.2+7 前端恢復修正的契約與版本（已交付試用）
-
-本輪只修正裝置端任務恢復：328項Flutter、12項原生XCTest、33項數值檢查、analyze及iOS簽署建置／包內核對通過。原生hk.pathguide/depth新增使用者明確按鈕觸發的openSettings→bool；從系統設定返回不自動啟動相機。Vision原生generation作廢晚到權限，菜單／辨識／ARKit開始前等待舊相機或picker釋放，Dart已dispose的來源拒絕舊初始化結果。這些是本機接口，不新增雲端API、模型下載、私人資料或同意用途。
-
-模型／映射與1.4.1+6相同，PHOTO_UPLOAD_ENABLED及付費GPU設定不變；不部署現有未提交後端服務。本版source／lockfile／相同模型的Git樹、不可變tag與prerelease已保存並核對遠端，其後iPhone 15 Pro Max安裝／啟動成功；[本輪工程證據](../verification/app-1.4.2+7.json)，交付結果見[版本收據](../verification/release-receipts/app-1.4.2+7.json)。真機資源交接、讀屏及精度仍須實測，完整統一任務協調層尚未完成。
+更新：2026年11月5日。只維護資料／服務／部署規格；使用者流程與導航主線集中在[Frontend整體規格](FRONTEND-DESIGN.zh-HK.md)，模型品質集中在[Dataset Review](DATASET-REVIEW.zh-HK.md)。
+**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，43項原生Simulator測試、415項Flutter測試及analyze通過。P2-D Flutter入口未實作；真機／VoiceOver驗收未做。**
 
 
-## 執行順序：先驗現況，再改善，再擴展
+**狀態用語：**「已確認需求」是產品決定；「待定」是尚未有答案；「已有程式／工程已驗」不代表真機或產品驗收；「已交付」須有版本收據。研究／候選能力不因列入文件就成為本輪實作或付費授權。
 
-三份文件沿用 S0–S7 作範圍索引，**不是八項同時開工，也不是每次發佈必須完成全部階段**。目前最新交付是 1.4.3+8；工程／裝機證據已保存，模型品質與實景測距尚未通過完整驗收。
+閱讀順序：[責任](#service-scope) → [現況](#service-state) → [資料流／契約](#data-contracts) → [驗收](#service-acceptance) → [依賴](#service-plan) → [部署／版本](#release-process)。
 
-**下一版完成範圍：核心操作穩定、辨識有可信基準、測距限制可理解。** 首輪任務固定為辨識、站定測距及菜單查價，戶外導航做回歸；graph、拍牌及私人學習保持樣例／規劃狀態。任務的入口、完成結果、失敗出口及證據以Frontend「下一版任務與恢復驗收」為準。以下新增規格均待實作／驗證，不改寫目前交付狀態。
+<a id="service-scope"></a>
+## 1. 服務目標與責任
 
-| 次序 | 工作與負責文件 | 完成後才進下一步 |
-|---|---|---|
-| 現在 A：可信辨識基準 | Dataset：第一版逐圖strict基準已建立（同源審核、1,082圖、逐圖TP/FP/FN、十類對九類）；補門／person／fence獨立正負例 | 有足夠獨立正負例及逐類基準後，才開新訓練 |
-| 現在 B：任務完成與恢復 | Frontend：辨識／站定測距／菜單三任務及戶外導航回歸；補可理解的未知提示、讀屏、跨任務交接與原多人場景覆驗 | 使用者能完成、重試或退出；分開判定辨識與表面測距，保留語音／量尺與恢復證據 |
-| 接著：一個問題修正案例 | Backend＋Dataset：回報→覆核→同源分組→開發資料→候選→獨立比較→手機重測；先驗證共用改善及私人微調的相對效益 | 完成一個可追溯案例後再用mock串工作／下載／回退；擴展私人自動訓練另須效益、資料、權限及預算驗證 |
-| 獨立支線：B 圖示 | Dataset 的 B11 交接：先確認既有程序／checkpoint，再決定續訓；完成後獨立評估與手機匯出 | 不阻塞 A 基準或目前 App 覆測；未通過不接拍牌功能 |
-| 後續：室內與擴展 | S4 先量測→幾何／追蹤→鳥瞰／短路徑；真實 graph 另需場地與定位資料；S7保留候選 | S6只驗收本次明確納入的能力；其他功能保持試驗／關閉，不以研究清單拖延核心交付 |
+後端把已同意的問題，經覆核、修正與獨立評估，轉成可追溯、可回退的改善。共用模型與私人微調分開授權及驗證；上傳成功只代表收到資料。
 
-三條流程分開判斷成效：**物件模型改善**看獨立辨識結果；**測距／引導改善**看量尺與任務真值；**graph內容改善**看地標、位置及路線版本。更新其中一條不代表另外兩條完成。
+| 資料／能力 | 邊界 |
+|---|---|
+| 基本辨識及已錄室內路線 | 本機優先，不以帳號、雲端問答或私人訓練為前置 |
+| 私人路線 | 已走路標／有向路段及版本；不自動同步或加入訓練 |
+| 雲端看圖 | 另取用途同意，只送必要內容；provider／預算／保留政策待定 |
+| 問題回報及覆核 | UID／同意版本／角色隔離；核准資料不等於模型改善或發佈許可 |
+| 模型更新 | 獨立品質及相容性通過後提供；保留閒置切換及回退 |
 
-文件分工：Frontend 管使用流程／裝置驗收，Backend 管契約／服務／發佈，Dataset 管資料／品質／訓練。詳細數字只在所屬文件維護；每次修改更新現況段落，歷史測試不冒充本輪重跑。
+<a id="service-state"></a>
+## 2. 現況與已確認限制
 
-## 開發階段與目前進度
+<a id="1-已有程式與缺口"></a>
 
-三份文件共用S0–S7階段編號。狀態只表示可追溯證據：**已有程式**不等於已部署；**待實測**不等於通過；**受阻**需先解依賴；**未開始／未來研究**不是現有功能。沒有足夠工作量與驗收資料前不編造完成百分比或日期。
-
-S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基準及S2核准資料，S6對本次納入能力的整合驗收通過後才擴大S7範圍。當前主線仍是改善準確度，室內畫面不可取代品質驗收。
-
-| 階段 | 本階段後端工作 | 目前進度 | 完成標準 | 下一步／依賴 |
-|---|---|---|---|---|
-| S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.4.3+8前處理版沿用十類權重；分支／不可變tag／prerelease先核實，之後iPhone安裝／啟動成功。來源PT已取回；品質未過關；Colab修正候選亦拒用 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
-| S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
-| S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理已有；問題／覆核API及本機工作台已有；Emulator與合成瀏覽器流程通過；預設關閉，正式部署／真人案例未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
-| S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；私人效益未驗證，付費GPU預算未定 | 私人／共用對照支持額外效益；mock工作及效果退化回退通過，真實工作受配額控制 | 先問題修正案例與對照，再mock；資料／權限／預算具備才開真實服務 |
-| S4 室內近距離感知與引導 | 只供版本／設定；不把即時深度送雲端推理 | 1.4.1+6同幀辨識與測距在iPhone記憶體處理；無室內雲端服務 | 離線空間感知不依賴後端；無深度／姿態上傳副作用 | 與Frontend確認接口，保留原照片用途界線 |
-| S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
-| S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
-| S7 多場地、多樓層與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 本機typed graph／觀察原型已有；雲端及真實場地服務未實作 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
-
-## 1. 已有程式與缺口
+### 已有程式與缺口
 
 | 項目 | 現況 |
 |---|---|
@@ -76,7 +41,103 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 
 下一版三任務驗收不依賴新增私人訓練服務。現有15個Functions export中，新增七個涵蓋問題接收、本人進度／撤回、人工覆核、分頁待辦及修訂歷史；均未部署、預設關閉。本機工作台已完成合成操作驗證，容量／抽覆／爭議裁定、修正案例後半段及私人模型拒用／撤回仍是規劃；既有照片上傳開關保持關閉。
 
-## 2. 現行照片流程與資料
+### 本輪核對的服務邊界
+
+Functions現有15個export：原有computeWalkingRoute、getPhotoConsent、setPhotoConsent、submitPhoto、listPhotoProgress、deletePhotoAccountData、expirePhotoCandidates、removeLatePhotoObjects，加上submitPhotoIssue、getPhotoIssue、getPhotoReviewItem、submitPhotoReview、withdrawPhotoIssue、listPhotoReviewQueue、listPhotoReviewHistory。問題／覆核API及工作台只完成本機／合成驗證，預設關閉、未部署；容量／抽覆、snapshot、排程、GPU worker、registry及私人下載尚未接通。本機照片／Google導航開關未設，沿用false；iPhone MapKit獨立。
+
+照片部署最近證據為[2026-10-23紀錄](../verification/baselines/2026-10-23.phase4-verification.json)，不能當今日雲端清單。每日03:00、50張／三場景是規劃條件，未有運行中的排程；付費GPU不提交是目前政策與未建服務的狀態，不能稱已有經驗收的預算阻擋器。
+
+### 目前問題：A10改善流程與發佈界線（2026-10-31）
+
+本機兩個4 epoch候選及免費T4的6 epoch候選均未通過品質比較；訓練／保存／評估可完成，不等於模型變準。現階段問題是資料及驗收證據不足，未有可發佈的新權重；沒有新registry／offer、App模型更新或私人訓練服務。詳細問題及數字見[Dataset目前問題總結](DATASET-REVIEW.zh-HK.md#目前問題總結2026-10-31)。
+
+Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成，候選、設定、evaluation及summary保存在原擁有者的`PathGuide/a10-repair-20261030-v1/runs`。只新增56張既有CC BY 2公開來源照片；私人legacy影像沿用已有壓縮檔，未重新上傳、未進共享Git。原run及B11未操作；這次掛載授權不等於私人訓練服務的永久授權。
+
+後續先完成資料覆核與獨立驗收定義，再決定下一個修正實驗。Colab只作互動實驗，不能冒充B06可靠無人worker；付費GPU仍停用。LLM用量主要來自改程式、看圖及讀工具輸出，訓練迴圈不呼叫LLM；雲端運算不會自動減少token，採批量執行／最後摘要以減少中途讀取。本次review整理沒有新增訓練或部署。
+
+開發工具的DSH隔離smoke已有工程證據，不代表App後端已部署。既有回報／工作台以本機及Emulator驗證為主，正式部署及真人閉環仍待確認。
+
+<a id="data-contracts"></a>
+## 3. 資料流與實作契約
+
+### 路線錄製／跨樓層步行導航的本機契約與選填雲端（P0／P1本機已驗；真實整合待實作）
+
+2026-11-05 P2-C已提供本機原生相機來源：request／session／generation、route／version、sequence及原生clock epoch／對映綁觀察。只在明確取幀時回長邊1280／512KiB有上限的正向JPEG及SHA；最新觀察僅含header，沒有逐幀JPEG、檔案或上傳。native工程幀齡1000ms且walkingValidated=false。這不是持久RoutePackage媒體schema、雲端endpoint或訓練用途同意；Flutter入口留P2-D，加密媒體及配額留P3。接口見Frontend P2-C節與[機器證據](../verification/codex-p2c-route-camera-20261105.json)。
+
+個人路線以本機首次錄製／重行為主，跨樓層及行走期間障礙／語音是正式主線；首次錄製建立App未有的路線，不要求使用者預先熟悉地方。基本功能不要求帳戶或雲端，操作及兼容範圍以[Frontend完整方案](FRONTEND-DESIGN.zh-HK.md#route-memory-plan)為準。既有照片API／工作台仍只屬本機驗證，沒有因此部署。一般iPhone路線記憶不以新YOLO權重、訓練服務或LiDAR為前置；行走物件提醒仍須獨立通過模型品質。
+
+2026-11-05需求對齊：基本辨識及已錄室內路線重行採本機處理，複雜看圖問答可另取同意選用雲端；分析照片不自動取得問題回報或訓練用途授權，各用途分開。完整產品新增陌生室內逐段探索方向，以現場線索及確認推進，不把雲端文字回答當目的地座標／已核實路段。探索可在另行確認保存後形成私人路線記憶，並非自動加入訓練或同步；其搜尋／失敗策略仍在對齊，本輪未新增endpoint或部署。
+
+正式裝置端契約以P0合成邊界為起點，完整格式於P1–P4補齊：RouteMemory保存路線ID／版本、起終點、已錄方向及有向路段；LandmarkNode保存穩定位置ID，RouteObservation另存session／sequence／捕捉時間、候選node、影像特徵產生器／revision／前處理版本及確認來源。Observation與node、路線版本分開，無公尺量測時不填假座標；既有class ID與無向樣例graph不直接當新路線記憶格式。MatchResult最少區分matched／unknown／ambiguous，只有符合當前session、路線／特徵版本、時間及方向的結果可交導航控制器；AI自由文字不能直接變方向指令。
+
+N0現碼為RouteMemory／LandmarkNode與ObservationTicket＋RouteMemoryController，固定synthetic-v1特徵revision及recorded方向；票據包含session／sequence／routeId／routeVersion／capturedAt，拒絕錯版本／未來／超過15秒或非預期路標。這些只支援合成互動，尚不是完整RouteObservation或SceneAnalyzer的真實影像契約；P2接相機前需再凍結生成器／前處理、確認來源與正式儲存格式。
+
+N0仍為記憶體mock；P1另立本機加密樣例庫，可保存／重開／回退／刪除合成路線結構，沒有正式雲端endpoint、照片或影片。自動候選不改已確認穩定路線，清理路線不影響照片佇列或帳戶。未來自願備份／同步另定UID隔離、保留與刪除，不沿用照片收集同意或默認公開地圖。平常重行不按次保存影像；錄路／明確更新才留有大小、數量及總庫上限的必要關鍵幀／特徵，實際媒體由P2–P3接入。
+
+SceneAnalyzer以本機實作／mock先驗證；可選雲端只做必要關鍵幀的場景描述與候選核對。provider、金鑰管理、授權／配額、每次／每session費用上限、保留及失敗策略確認後才接真實服務；目前未選provider、未給視覺API預算，DSH程式派工的US$0.10不是雲端看圖費用授權。明確同意後才送圖，撤回／取消後丟棄晚到結果，不把私人路線相片默認加進既有training photo流程。
+
+N0、P0及P1是獨立付費包，各已耗用兩張票據。P1經使用者明確選擇US$0.10／兩次／20分鐘後派發；DSH頁面／測試均經主控修正，原稿不直接當已驗收。下一包P2相機狀態UI，範圍及費用另定；不接帳戶、不開公網服務或自動部署／裝機。使用者指定先功能、後系統優化，主控先接相機／錄路／障礙語音，沒有額外訓練／模型授權。
+
+#### DSH後續實作責任與主控驗收（2026-11-05）
+
+使用者最新要求DSH負責後續全部實作／測試／修正，Codex只做詳細計劃、接口驗收、diff覆核及機械整合；包含相機、語音、媒體儲存及整合，取代舊「Sol寫關鍵程式」分工。已有P0／P1作者與證據不改。完整P2–P5包的實際檔案allowlist、命令、完成／停止及交付要求見Frontend「DSH實作、主控審核的詳細執行計劃」及`configs/planning/dsh-functional-execution-20261105.json`。
+
+目前橋接只有固定文字diff，工具被禁；DSH不能自行操作檔案／Xcode／測試，主控執行驗收時保留程式作者及真實exit/log，不冒稱worker自行測過。每包task/session、contract／prompt／runtime／dirty source SHA、票據及終態獨立；原稿只為delivered_unreviewed。主控可機械正規化diff／格式化，不改功能語意，失敗附反例回DSH。兩次無進展即停，不用新包洗掉同一錯誤的重試上限。
+
+P2四個依賴包各兩次／US$0.10／20分鐘，整階段US$0.40／八次候選仍待批准；P3–P5及視覺雲端費用未授權。獲批後只在上限內綁前包接收SHA逐包派發，不接管Desktop已有session，不讀key、不部署／開公網。P1加密及catalog規則是不可退化依賴；P3 captured schema須保留synthetic v1、驗媒體引用／時鐘／feature profile及總quota，不以放鬆schema把合成結果當真路線。Keychain／OS備份政策、UID隔離及刪除跨blob競態列交付覆核；雲端仍另取同意。
+
+#### P1本機加密版本庫（2026-11-05，合成結構已驗）
+
+使用App support下獨立`route_memory_v1`及`pathguide.route_memory.library.aes.v1`裝置金鑰，與照片佇列／UID及其清理規則分開。AES-256-GCM的AAD綁device-local用途、catalog或routeId／version；路線名稱／樓層及catalog內容加密，版本檔另核cipher SHA及明文manifest SHA。RouteDocument schema1固定synthetic／recorded方向；draft可缺floor，完整結構需building、樓層、有向連接及確認旗標齊備，仍不是實地核准。真實影像／特徵blob及其引用留P2–P3擴充，不把此schema冒充完整相機格式。
+
+同目錄temp寫入、flush、rename後最後切加密catalog；不可變版本與active／draft pointer分開。CAS revision防止舊列表覆寫新內容；epoch綁定store owner，刪除另作廢同route舊寫入。持久刪除紀錄先於清檔；重開只信catalog，不掃孤兒檔恢復路線。catalog損壞不自動倒回舊catalog，避免恢復已刪路線；單一版本損壞保留並可明確回退至核實版本。寫入結果未知只重新讀取，不自動重送；金鑰遺失不重建覆蓋原資料。
+
+每份JSON256 KiB、每route8版本、整庫32 MiB，連暫存計算；超限拒寫，清理須明確操作，保留active／一個有效回退／當前draft，不重用舊version號。actor在同一main isolate按實體路徑串行，另用非阻塞OS檔鎖拒絕其他process；不支援不同isolate獨立writer。[Dart檔鎖](https://api.dart.dev/dart-io/RandomAccessFile/lock.html)在POSIX是process層級，不能當isolate互斥；[rename](https://api.dart.dev/dart-io/File/rename.html)要求同檔案系統的流程，真機斷電耐久性尚未驗證。OS備份排除／Keychain真機行為亦未驗；目前只證明本機故障注入及fake vault重開，不承諾重裝／跨裝置還原。
+
+21項store／adapter、6項controller、6項UI、2項screen及全App415項通過，analyze無問題。未新增endpoint、App雲端上傳、訓練資料或權重；見[P1證據](../verification/dsh-p1-route-store-20261105.json)。
+
+#### 跨樓層步行導航資料與服務契約（P0合成子集已實作）
+
+本節是Frontend P0–P6的資料及生命周期邊界；下表完整格式仍不是雲端API或已完成的持久schema。N0的RouteMemory／LandmarkNode保持無floor，獨立P0新增FloorRef／FloorNode／FloorEdge／FloorRoute、FloorObservation、PerceptionFrame、GuidanceEvent與CrossFloorController。FloorRoute只接受building一致的相鄰有向邊，walk不能跨floor，其他邊需connectorId；不推斷反向。觀察分location／perception序列，綁journey／generation／routeId/version／clockEpoch及單調捕捉時間；跨session、版本、方向、未來／過期回覆被拒。P0固定p0-synthetic-v1，沒有圖像blob、模型推論或真確認來源；正式序列化／加密／ownership於P1、取幀與來源版本於P2–P3、真播音於P4補齊。不能把mock的version=1當正式持久格式。
+
+P0分開expected／candidate／actual floor；先確認fresh樓層候選，再確認fresh出口及方向才更新actual。轉層撤回舊樓層及事件；障礙優先級3覆蓋路線級2，過期frame轉perceptionUnavailable，不復播舊指令。缺有效深度不允許米數；分類與深度信心未接真模型。背景／暫停／刪除作廢兩支序列，前景只刷新控制，不恢復導航；子頁owner dispose亦作廢。2秒／500ms只是合成測試窗，畫面時鐘凍結，不能接真實行走輸入。沒有讀帳戶、寫磁碟或新增endpoint。27項P0／全App380項及analyze通過，見[P0覆核](../verification/dsh-p0-cross-floor-20261104.json)。
+
+| 規劃資料 | 最少欄位／規則 |
+|---|---|
+| RoutePackage | schemaVersion、routeId／routeVersion、device-local owner scope、buildingId、路線名稱、起終點、方向變體、nodes／edges／observations索引、feature／preprocess版本、draft或可重行範圍、manifest SHA。穩定版不可變，active pointer另存 |
+| FloorRef | buildingId＋穩定floorId、顯示名稱、確認來源與時間；未知為null／unconfirmed。G、M、UG、B1等只是標籤，不按字串／高度自動排序 |
+| LandmarkNode | 固定nodeId、FloorRef、名稱／固定objects、內容版本、不同方向／光線觀察引用；相似外觀但不同樓層不可合併 |
+| RouteEdge | edgeId、from／to node、walk或stairs／elevator／escalator類型、實際已走方向、通行／關閉狀態、connectorId、來源／目的floor引用；實測長度可空。walk不能無聲跨floor，缺轉層端點的edge不得導航 |
+| FloorTransition | connectorId、入口／出口node、來源／預期目的floor、目前已確認floor、設備類型、方向／可行性來源及版本。預期目的地與目前樓層分欄，升降機可跳層，樓梯平台不等於樓層 |
+| RouteObservation | observationId、journey／session／generation、sequence、單調捕捉時間及clockEpoch、保存UTC、source／方向、routeVersion、frame／JPEG SHA、feature request revision／preprocess／尺寸、OCR候選、可選pose／tracking／相對高度；自動候選不寫成確認答案 |
+| MatchResult／FloorEstimate | matched／unknown／ambiguous、候選node與floor、不同來源證據、當前版本／時間／方向、有效期／失效原因。跨樓層續行需已確認floor及出口路標；路線先驗不壓過相似樓層歧義 |
+| PerceptionFrame | 同幀session／seq／捕捉時間、模型SHA／profile、detections及短時track、可選深度／pose及其有效性；分類score不是深度信心。缺距離為null，不使用未知class ID代填 |
+| GuidanceEvent | eventId、journey／generation／routeVersion、eventKind、priority、目標node／floor／track、來源seq、monotonic expiry、reasonCode及本地化參數。文字由受控規則產生；AI自由文字不直接成步行指令 |
+
+轉層狀態：walkingOnFloor→approachingConnector→transitioning→awaitingFloorConfirmation→relocalizingExit→walkingOnFloor；任一步可到unknown／paused／cancelled。離開設備不代表到達預期層；錯層、相似出口、AR重設、氣壓漂移或OCR衝突會阻止續行。原則上可在已確認的中途路標重定位，不把N0回起點mock變成正式跨層恢復策略。回程需另驗視角／方向，不能默認所有連線雙向可靠。
+
+原生CameraCoordinator管理取用權；新增RouteObservationSource與WalkingPerception adapter，但不是另開競爭相機。現有VisionFrame只有偵測結果，新的原生觀察契約另建，保持舊辨識／菜單／測距方法語意。Swift處理最新幀偵測／可用深度及節流後關鍵幀OCR／features，Flutter只接必要精簡事件；session、取消、時序與停止屏障由Sol負責。普通ARKit與LiDAR分開能力檢查；無AR／無Motion授權時仍可明示路標及樓層確認。
+
+旅程級GuidanceArbiter接路由及感知：有效急需障礙／感知失效提示優先於當前轉層／轉彎，再到一般環境。每次派發及播出前重驗來源、世代、版本與有效期；停止／背景／新路線作廢舊事件，恢復後不補播queue。VoiceOver／TTS擇一路，現有僅environment／navigation的coordinator需擴充而不能宣稱已具危險優先。
+
+##### 本機保存、刪除與資料用途
+
+- 選App私有route-memory命名空間，以已裝path_provider、cryptography的AES-GCM及flutter_secure_storage／Keychain作裝置端版本保存；路線金鑰與照片佇列分開。此為新store，不直接複製目前會刪無效照片的queue實作。
+- 新版本先寫暫存blob與manifest，核SHA／schema／引用完整性，最後原子切換active pointer；中斷保留最後穩定版。draft未確認轉層不得顯示整條可導航。清晰關鍵幀與feature blob只保存用途必要部分，原始影片／持續音訊不預設保存。
+- feature revision／前處理不符時拒比；可從仍獲授權的本機關鍵幀明確重建features為候選新版本，不能無聲改永久node、floor或路線。無法重建時提示補錄，不猜相容。
+- 刪除先作廢route epoch及所有observer／語音／儲存回覆，再移active pointer及路線檔案；原子寫入／回退／刪除操作串行，晚到寫入不能復活。重啟不得將殘存暫存檔當可用路線；不刪不相干照片、收藏、模型或其他路線。
+- 訪客基本版是明示的本機路線庫，不綁Google登入，不因登入自動遷移／上傳。若日後提供UID私人同步，須獨立owner namespace、授權及登出／刪除規則；不複用現有personal_model_photos同意。裝置金鑰遺失／重裝恢復限制要在P1驗證並說明，不能默認已可iCloud／跨裝置還原。
+- 本輪不新增Firebase endpoint、VPS、藍牙信標、LLM每幀推理或付費GPU。可選雲端仍依原同意／provider／配額計劃；已建立本機路線不以雲端回覆作繼續行走前置。室外新搜尋／重新規劃斷網能力另驗，不因室內本機運作而承諾整個MapKit流程離線。
+
+##### 派工與可審查交付
+
+P0先由Sol固定types／狀態／取消與floor信任邊界；DSH只承接最多兩個新檔案的小UI或fixture包，優先完整來源文字回收、由主控產生diff及SHA，避免模型手算hunk。若改交付格式，先改本機閘門的提示規則並跑離線測試，不能忽略既有diff-only guard。每包綁base＋dirty依賴SHA、允許檔案、驗收命令、請求／費用／時間上限及停止條件；不用新paid smoke重做既有橋接往返。
+
+本地統計／影像評估／重播用腳本，主控只看摘要／異常及必要樣本。相機、幾何、語音、版本及刪除由Sol主導；真人場地與視障驗收不能交AI自稱通過。同時最多兩位寫檔者，worktree或檔案範圍分隔；Xcode／裝機／同一GPU只一位負責。使用者此輪要求先完成規劃，以上工作包尚未開始。
+
+<a id="2-現行照片流程與資料"></a>
+
+### 現行照片流程與資料
 
 獨立照片同意 → 同幀JPEG與預測 → 綁定project／UID／consent epoch的加密待傳 → Wi-Fi callable提交 → 伺服器驗證與重編碼 → 私人儲存與待覆核進度。
 
@@ -96,48 +157,13 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | 工作／registry | 規劃以ownerUid綁定，App只讀本人進度 |
 | 私人模型 | 規劃 personal_models/{uid}/{modelVersion}/，僅授權相符UID |
 
-## 參考體驗對後端的影響（方案分析，未部署）
+<a id="3-管理員覆核與自動批次覆核api本機驗證部署排程未啟用"></a>
 
-公開產品列項與證據限制集中在Frontend「瞰見聆境」節；以下是我們的設計推論，不宣稱第三方後端採用相同架構。
-
-- **路線內容改善：** B14／B15為graph／route另存node ID、內容版本、註記類型、來源、確認時間與有效期；臨時施工可失效／撤銷，店名變更保留位置身份。私人路標與場地共用變更分開授權，不能由一次觀察自動改公共地圖。
-- **權重改善：** 維持B04–B09的UID快照、回放、獨立評估與模型registry；新增路線註記不直接觸發GPU或宣稱模型已學會。路線／內容／權重各有可回退版本。
-- **同一旅程的多能力：** 導航、感知、查詢可共用session／mapVersion／modelVersion與過期檢查，但深度及即時障礙仍在手機。伺服器回覆慢時不能補播舊方向或覆寫新位置。
-- **場景模型及下載：** 現行首版仍用本機有效證據摘要。若後續採雲端或大型本機模型，需另外確認供應商、圖片用途／保留、預算、下載相容性與斷網回退；本輪未開任何雲端影像服務。
-- **聲音、手勢及背景：** F19／F22預設裝置端運算，不建立頭部追蹤上傳。F23若開發背景導航，需另定定位／音訊狀態與隱私說明；不把鎖屏路線語音等同背景鏡頭感知。
-- **驗收及發佈：** 先用mock狀態驗證權限、版本、遲到事件與取消，再做HKDI實機／離線測試；競品的宣傳不作我們的品質門檻或驗收證據。
-
-## 室內graph與照片序列資料設計（討論方案，待驗證）
-
-先做手動graph＋模擬observation的原型，再接AI；不需要先完成大型VPS或向量資料庫。以下是設計分層，不是現有API／Firestore已支援的格式：
-
-| 資料層 | 保存內容 | 更新規則 |
-|---|---|---|
-| graph | building／floor、mapVersion、node ID、實際通路edge及限制 | 只有核准的地點／連通性變更才發新版本 |
-| node內容 | 同位置的objects、店名／別名、參考圖片、特徵版本、有效時間與證據 | 改店名不換位置ID；動態物件只作觀察，不當永久錨點 |
-| 觀察queue | session、seq、capturedAt、圖片／特徵及候選node／可信度 | 是行程序列，按拍攝順序，不按Server回覆先後或預測node排序 |
-| 配對結果 | matched／uncertain、候選、證據、mapVersion、觀察時間 | 低信心保留未知；不存在的精準位置／朝向不填假值 |
-| 地圖變更候選 | 新地標、店名疑似改變、封閉或不吻合證據 | 覆核後才升格；模型自己猜的結果不直接變地圖真值 |
-
-最小node示例（尚未量測的位置保留null）：
-
-```json
-{"id":"L1_N03","floor":"L1","position":null,"objects":[{"type":"shop","name":"店面A"}],"referenceImages":[],"contentVersion":1}
-```
-
-渲染用的示意layout與真實公尺座標分開；若加入x,y，必須同時記原點、座標系、單位及量測來源。edge先驗實際連通，同層雙向用無向邊；單向、封閉、樓梯與升降機後續獨立屬性，不一律當雙向。
-
-定位處理流程：觀察入queue → 用最後可信node／樓層／路線選graph鄰域 → 比較最近多筆候選與允許轉移 → matched或uncertain → 需要時擴大搜尋。保留停留、跳node、倒行和分岔，遲到回應不能覆蓋新位置；不確定時不強制選「預測的下一個node」。
-
-每5秒上傳屬新增的定位用途，不能直接套私人訓練照片API：現有自動照片冷卻30秒、場景60秒且有日額。後續若採Server定位，須獨立同意／session／限流／短保留策略；定位圖片預設不加入私人訓練或共用地圖，地圖建庫與私人模型亦非同一批資料。
-
-後續AI可加入全局檢索、局部特徵及OCR；純圖片鄰近node只能支持拓撲候選，精確PnP仍要已知3D點與相機內參，不能由node ID直接求得公尺級pose。[OpenCV PnP](https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html)；完整3D建圖／匹配路線可參考 [hloc](https://github.com/cvg/Hierarchical-Localization)。iPhone沒有通用Wi-Fi掃描API，因此初版粗篩先用使用者選定場地／樓層與可信起點，不把任意SSID指紋當既有能力。[Apple Wi-Fi API說明](https://developer.apple.com/documentation/technotes/tn3111-ios-wifi-api-overview)
-
-## 3. 管理員覆核與自動批次（覆核API本機驗證；部署／排程未啟用）
+### 管理員覆核與自動批次（覆核API本機驗證；部署／排程未啟用）
 
 管理員透過受權限保護的工具補漏修框；原始預測與人工答案分開。保存覆核者、時間、定義、授權及影像／標註雜湊。只有核准且用途仍有效的資料可進快照；流程依 [Dataset覆核](DATASET-REVIEW.zh-HK.md)。
 
-### 最小覆核工作台與問題追蹤
+#### 最小覆核工作台與問題追蹤
 
 先指定受權管理員負責接件／初覆、複核角色負責抽查及爭議裁定；尚未指定處理者、沒有覆核容量或覆核定義不完整時，保持待處理。小型試驗可由同一管理員分兩次覆核並記限制，重要爭議需另人裁定；AI預標或Codex視覺篩查不等於human_approved。
 
@@ -155,7 +181,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 
 保存每張實際處理時間、待辦量／最老待辦時間、退回／爭議率、複核不一致率及抽樣漏標；用途到期、撤回及刪除與工作台清理相連。抽樣複核先涵蓋每位reviewer／各問題類型及高風險類別，比例與放行規則在試驗前固定，低一致性重開相關批次。啟用前按人手配置待辦上限與告警；積壓達上限可停自動抽樣，手動回報明示待處理，不承諾即時修復，也不影響核心辨識。這些服務與指標尚未運行。
 
-### 已實作的問題／覆核API及本機工作台（2026-10-29，預設關閉）
+#### 已實作的問題／覆核API及本機工作台（2026-10-29，預設關閉）
 
 程式：[photo_review.js](../backend/functions/photo_review.js)、[review_policy.js](../backend/functions/review_policy.js)。B03的接件／覆核契約已接本機工作台；待辦與修訂歷史以相同權限檢查讀取。沒有實作容量／抽樣複核服務、訓練、模型更新或已解決案例。
 
@@ -181,7 +207,7 @@ save的annotation含taxonomyVersion=pathguide.a.mixed10.v1、definitionVersion�
 
 本機測試證據見[backend-photo-review.json](../verification/backend-photo-review.json)。使用Firestore／Storage Emulator及合成JPEG，Auth當前角色查詢用測試替身；不代表真實App Check閘道、Auth撤銷傳播、真人覆核、工作台的真人操作、積壓控制或雲端部署已驗收。啟用前仍須指定人員／定義／capacity、完成真實角色／App Check／工作台及刪除驗收，再選一個真實問題由Dataset接續。
 
-### 本機覆核工作台的操作與連線
+#### 本機覆核工作台的操作與連線
 
 來源在backend/workbench/，沒有新增對外網站或Hosting部署。提供狀態篩選／最舊優先／分頁、私人原圖與唯讀預測框、拖曳新增框、數值改框／改類／刪框、同源群組與定義、逐類coverage及全圖確認、接件／退回／爭議／拒絕／雙人核准，以及分頁修訂歷史。不能由此直接訓練、關單或發佈模型。
 
@@ -202,13 +228,13 @@ Demo只允許demo-pathguide-phase3及127.0.0.1的Firestore／Storage Emulator，
 
 本機server只綁127.0.0.1，拒絕錯誤Host、跨站請求、非同源JSON寫入及超過256KiB的demo body；檔案使用白名單，回覆no-store及CSP。正式模式沒有demo寫入代理。瀏覽器已驗合成接件、完整coverage、數值修框保存、拖曳畫框保存、換人核准與固定歷史；390px畫面無水平溢出，1280px雙欄版面已目視。證據在verification/backend-photo-review.json及verification/ui/backend-review-workbench.jpg；這不是實拍人工覆核、資料獨立性或品質改善證據。
 
-### 先完成一個可追溯修正案例
+#### 先完成一個可追溯修正案例
 
 首例可選「某類門經常漏認」，實際issue與資料尚未選定，不能宣稱已完成。人工回報→獨立真值覆核→同源分組→用途有效的開發快照→候選→與現用模型在另一批未訓練場景比較→手機重測；每步用上述ID及版本串起。私人資料預設只在本人授權範圍，若要共用模型使用須另有共用訓練授權；授權不足仍可做私人研究，不能混入共享產物。完整驗收方法見Dataset。
 
 第一個案例先人工觸發及mock驗錯誤／取消／回退，證明流程有效後才接自動排程。私人微調另外先與現用及改善共用模型做對照；若額外效益不足或證據不確定，保持共用改善路線及本人資料隔離，不擴大每UID worker／registry服務。
 
-### 自動批次的後續啟用條件
+#### 自動批次的後續啟用條件
 
 每日香港時間03:00、每UID至少50張新增核准圖／三場景是後續規劃的排隊檢查起點，**不是樣本充分或可發佈的證據**。另須有Dataset預先固定的獨立實體／場景覆蓋、不確定範圍及任務指標規則；未達即資料不足／待評估。排程需在修正案例、私人效益、mock閉環、權限／刪除與預算驗收通過後才啟用，目前未運行。
 
@@ -220,7 +246,9 @@ Demo只允許demo-pathguide-phase3及127.0.0.1的Firestore／Storage Emulator，
 
 **GPU預算待定，付費提交預設關閉。** 先完成模擬worker的成功、失敗、重試與取消。部署前設定專案、可用區域／GPU、單次時限、每日額度、併發及預算；缺設定即拒絕提交，不能用告警冒充停止計費。
 
-## 4. 私人發佈、自動更新與回退（待實作）
+<a id="4-私人發佈自動更新與回退待實作"></a>
+
+### 私人發佈、自動更新與回退（待實作）
 
 訓練 → validation比較 → 凍結候選／獨立驗收 → 格式及映射檢查 → 核准registry → 本人授權下載。不合格保留原版本，報告同時寫改善與退化。
 
@@ -228,7 +256,7 @@ Demo只允許demo-pathguide-phase3及127.0.0.1的Firestore／Storage Emulator，
 
 使用者可另行預先同意自動更新；未同意則手動選擇。僅App前景且辨識／導航等相機任務停止時下載至暫存，驗UID／雜湊／映射／相容性，試載入後原子切換。保留上一個私人版本與內置備援，失敗回退。此決定取代「每次都必須手動啟用」。
 
-### 能載入、效果合格及使用者接受分開記錄
+#### 能載入、效果合格及使用者接受分開記錄
 
 規劃registry分候選／評估通過／核准可提供／撤回版本，裝置另外記下載／試載入／啟用及使用者拒用狀態；載入成功不能改寫評估結果或滿意度。offer綁owner scope、modelVersion／SHA、evaluationProfile、資料／報告版本及有效期；宣稱改善必須對應Dataset同條件報告，更新說明列實際改動與限制。
 
@@ -240,11 +268,11 @@ Demo只允許demo-pathguide-phase3及127.0.0.1的Firestore／Storage Emulator，
 | 發佈者撤回版本 | 核准者提供原因與撤回版本；停止新offer／授權／重試，已下載裝置下次得知撤回時提示並停用受影響任務，閒置切到仍核准上版或內置。離線無法保證即時收到撤回，不宣稱已即時清除所有副本 |
 | 切帳號／登出／授權失效 | 作廢下載與啟用世代，清UID私人快取，回內置；拒用及原因不跨UID。若同步偏好，另定本人存取、同意、到期與刪除，不新增默認行為日誌 |
 
-拒用同一SHA只阻止該版本，不能自行判定所有後續候選失敗；新候選仍須獨立評估，不靠改名重新提供。模型回退與第7節App程式的tag／重建／簽署回退分開。現有內置選擇器不等於此私人registry與撤回服務已實作。
+拒用同一SHA只阻止該版本，不能自行判定所有後續候選失敗；新候選仍須獨立評估，不靠改名重新提供。模型回退與「部署、設定與版本回退」App程式的tag／重建／簽署回退分開。現有內置選擇器不等於此私人registry與撤回服務已實作。
 
-App／共用模型完成後先推GitHub commit、tag／Release並核對，再安裝交付。私人照片、權重及含私人資訊報告留在受權限保護的儲存，不進共用repo；私人registry保留歷史版本供本人回退。完整版本程序見本檔第7節。
+App／共用模型完成後先推GitHub commit、tag／Release並核對，再安裝交付。私人照片、權重及含私人資訊報告留在受權限保護的儲存，不進共用repo；私人registry保留歷史版本供本人回退。完整版本程序見本檔「部署、設定與版本回退」。
 
-### 1.2.0+3本機graph資料邊界
+#### 1.2.0+3本機graph資料邊界
 
 目前只增加App內的typed Dart資料與樣例，不部署Firestore、Storage、callable或Server定位服務。`IndoorGraph(id, version, floor, nodes, edges)`保存不可變node與開放／封閉無向edge；`IndoorNode`保存固定ID、名稱、contentVersion與objects，各object的已核准aliases先正規化再配對；同一node的不同object不可共用匹配key，避免同一個詞被當成兩份證據。畫圖layout另存，不是可輸出米數的x,y。
 
@@ -252,14 +280,54 @@ App／共用模型完成後先推GitHub commit、tag／Release並核對，再安
 
 本機回放無帳號、無照片／GPS擷取、無影像／路徑／深度上傳，也不讀取現有私人照片佇列。5秒是樣例capture時間間隔；自動顯示每秒一筆，兩者都不是新增拍攝API。未來實拍／Server adapter需另訂用途、配額與授權，不能沿用訓練照片同意。付費GPU仍停用。
 
-## 5. 撤回、刪除與失效
+<a id="5-撤回刪除與失效"></a>
+
+### 撤回、刪除與失效
 
 - 關閉收集停止本機擷取／待傳；另提供個人訓練及自動更新控制，worker在排隊、取資料、續跑與發佈前重驗授權。
 - 刪除先建保護、停止新工作／下載，取消並等待或隔離worker，再清理照片、標註、快照、第三方匯出及私人權重，最後移除身分。遲到事件不得重建資料。
 - 現有deletePhotoAccountData只涵蓋第四階段；加入worker／registry後必須擴充，不能假稱已涵蓋未有資源。
 - 室內深度、姿態、網格留本機；照片同意不擴大為持續影片、GPS或軌跡上傳。方向短片另行授權。
 
-## 6. 後端驗收
+<a id="8-導航資料與使用說明發佈前草稿重點"></a>
+
+### 導航資料與使用說明（發佈前草稿重點）
+
+導航只在使用者啟動與App前景取得位置；暫停、背景或結束停止定位，不建立／上傳行走軌跡。Apple／Google會收到完成搜尋及路線所需查詢、起點／目的地；代理不持久保存完整座標／路線，診斷避免私人位置。
+
+語音按鈕才收音；優先裝置端，線上服務先取得本次同意，不把導航或錄音加入模型訓練。收藏／最近十個地點在本機安全儲存，可清除，不跟帳號同步；Google項目以Place ID、使用者標籤與時間保存，再查地點。
+
+路線可能有誤差、延遲或入口不符，不保證樓梯／升降機可用，不提供過路時機、室內樓層或鎖屏導航。接近終點仍需確認入口，資訊不代替白杖、導盲犬或定向技能。Android需已配置服務、網絡與適當權限。
+
+供應商參考：[Google Maps條款](https://maps.google.com/help/terms_maps/)、[Google私隱](https://policies.google.com/privacy)、[Apple地圖條款](https://www.apple.com/legal/internet-services/maps/terms-en.html)、[Apple私隱](https://www.apple.com/legal/privacy/)。正式政策需補聯絡及變更通知方式，不能以本章冒充已公開條款。
+
+### 裝置端深度契約（現行，非雲端服務）
+
+2026-10-28 物件距離版：1.4.0+5延伸本機hk.pathguide/depth契約，start帶objects模式、threshold、已校驗的內置權重cache路徑／SHA／bytes／classIds／classes／inputSize；原生再次核對才建立模型。不是外部下載／私人模型offer，不新增Cloud API。靜態內置權重快取放App support的PathGuideDepth，以SHA命名；只寫共用模型，沒有照片／深度／pose／UID資料。背景停止會作廢尚未完成的準備或啟動。
+
+物件事件status=objects，附同session／timestamp／ageMs、viewWidth／viewHeight／rotation及最多5個objects：專案class id、score、已裁切預覽box、reason，可用時另帶rangeM／planeZM／accepted／total／spreadM。score是物件模型分數，不是距離可信度或正確率；rangeM是框內代表表面的徑向米數。短時track ID只在Dart當次session作配對，不寫永久graph／觀察資料庫。原有sample準星事件保留，兩種模式不能混用米數。資料不持久保存／上傳；訓練照片用途／同意／配額及PHOTO_UPLOAD_ENABLED=false不變，無付費GPU工作。
+
+
+2026-10-28 1.4.1+6修正版：物件本機事件新增samplePoint（當次預覽normalized座標）、validDepth／depthTotal與細分reason；前端展示原因與點數，不把它們當正確率。深度信心／量程／混合表面／過期門檻不變，僅改框內局部取樣選擇及遮擋檢查；取樣位置改變重新累積時序證據。本機不新增影像／深度記錄或Cloud API、照片上傳仍關閉，無GPU／訓練工作。使用者提供測試截圖未放GitHub／dataset。
+
+### 自動模型調度的服務界線（新增方案，未實作）
+
+意圖辨識與模型路由優先放裝置端，基本操作不新增雲端依賴。不同能力可由已下載的A／B／OCR／視覺語言模型執行；不要求使用者選模型名稱。現有服務沒有這個調度器或視覺語言模型下載服務。
+
+模型包規劃另記能力、格式／runtime、語言、裝置相容性、SHA、大小及驗收profile。只向調度器提供已驗證且可用的能力；不可把A的class映射套到生成文字。大型模型首次下載顯示大小／可用空間，允許取消、重試及刪除；固定版本驗證後才啟用。具體模型／大小待選型，不能把第三方宣傳數字當本App需求。
+
+自動選擇已載入的運算能力與私人模型自動更新是兩個操作：後者繼續遵守UID、同意、閒置原子切換與回退。路由失敗不默默轉雲端；若未來加入雲端，圖片用途及傳送另行同意。查詢影像預設僅暫存記憶體，不自動進照片訓練流程。
+
+最小診斷記request/session、路由能力、版本、取消／超時／降級原因及耗時，不預設收集圖片／聲音／完整提問。驗收離線、未下載、損壞包、空間不足、遲到結果、切帳號及重啟；未接服務先mock，不開付費推理或GPU。
+
+<a id="service-acceptance"></a>
+## 4. 服務驗收規格
+
+使用者已確認：服務／儲存邊界沿用外部行為驗收，與旅程功能及真機場地結果分開。優先覆蓋越權、同意epoch、冪等、撤回／刪除競態、逾時、損壞及回退；不以內部函式呼叫次數代替行為。
+
+<a id="6-後端驗收"></a>
+
+### 後端驗收
 
 - [ ] 身分／App Check、跨UID、舊epoch、影像及額度會拒絕；重送不重複照片或工作。
 - [ ] AI不能覆寫人工答案；未核准／拒絕／授權不明的資料不入快照。
@@ -271,7 +339,59 @@ App／共用模型完成後先推GitHub commit、tag／Release並核對，再安
 - [ ] 一個issue可追溯至獨立資料比較及手機重測；回報照片不冒充驗收集，未評估不關單。
 - [ ] 斷網／空間不足／重開／切帳號後active版本正確；體驗變差能主動回退，同SHA拒用與發佈者撤回不被重試繞過。
 
-## 7. 部署、設定與版本回退
+<a id="service-plan"></a>
+## 5. 開發階段與逐功能計劃
+
+### 開發階段與目前進度
+
+三份文件共用S0–S7階段編號。狀態只表示可追溯證據：**已有程式**不等於已部署；**待實測**不等於通過；**受阻**需先解依賴；**未開始／未來研究**不是現有功能。沒有足夠工作量與驗收資料前不編造完成百分比或日期。
+
+S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基準及S2核准資料，S6對本次納入能力的整合驗收通過後才擴大S7範圍。當前主線為一般iPhone路線錄製、跨樓層步行導航及即時障礙／語音整合；Dataset／訓練工作仍暫停。S4包含基本跨樓層路線，S7才擴更多場地／複雜網絡與平台；ARKit追蹤與LiDAR深度分開，物件、定位及實地任務品質各自驗收。
+
+| 階段 | 本階段後端工作 | 目前進度 | 完成標準 | 下一步／依賴 |
+|---|---|---|---|---|
+| S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.4.3+8前處理版沿用十類權重；分支／不可變tag／prerelease先核實，之後iPhone安裝／啟動成功。來源PT已取回；品質未過關；Colab修正候選亦拒用 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
+| S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
+| S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理已有；問題／覆核API及本機工作台已有；Emulator與合成瀏覽器流程通過；預設關閉，正式部署／真人案例未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
+| S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；私人效益未驗證，付費GPU預算未定 | 私人／共用對照支持額外效益；mock工作及效果退化回退通過，真實工作受配額控制 | 先問題修正案例與對照，再mock；資料／權限／預算具備才開真實服務 |
+| S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；真實路線記憶與雲端看圖未實作／部署  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口及真機待驗。| 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
+| S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
+| S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
+| S7 多場地、複雜樓層網絡與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 本機typed graph／觀察原型已有；雲端及真實場地服務未實作 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
+
+### 功能計劃索引（按依賴取用，不代表同時開工）
+
+本節接口名稱若寫「新增」即尚未實作，不能當成目前已可呼叫的API。
+
+| 功能／階段 | 目前狀態 | 實現方法與輸入／輸出 | 依賴／完成標準 |
+|---|---|---|---|
+| B01 帳號、角色與私人聯絡／S1–S2 | Google／聯絡規則已有；覆核API已有角色／當前Auth及server-only人員檢查，本機替身測試通過，未部署／指定真人 | 驗證token取得UID，以可重試交易建profile；聯絡資料保持獨立。新增覆核角色由受權Admin設定custom claims，服務端驗證，不接受前端自報admin或ownerUid | 本人／覆核者／一般訪客權限分開；角色變更與token刷新／撤銷有測試 |
+| B02 照片同意與提交／S2 | callable已有，未啟用 | 沿用get／setPhotoConsent與submitPhoto；檢查UID、epoch、配額／尺寸，解碼重編碼、綁photoId／objectGeneration，再原子更新validated／pending。sourceSha與清理後sha分開 | 前端F05同幀資料；重試冪等、無效App Check／舊epoch拒絕，不改成公開Storage |
+| B03 管理員覆核與問題追蹤／S2 | 七個API、本機工作台及版本／權限／到期測試完成；預設關閉、真人／容量／案例未完成 | 依「管理員覆核與自動批次」建立原圖／預測／修框工作台，指定接件與複核角色，驗全圖coverage；expectedRevision防覆蓋，疑義退回，固定核准版本。以issueId串開發快照／候選／獨立評估／手機重測，記處理時間與積壓 | Dataset D02；人工完整答案及抽覆有效、衝突可恢復、撤回不復活；未重測不關單，AI篩查不冒充人工核准 |
+| B04 私人快照匯出／S3 | 未接通 | 依ownerUid＋仍有效用途查核准版本，合併獲授權基礎回放，固定影像／標註版本、場景split、coverage與SHA，輸出不可變manifest；重送同一請求沿用snapshot ID | Dataset D03／D07；同實物不跨split，其他UID資料不得混入，資料變動建新snapshot |
+| B05 排程、去重與佇列／S3 | 未實作；先案例與效益驗證 | 通過「管理員覆核與自動批次」啟用條件後才設03:00排程；50張／三場景只作候選檢查，仍驗樣本充分性。以UID＋snapshot＋config唯一job及lease，綁預算／時限與GCP Batch ID | 修正案例、私人效益、mock／權限／刪除及預算先驗收；資料不足不排，重複事件不重開；UTC照片配額不變 |
+| B06 GPU訓練worker／S3 | 現有Colab實驗；服務未實作 | 容器固定工具／權重／設定，最小IAM讀指定snapshot，執行preflight→smoke→正式run；每輪備份checkpoint／optimizer／CSV及心跳。相同快照中斷才resume，改資料開新run；逾時／取消不發佈 | Dataset提供D04／D05／D07腳本；先mock成功／失敗／重試，再配置GPU；不把免費Colab當可靠無人服務 |
+| B07 品質門檻與獨立評估／S3 | 只有本地A／B評估工具 | worker產生候選與現用模型的同資料逐類比較、樣本量、export parity及手機結果；核准服務驗完整報告並套版本化門檻，不能由worker一句success直接寫ready | Dataset「訓練與改善判定」為門檻唯一來源；目標無真值或其他類別退化則不核准；測試集不拿來反覆調參 |
+| B08 Registry與發佈包／S3–S5 | 未實作 | 新增不可變模型record：ownerUid／shared scope、job／snapshot、A或B namespace、權重／manifest SHA與大小、taxonomy、App相容性、評估與狀態；核准才設可下載，發布指標另指向可回退版本 | A／B映射不得互換；現行內置format:1不無聲改義；共用模型與私人模型有不同存取範圍 |
+| B09 本人下載、自動更新與回退／S3 | 未接通 | 新增綁scope／SHA／profile的offer與限時授權，重驗用途及版本核准；閒置原子切換，保留上版／內置。依「私人發佈、自動更新與回退」加入主動回退、選填原因、同SHA拒用及發佈者撤回 | Frontend F08；驗斷網、重開、空間不足、切帳號、重複offer及撤回競爭；signed URL有效期／離線撤回限制須如實呈現 |
+| B10 撤回、取消、帳號刪除與到期／S2–S3 | 照片及新增問題／修訂／重試收據的到期、刪除已本機驗證；訓練資源未覆蓋 | 沿用tombstone／deleting，先禁止新上傳／job／下載，取消並等待或隔離worker，再按清單刪照片、annotations、snapshot、外部副本及私人模型，最後Auth；每步可重試並拒絕遲到重建 | 擴充現有deletePhotoAccountData；基礎共用資料不因單UID刪除而誤刪，處理中狀態可理解 |
+| B11 Android搜尋／步行代理／S1 | computeWalkingRoute已有，未部署／驗證 | App Check驗應用，訪客可用；固定Google Routes WALK、HK／繁中與回傳欄位，Secret Manager供金鑰，逾時／配額分類；不接受任意網址代理、不持久保存軌跡 | Google配置、預算、簽署限制及真機；iPhoneMapKit不改走此代理 |
+| B12 發佈、診斷與預算／S0–S6 | 1.4.1+6工程／簽署建置與遠端核對通過；之後安裝及啟動成功，舊版保留，場景覆驗待補 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依「部署、設定與版本回退」先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
+| B13 室內即時資料邊界／S4 | 1.4.1+6辨識框與深度已本機處理，無雲端服務 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
+| B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
+| B15 路線錄製／場景理解與選填同步／S1–S4 | P0跨層mock及P1加密樣例庫已有；真實觀察待P2–P3 | 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。SceneAnalyzer／備份／同步及圖像blob未接 | F17；下一步真相機／功能閉環，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
+| B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
+
+管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
+
+產品及導航派工只在[Frontend開發次序](FRONTEND-DESIGN.zh-HK.md#delivery-plan)與[現行DSH契約](FRONTEND-DESIGN.zh-HK.md#dsh-functional-execution-plan)維護。本檔的B項目保存服務依賴及驗收，不再複製整份N0–N3導航表。
+
+<a id="release-process"></a>
+## 6. 部署、版本保存與回退
+
+<a id="7-部署設定與版本回退"></a>
+
+### 部署、設定與版本回退
 
 帳號與照片服務分開配置；目前本機照片開關關閉，既有紀錄未部署照片服務，本輪未讀取雲端清單，不以文件代替部署驗收。
 
@@ -290,75 +410,82 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 
 每個App／共用模型版本：完成檢查 → 增加App版本／build → 提交程式、lockfile、對應模型／映射及三份文件更新 → 建不可變tag（v版本+build）／Release → 推送並核對遠端 → 才安裝交付。Release記錄模型SHA、評估、限制與重裝方法；實驗版標prerelease，不覆寫tag、不force push。
 
+2026-11-05已確認保存頻率：每張工作票通過檢查及程式覆核後，先commit／push相關來源、文件及機器證據到feature/cross-platform-navigation並核對遠端，再標完成。這類原始碼檢查點不等於App交付，不要求每票增加App版本。P2-D、P3-C、P4-B及P5各準備手機prerelease；P3-A另安排Keychain、檔案保護／備份排除、重開及刪除的工程真機檢查。任何裝機均遵循上列版本程序，實測結果再更新收據及文件，不能以關閉Issue或推送成功代替人工驗收。
+
 倉庫為https://github.com/actiondarr/pathguide，既有工作分支feature/cross-platform-navigation。小型共用模型隨Git，過大共用產物用Release asset並記SHA及精確版本；私人照片／權重不得進共用repo。保留舊tag、模型及相容資料；回退App需重建並有效簽署，必要時用新的遞增iOS build號。私人模型則由本人授權registry保留上一版。
 
 文件整併的歷史提交不冒充新App還原點。本輪1.1.0+2包括中英文與導航／辨識共用語音、當前試用模型及manifest，247項Flutter測試與未簽署iOS編譯通過。不可變tag `v1.1.0+2`；歷史源碼／模型還原點 `v1.0.0+1-baseline` 指向 `f9dfb494ac3bc9a470337d15cde6a5c67018aac9`（舊hkdi10 pilot模型，不冒充已重新驗收版本）。遠端分支／tag核對與Release狀態另存verification的機器紀錄。
 
 版本發佈使用正常Git推送，以及有效的gh登入或GitHub已登入網頁流程；不從OS憑證庫抽出Git token作API登入。Release列模型SHA、試驗限制、測試、重建與回退方法；現有本機Firebase設定不入Git。CLI登入無效時，本版用正常GitHub網頁建立prerelease。
 
-## 8. 導航資料與使用說明（發佈前草稿重點）
+<details>
+<summary>已交付App版本對服務契約的影響</summary>
 
-導航只在使用者啟動與App前景取得位置；暫停、背景或結束停止定位，不建立／上傳行走軌跡。Apple／Google會收到完成搜尋及路線所需查詢、起點／目的地；代理不持久保存完整座標／路線，診斷避免私人位置。
+<a id="1438-相機前處理修正版github已保存iphone已安裝啟動"></a>
 
-語音按鈕才收音；優先裝置端，線上服務先取得本次同意，不把導航或錄音加入模型訓練。收藏／最近十個地點在本機安全儲存，可清除，不跟帳號同步；Google項目以Place ID、使用者標籤與時間保存，再查地點。
+### 4.3+8 相機前處理修正版（GitHub已保存，iPhone已安裝／啟動）
 
-路線可能有誤差、延遲或入口不符，不保證樓梯／升降機可用，不提供過路時機、室內樓層或鎖屏導航。接近終點仍需確認入口，資訊不代替白杖、導盲犬或定向技能。Android需已配置服務、網絡與適當權限。
+裝置端共用前處理由最近鄰／截斷尺寸改為雙線性／取最近整數（恰半取偶數）的letterbox，影響普通辨識及ARKit同幀辨識輸入；模型SHA、bytes、十類ID、下載／上傳及後端契約不變。14項原生XCTest、328項Flutter、33項數值檢查、analyze及iOS簽署建置／包內核對通過；遠端版本／交付狀態另依[工程證據](../verification/app-1.4.3+8.json)及收據核對。自然圖仍大量漏門及誤認行人，不能把此版記作新共用權重或品質gate通過。
 
-供應商參考：[Google Maps條款](https://maps.google.com/help/terms_maps/)、[Google私隱](https://policies.google.com/privacy)、[Apple地圖條款](https://www.apple.com/legal/internet-services/maps/terms-en.html)、[Apple私隱](https://www.apple.com/legal/privacy/)。正式政策需補聯絡及變更通知方式，不能以本章冒充已公開條款。
+原十類checkpoint及原run資料紀錄已按限定授權經Drive連接下載到ignored本機目錄；來源checkpoint／訓練報告SHA與原匯出一致，42個自然圖PT↔TFLite對照通過，誤認存在於原權重。未進行雲端部署或私人資料傳送，亦未操作B11。D04／D08後續須完成覆核反例／修正候選的獨立比較，再依B08／S0保存模型＋manifest＋設定。前處理版source 7f1d270、不可變tag及prerelease核對後，已成功安裝／啟動iPhone，見[交付收據](../verification/release-receipts/app-1.4.3+8.json)。
 
+<a id="1427-前端恢復修正的契約與版本已交付試用"></a>
 
-## 裝置端深度契約（現行，非雲端服務）
+### 4.2+7 前端恢復修正的契約與版本（已交付試用）
 
-2026-10-28 物件距離版：1.4.0+5延伸本機hk.pathguide/depth契約，start帶objects模式、threshold、已校驗的內置權重cache路徑／SHA／bytes／classIds／classes／inputSize；原生再次核對才建立模型。不是外部下載／私人模型offer，不新增Cloud API。靜態內置權重快取放App support的PathGuideDepth，以SHA命名；只寫共用模型，沒有照片／深度／pose／UID資料。背景停止會作廢尚未完成的準備或啟動。
+本輪只修正裝置端任務恢復：328項Flutter、12項原生XCTest、33項數值檢查、analyze及iOS簽署建置／包內核對通過。原生hk.pathguide/depth新增使用者明確按鈕觸發的openSettings→bool；從系統設定返回不自動啟動相機。Vision原生generation作廢晚到權限，菜單／辨識／ARKit開始前等待舊相機或picker釋放，Dart已dispose的來源拒絕舊初始化結果。這些是本機接口，不新增雲端API、模型下載、私人資料或同意用途。
 
-物件事件status=objects，附同session／timestamp／ageMs、viewWidth／viewHeight／rotation及最多5個objects：專案class id、score、已裁切預覽box、reason，可用時另帶rangeM／planeZM／accepted／total／spreadM。score是物件模型分數，不是距離可信度或正確率；rangeM是框內代表表面的徑向米數。短時track ID只在Dart當次session作配對，不寫永久graph／觀察資料庫。原有sample準星事件保留，兩種模式不能混用米數。資料不持久保存／上傳；訓練照片用途／同意／配額及PHOTO_UPLOAD_ENABLED=false不變，無付費GPU工作。
+模型／映射與1.4.1+6相同，PHOTO_UPLOAD_ENABLED及付費GPU設定不變；不部署現有未提交後端服務。本版source／lockfile／相同模型的Git樹、不可變tag與prerelease已保存並核對遠端，其後iPhone 15 Pro Max安裝／啟動成功；[本輪工程證據](../verification/app-1.4.2+7.json)，交付結果見[版本收據](../verification/release-receipts/app-1.4.2+7.json)。真機資源交接、讀屏及精度仍須實測，完整統一任務協調層尚未完成。
 
+</details>
 
-2026-10-28 1.4.1+6修正版：物件本機事件新增samplePoint（當次預覽normalized座標）、validDepth／depthTotal與細分reason；前端展示原因與點數，不把它們當正確率。深度信心／量程／混合表面／過期門檻不變，僅改框內局部取樣選擇及遮擋檢查；取樣位置改變重新累積時序證據。本機不新增影像／深度記錄或Cloud API、照片上傳仍關閉，無GPU／訓練工作。使用者提供測試截圖未放GitHub／dataset。
+## 7. 範圍限制與待定事項
 
-## 本輪核對的服務邊界
+雲端問答的provider、預算、最少傳送欄位及保存期限尚未選定；分析、回報及訓練用途分開授權。陌生室內探索只接受方向，無線索時停定掃描及保留未知已確認，具體線索搜尋／定位及正式接口未定，不把自由文字回答轉成已確認位置。私人訓練及付費GPU沒有因本規格獲得啟動授權。
 
-Functions現有15個export：原有computeWalkingRoute、getPhotoConsent、setPhotoConsent、submitPhoto、listPhotoProgress、deletePhotoAccountData、expirePhotoCandidates、removeLatePhotoObjects，加上submitPhotoIssue、getPhotoIssue、getPhotoReviewItem、submitPhotoReview、withdrawPhotoIssue、listPhotoReviewQueue、listPhotoReviewHistory。問題／覆核API及工作台只完成本機／合成驗證，預設關閉、未部署；容量／抽覆、snapshot、排程、GPU worker、registry及私人下載尚未接通。本機照片／Google導航開關未設，沿用false；iPhone MapKit獨立。
+## 8. 研究、開發工具與歷史紀錄
 
-照片部署最近證據為[2026-10-23紀錄](../verification/baselines/2026-10-23.phase4-verification.json)，不能當今日雲端清單。每日03:00、50張／三場景是規劃條件，未有運行中的排程；付費GPU不提交是目前政策與未建服務的狀態，不能稱已有經驗收的預算阻擋器。
+<details>
+<summary>候選場地graph、參考體驗及無障礙服務研究</summary>
 
-## 功能計劃索引（按依賴取用，不代表同時開工）
+### 室內graph與照片序列資料設計（討論方案，待驗證）
 
-本節接口名稱若寫「新增」即尚未實作，不能當成目前已可呼叫的API。
+先做手動graph＋模擬observation的原型，再接AI；不需要先完成大型VPS或向量資料庫。以下是設計分層，不是現有API／Firestore已支援的格式：
 
-| 功能／階段 | 目前狀態 | 實現方法與輸入／輸出 | 依賴／完成標準 |
-|---|---|---|---|
-| B01 帳號、角色與私人聯絡／S1–S2 | Google／聯絡規則已有；覆核API已有角色／當前Auth及server-only人員檢查，本機替身測試通過，未部署／指定真人 | 驗證token取得UID，以可重試交易建profile；聯絡資料保持獨立。新增覆核角色由受權Admin設定custom claims，服務端驗證，不接受前端自報admin或ownerUid | 本人／覆核者／一般訪客權限分開；角色變更與token刷新／撤銷有測試 |
-| B02 照片同意與提交／S2 | callable已有，未啟用 | 沿用get／setPhotoConsent與submitPhoto；檢查UID、epoch、配額／尺寸，解碼重編碼、綁photoId／objectGeneration，再原子更新validated／pending。sourceSha與清理後sha分開 | 前端F05同幀資料；重試冪等、無效App Check／舊epoch拒絕，不改成公開Storage |
-| B03 管理員覆核與問題追蹤／S2 | 七個API、本機工作台及版本／權限／到期測試完成；預設關閉、真人／容量／案例未完成 | 依第3節建立原圖／預測／修框工作台，指定接件與複核角色，驗全圖coverage；expectedRevision防覆蓋，疑義退回，固定核准版本。以issueId串開發快照／候選／獨立評估／手機重測，記處理時間與積壓 | Dataset D02；人工完整答案及抽覆有效、衝突可恢復、撤回不復活；未重測不關單，AI篩查不冒充人工核准 |
-| B04 私人快照匯出／S3 | 未接通 | 依ownerUid＋仍有效用途查核准版本，合併獲授權基礎回放，固定影像／標註版本、場景split、coverage與SHA，輸出不可變manifest；重送同一請求沿用snapshot ID | Dataset D03／D07；同實物不跨split，其他UID資料不得混入，資料變動建新snapshot |
-| B05 排程、去重與佇列／S3 | 未實作；先案例與效益驗證 | 通過第3節啟用條件後才設03:00排程；50張／三場景只作候選檢查，仍驗樣本充分性。以UID＋snapshot＋config唯一job及lease，綁預算／時限與GCP Batch ID | 修正案例、私人效益、mock／權限／刪除及預算先驗收；資料不足不排，重複事件不重開；UTC照片配額不變 |
-| B06 GPU訓練worker／S3 | 現有Colab實驗；服務未實作 | 容器固定工具／權重／設定，最小IAM讀指定snapshot，執行preflight→smoke→正式run；每輪備份checkpoint／optimizer／CSV及心跳。相同快照中斷才resume，改資料開新run；逾時／取消不發佈 | Dataset提供D04／D05／D07腳本；先mock成功／失敗／重試，再配置GPU；不把免費Colab當可靠無人服務 |
-| B07 品質門檻與獨立評估／S3 | 只有本地A／B評估工具 | worker產生候選與現用模型的同資料逐類比較、樣本量、export parity及手機結果；核准服務驗完整報告並套版本化門檻，不能由worker一句success直接寫ready | Dataset第3節為門檻唯一來源；目標無真值或其他類別退化則不核准；測試集不拿來反覆調參 |
-| B08 Registry與發佈包／S3–S5 | 未實作 | 新增不可變模型record：ownerUid／shared scope、job／snapshot、A或B namespace、權重／manifest SHA與大小、taxonomy、App相容性、評估與狀態；核准才設可下載，發布指標另指向可回退版本 | A／B映射不得互換；現行內置format:1不無聲改義；共用模型與私人模型有不同存取範圍 |
-| B09 本人下載、自動更新與回退／S3 | 未接通 | 新增綁scope／SHA／profile的offer與限時授權，重驗用途及版本核准；閒置原子切換，保留上版／內置。依第4節加入主動回退、選填原因、同SHA拒用及發佈者撤回 | Frontend F08；驗斷網、重開、空間不足、切帳號、重複offer及撤回競爭；signed URL有效期／離線撤回限制須如實呈現 |
-| B10 撤回、取消、帳號刪除與到期／S2–S3 | 照片及新增問題／修訂／重試收據的到期、刪除已本機驗證；訓練資源未覆蓋 | 沿用tombstone／deleting，先禁止新上傳／job／下載，取消並等待或隔離worker，再按清單刪照片、annotations、snapshot、外部副本及私人模型，最後Auth；每步可重試並拒絕遲到重建 | 擴充現有deletePhotoAccountData；基礎共用資料不因單UID刪除而誤刪，處理中狀態可理解 |
-| B11 Android搜尋／步行代理／S1 | computeWalkingRoute已有，未部署／驗證 | App Check驗應用，訪客可用；固定Google Routes WALK、HK／繁中與回傳欄位，Secret Manager供金鑰，逾時／配額分類；不接受任意網址代理、不持久保存軌跡 | Google配置、預算、簽署限制及真機；iPhoneMapKit不改走此代理 |
-| B12 發佈、診斷與預算／S0–S6 | 1.4.1+6工程／簽署建置與遠端核對通過；之後安裝及啟動成功，舊版保留，場景覆驗待補 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依第7節先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
-| B13 室內即時資料邊界／S4 | 1.4.1+6辨識框與深度已本機處理，無雲端服務 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
-| B14 拓撲graph、觀察序列與場地版本／S7 | 1.2.0+3本機Dart模型／樣例已有，無雲端API | IndoorGraph／IndoorNode／LandmarkObject／LandmarkObservation以固定ID、內容版本、scope與有界queue表達；手動node／edge先驗證；永久地圖、node內容與行程觀察分開版本化，圖片只產生候選對照。不吻合先保留未知與待覆核，核准後才更新地圖；量測座標／幾何校準及樓層連接後續加入 | F14／D09；不用GPS猜樓層，無場地資料不提供指定課室；場地更新不破壞舊App |
-| B15 路線錄製／場景摘要同步／S7 | 後續構想 | 先本機功能；自願同步才新增UID版本化路標序列與刪除。場景摘要預設本機有效證據，不自動新增雲端影像描述或追蹤紀錄 | F17；另行確認用途與授權，不能因訓練照片同意便錄影／上傳路線 |
-| B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
+| 資料層 | 保存內容 | 更新規則 |
+|---|---|---|
+| graph | building／floor、mapVersion、node ID、實際通路edge及限制 | 只有核准的地點／連通性變更才發新版本 |
+| node內容 | 同位置的objects、店名／別名、參考圖片、特徵版本、有效時間與證據 | 改店名不換位置ID；動態物件只作觀察，不當永久錨點 |
+| 觀察queue | session、seq、capturedAt、圖片／特徵及候選node／可信度 | 是行程序列，按拍攝順序，不按Server回覆先後或預測node排序 |
+| 配對結果 | matched／uncertain、候選、證據、mapVersion、觀察時間 | 低信心保留未知；不存在的精準位置／朝向不填假值 |
+| 地圖變更候選 | 新地標、店名疑似改變、封閉或不吻合證據 | 覆核後才升格；模型自己猜的結果不直接變地圖真值 |
 
-管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
+最小node示例（尚未量測的位置保留null）：
 
+```json
+{"id":"L1_N03","floor":"L1","position":null,"objects":[{"type":"shop","name":"店面A"}],"referenceImages":[],"contentVersion":1}
+```
 
-## 自動模型調度的服務界線（新增方案，未實作）
+渲染用的示意layout與真實公尺座標分開；若加入x,y，必須同時記原點、座標系、單位及量測來源。edge先驗實際連通，同層雙向用無向邊；單向、封閉、樓梯與升降機後續獨立屬性，不一律當雙向。
 
-意圖辨識與模型路由優先放裝置端，基本操作不新增雲端依賴。不同能力可由已下載的A／B／OCR／視覺語言模型執行；不要求使用者選模型名稱。現有服務沒有這個調度器或視覺語言模型下載服務。
+定位處理流程：觀察入queue → 用最後可信node／樓層／路線選graph鄰域 → 比較最近多筆候選與允許轉移 → matched或uncertain → 需要時擴大搜尋。保留停留、跳node、倒行和分岔，遲到回應不能覆蓋新位置；不確定時不強制選「預測的下一個node」。
 
-模型包規劃另記能力、格式／runtime、語言、裝置相容性、SHA、大小及驗收profile。只向調度器提供已驗證且可用的能力；不可把A的class映射套到生成文字。大型模型首次下載顯示大小／可用空間，允許取消、重試及刪除；固定版本驗證後才啟用。具體模型／大小待選型，不能把第三方宣傳數字當本App需求。
+每5秒上傳屬新增的定位用途，不能直接套私人訓練照片API：現有自動照片冷卻30秒、場景60秒且有日額。後續若採Server定位，須獨立同意／session／限流／短保留策略；定位圖片預設不加入私人訓練或共用地圖，地圖建庫與私人模型亦非同一批資料。
 
-自動選擇已載入的運算能力與私人模型自動更新是兩個操作：後者繼續遵守UID、同意、閒置原子切換與回退。路由失敗不默默轉雲端；若未來加入雲端，圖片用途及傳送另行同意。查詢影像預設僅暫存記憶體，不自動進照片訓練流程。
+後續AI可加入全局檢索、局部特徵及OCR；純圖片鄰近node只能支持拓撲候選，精確PnP仍要已知3D點與相機內參，不能由node ID直接求得公尺級pose。[OpenCV PnP](https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html)；完整3D建圖／匹配路線可參考 [hloc](https://github.com/cvg/Hierarchical-Localization)。iPhone沒有通用Wi-Fi掃描API，因此初版粗篩先用使用者選定場地／樓層與可信起點，不把任意SSID指紋當既有能力。[Apple Wi-Fi API說明](https://developer.apple.com/documentation/technotes/tn3111-ios-wifi-api-overview)
 
-最小診斷記request/session、路由能力、版本、取消／超時／降級原因及耗時，不預設收集圖片／聲音／完整提問。驗收離線、未下載、損壞包、空間不足、遲到結果、切帳號及重啟；未接服務先mock，不開付費推理或GPU。
+### 參考體驗對後端的影響（方案分析，未部署）
 
-## 無障礙整合的後端責任（研究規格，待實作）
+公開產品列項與證據限制集中在Frontend「瞰見聆境」節；以下是我們的設計推論，不宣稱第三方後端採用相同架構。
+
+- **路線內容改善：** B14／B15為graph／route另存node ID、內容版本、註記類型、來源、確認時間與有效期；臨時施工可失效／撤銷，店名變更保留位置身份。私人路標與場地共用變更分開授權，不能由一次觀察自動改公共地圖。
+- **權重改善：** 維持B04–B09的UID快照、回放、獨立評估與模型registry；新增路線註記不直接觸發GPU或宣稱模型已學會。路線／內容／權重各有可回退版本。
+- **同一旅程的多能力：** 導航、感知、查詢可共用session／mapVersion／modelVersion與過期檢查，但深度及即時障礙仍在手機。伺服器回覆慢時不能補播舊方向或覆寫新位置。
+- **場景模型及下載：** 現行首版仍用本機有效證據摘要。若後續採雲端或大型本機模型，需另外確認供應商、圖片用途／保留、預算、下載相容性與斷網回退；本輪未開任何雲端影像服務。
+- **聲音、手勢及背景：** F19／F22預設裝置端運算，不建立頭部追蹤上傳。F23若開發背景導航，需另定定位／音訊狀態與隱私說明；不把鎖屏路線語音等同背景鏡頭感知。
+- **驗收及發佈：** 先用mock狀態驗證權限、版本、遲到事件與取消，再做HKDI實機／離線測試；競品的宣傳不作我們的品質門檻或驗收證據。
+
+### 無障礙整合的後端責任（研究規格，待實作）
 
 VoiceOver／TalkBack、語意樹、讀屏焦點、系統縮放及快捷動作在裝置端，不為此新增AccessibilityService、雲端讀屏或強制帳號。系統是否開啟讀屏不作身分／能力判定，不預設上傳輔助科技使用狀態。
 
@@ -366,19 +493,40 @@ VoiceOver／TalkBack、語意樹、讀屏焦點、系統縮放及快捷動作在
 
 無障礙偏好預設本機，不能由「使用VoiceOver」推定同意上傳、常開麥克風或下載模型。診斷如需保存測試語音／畫面另取用途同意；共用報告只保存去識別結果。驗收錯誤碼／狀態映射、取消／斷網／重送與語言切換；官方研究與平台差異見Frontend「Android／iOS無障礙整合研究」。
 
-## DeepSeek／Sol全專案執行分工（2026-10-31）
+</details>
+
+<details>
+<summary>開發工具／成本控制證據與舊W階段分配（現行責任以DSH契約為準）</summary>
+
+### DeepSeek／Sol全專案執行分工（2026-10-31）
+
+2026-11-02當時分工（後續以2026-11-05的DSH全實作指示為準）：DSH只承接前端UI、後端API及相關測試；Dataset暫擱置，不再委派資料工具、看圖、標註或模型品質判斷。既有資料／訓練分工表僅保留候選背景，不構成恢復授權。相機／語音時序、帳戶隔離、刪除競態、模型相容及跨模組整合仍由Sol把關；人工真值不得由AI核准。
 
 此為成本導向的工作分配，不是兩模型在本專案已完成的能力比較；先以小工作包核實正確率、返工與總費用。DeepSeek Flash＋DS Harness為日常執行主力，Sol為整合與關鍵覆核；統計、訓練、評估由固定程式運行，標註真值與真機任務由人工驗收。完整階段排程及交接規則集中Backend同名章節，各領域分工在所屬文件。模型替換不改任何品質gate或人手核准要求。
 
-### 工作環境與成本控制
+#### Codex→DSH本機橋接（2026-11-04，有限CLI派工及N0整合已驗證）
 
-保留一個Sol總控／整合對話，DeepSeek分Frontend、Backend、Dataset三個長期工作範圍；本地視覺語言模型先作Frontend範圍內的隔離原型，必要時才開短期任務。平常同時最多兩個寫入任務，使用獨立worktree或嚴格檔案擁有權；Xcode／裝機／GPU工作每次只由一個執行者負責。各自讀AGENTS.md及相關主文件，不另開第四份計劃。worktree開始前檢查未提交／ignored資料與配置，不能假設已全部帶入。
+Desktop 0.13.0內的Harness為0.2.1-rc.3。以安裝包既有CLI／headless執行隔離小任務，原生credentials服務直接使用已保存的API key；key不讀出、不複製、不寫入環境或證據。單次模型請求成功取得session ID、completed狀態及unified diff，由主控限制至solution.py後套用，三項固定測試通過。輸入216／輸出42 tokens，4.502秒；按[官方離峰價格](https://api-docs.deepseek.com/quick_start/pricing/)估算US$0.0000576，未讀帳單或餘額，不當作實扣收據。見[smoke證據](../verification/dsh-smoke-20261031.json)及[已完成的候選契約](../configs/planning/dsh-smoke-20261031.json)。
+
+此次使用者批准上限US$0.10／120秒／一次模型請求。送出前限制官方Flash endpoint、思考關閉、無工具、最多512輸出token及保守輸入上界；峰值費用上界US$0.0022218。耐久one-use ticket在送出前落盤，失去回覆亦不自動重送；同key重送已驗只回原結果。smoke另以精簡系統提示及移除DSH session／套件附加欄位限制輸入，不能把這次低用量外推普通程式工作包。
+
+執行中狀態、短deadline停止自有程序，以及ACP對指定執行中session的cancel／cancelled／close，已透過真實DSH控制流程＋完全不連外的假模型補驗。這不是上游真實推理／計費停止的驗收。通用專案改檔、多人worktree、登入帳戶路由、崩潰後自動恢復及真實模型在途取消仍待驗；SDK沒有已核實的指定session取消方法。各接口依安裝版help／source，不假設最新文件的權限旗標或final事件欄位已存在。
+
+本機控制程式在`/Users/darr/Desktop/development/pathguide-dsh-bridge/`，原始合成證據及一次性登記留ignored `review_artifacts/2026-10-31/dsh-smoke/`；沒有新增MCP或監聽服務。此smoke授權已用一次並關閉後續連線；W1另獲US$0.10／20分鐘／最多兩次模型請求授權，兩輪DSH實作已交回；Sol於11月2日完成本機覆核與兩個新檔案整合，27項測試及6個獨立CLI案例通過。實包完整性仍fail，細節及限制見Dataset與[W1證據](../verification/dsh-w1-integrity-20261102.json)。兩次請求的輸入合計14,388、輸出20,900 tokens，按執行當日已核實離峰價估算US$0.0146982，非帳單回執；本包兩次額度已用完，不自動延伸付費派工。既有DSH任務、App／模型、B11及GPU政策不變。
+
+2026-11-04依本對話指定使用桌面`/Users/darr/Desktop/DSH Desktop.app`。新增scoped_control.py綁定契約／prompt／runtime SHA、原子登記、啟動失敗與中斷未知狀態；不確定回覆不自動重送，已有session不接管。五項新保護測試通過。N0第一輪max-tokens失敗但留下來源骨架；第二輪回覆完成但diff context有誤，兩輪均未直接通過交付。Sol保留原稿並修正接口、UI／測試及既有入口回歸後本機整合；這不是DSH自行工具改檔或自行跑測試已驗證。官方Flash價格當日核對，兩請求各送出前峰值費用上界合計US$0.0462771；實際token按峰值價估算US$0.0235686，非帳單。兩票據已消耗，本包不再派第三輪；20分鐘約束模型派工，本機覆核／測試可在模型時限後完成。證據見[N0覆核](../verification/dsh-n0-ui-20261104.json)。
+
+#### 工作環境與成本控制
+
+保留一個Sol總控／整合對話，DSH只分Frontend、Backend工作範圍，Dataset暫停；先做導航本機mock，真實視覺理解及provider另作有預算的可行性驗證。平常同時最多兩個寫入任務，使用獨立worktree或嚴格檔案擁有權；Xcode／裝機／GPU工作每次只由一個執行者負責。各自讀AGENTS.md及相關主文件，不另開第四份計劃。worktree開始前檢查未提交／ignored資料與配置，不能假設已全部帶入。
 
 DeepSeek常規整理用非思考模式，需設計或除錯才開思考；Sol通常Medium，權限／時序／模型相容及困難根因用High。這是起始策略，不承諾固定成本優勢。先以小包測實際token、工具費、耗時、返工及驗收結果，再決定擴大；費用上限由使用者設定，未設定不啟動長時間付費agent／GPU工作。
 
 不要讓LLM逐張讀全資料集或逐epoch監看。腳本一次輸出完整機器報告，對話只讀摘要／異常及必要樣本。定額限制重試與搜尋；同一失敗兩次仍無新證據，交Sol診斷。新對話使用短任務契約，不反覆貼全部歷史／原始log。
 
-### 全專案階段排程
+#### 全專案階段排程
+
+下表保留跨模組依賴，現行執行以P0–P6導航主線為準；舊W1／W4資料與訓練任務暫停，不向DSH派Dataset、看圖或品質裁定。
 
 | 工作包／順序 | DeepSeek主責 | Sol主責 | 交付與過關條件 |
 |---|---|---|---|
@@ -390,17 +538,17 @@ DeepSeek常規整理用非思考模式，需設計或除錯才開思考；Sol通
 | W5 最小照片覆核與mock閉環，可先準備 | 已有API的測試補缺、工作台UI、狀態映射／mock | Auth／App Check／UID／epoch、核准版本、撤回與刪除競爭 | 本機與emulator通過；真實部署另核配置與授權；不用mock冒充服務已通 |
 | W6 模型交付／更新，依W3或W4合格包 | 進度UI、下載失敗fixture、相容性報告 | manifest／hash／UID驗證、原子切換、重啟恢復／回退 | 不相容及損壞拒絕；版本更新在閒置；個人訓練另需對照效益與預算 |
 | W7 整合發佈，每版執行 | 跑指定回歸、整證據及文件草稿 | review差異、跨模組整合、版本／Release／裝機統籌 | 人工真機驗收；commit／不可變tag／遠端核對先於安裝，未通過能力仍試驗或關閉 |
-| W8 後續室內／平台擴展 | 合成graph／場景fixture、幾何可視化、資料工具、普通adapter | 真實定位、深度／追蹤／路徑、Android感測差異 | 每次一個任務獨立驗收；空間音效、跨樓層、燈號／頭部手勢不搶W1–W3主線 |
+| W8 後續室內／平台擴展 | 合成graph／場景fixture、幾何可視化、資料工具、普通adapter | 真實定位、深度／追蹤／路徑、Android感測差異 | 每次一個任務獨立驗收；空間音效、燈號／頭部手勢後續；基本跨樓層按P0–P5導航主線 |
 
-A10免費Colab修正run已完成且拒用；W4不是重跑該run，須先依Dataset第6節完成錯例／定義及獨立資料覆核，再提出新的比較設計。B11狀態另依其交接節核對。
+A10免費Colab修正run已完成且拒用；W4不是重跑該run，須先依Dataset「下一輪資料工作」完成錯例／定義及獨立資料覆核，再提出新的比較設計。B11狀態另依其交接節核對。
 
-W1／W2優先；W3是有上限的可行性試驗。W4與W5視資料／資源並行，並非要求全部串行。私人自動訓練不是整個App發佈前提；真實室內引導在幾何與場地證據具備後另啟。
+現按Frontend完整方案P0–P6先做跨樓層／行走感知契約mock，再接儲存、相機、定位及語音；N3雲端理解維持選填及另有同意／provider／預算條件。私人訓練、LiDAR、鳥瞰及新YOLO權重不作本機原型前置。
 
-### Backend具體責任
+#### Backend具體責任
 
 DeepSeek負責B03工作台、已凍結schema的表單／狀態UI、B04 manifest工具、B05–B09 mock與失敗fixture、部署指令草稿及既有測試補缺。B01–B02權限／同意、B03核准角色、B04隔離、B05 lease／配額、B08–B10授權下載／刪除競爭由Sol主導或逐差異覆核；安全邊界不因換執行者放寬。B11 Android路線adapter普通程式可交DeepSeek，金鑰／App Check／導航生命週期由Sol覆核。B12發佈由Sol總控；B13–B16場地／provider擴展待相應階段。
 
-### 任務契約、交接與升級
+#### 任務契約、交接與升級
 
 每包先寫：目標、允許修改路徑、禁止事項、輸入版本／SHA、接口、預期產物、驗收命令、費用／時限。交付：base commit與實際diff或commit、測試命令／exit code／摘要、產物路徑與SHA、未完成及風險、所改主文件。機器證據進verification，本地圖像／CSV進review_artifacts；人工裁定在原有覆核記錄，不另寫handoff文檔。
 
@@ -408,7 +556,42 @@ Sol優先看diff＋摘要＋關鍵原始證據；不為所有文案／格式工�
 
 DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做。雲端模型可讀取送出的內容，不因工具本機執行便推定照片留本地；私人影像／聲音／權重與密鑰不得默認傳第三方。以本地統計及獲授權樣本交付。保留現有staged／unstaged他人工作，不自動重置、提交全部或重跑活躍訓練。
 
-## 維護紀錄
+</details>
+
+### 維護紀錄
+
+2026-11-05 保存／裝機節點確認：使用者接受逐票來源同步與P2-D／P3-C／P4-B／P5手機版節點，以及P3-A工程真機檢查。區分原始碼檢查點、已發布手機測試版及人工結果；不更改雲端部署、照片用途或模型放行條件。
+
+2026-11-05 Codex完成P2-C原生來源：新增獨立AVFoundation錄路相機、native preview及能力／狀態／最新觀察／按需JPEG通道；不載入模型或啟動ARSession。只留一個最新buffer及最多一個JPEG工作，長邊1280／512KiB硬限，原生時鐘／新鮮度／方向及SHA綁實際bytes。17項新增錄路測試連既有共43項原生Simulator、415項Flutter及analyze通過。兩個同步重入反例先紅後綠；停止／背景／逾時不交舊幀或假稱硬件已停。Flutter入口留P2-D，真機／VoiceOver、持久影像及定位未驗收；未發布／裝機。見[本輪證據](../verification/codex-p2c-route-camera-20261105.json)。
+
+2026-11-05 Codex接續P2-B：Vision／Depth／Menu統一取得精確相機lease，移除互相直接啟停；Vision以serial session／inference queue屏障、Depth以AR pause及model work屏障、Menu以picker dismissal completion確認交接。修正舊client提早釋放導致停機回覆遺失，舊版回歸probe可重現失敗，修正版30項核心檢查通過。26項原生Simulator、415項Flutter及analyze通過；只屬本機工程驗證，真機／VoiceOver及P2-C/D未完成。見[本輪證據](../verification/codex-p2b-camera-adapters-20261105.json)。
+
+2026-11-05 DSH開發驗收結果：P2總上限US$0.40／八次請求已批准，P2-A獲額外一次修正而合共三次；三輪均未通過，主專案App程式未合併。第一輪檢查器執行失敗，第二輪檢查器編譯失敗；第三輪交接回覆修正，但檢查器仍呼叫不存在方法，獨立probe仍重現跨協調器令牌相等及外來令牌停止本機擁有者，且錯把CLI檢查器加入App Sources。保留原稿、diff、編譯及probe證據；P2-B–D因前置未驗收保持未派，餘下五次總請求未使用，沒有第四次P2-A授權。三次token按峰值價保守估算US$0.03327，非帳單；未宣稱相機／真機／VoiceOver通過。見[本包驗收](../verification/dsh-p2a-camera-ownership-20261105.json)。
+
+2026-11-05 開發啟動需求確認：同步已確認的UI／VoiceOver單一路輸出及無線索保留未知；不新增雲端服務或擴大資料用途。實作交DSH、Codex只驗收；Dataset／B11及現有品質gate維持原狀。
+
+2026-11-05 /to-spec規格重整：按服務責任重排資料流、契約、驗收與部署，刪除與Frontend完全相同的導航次序副本；保留S0–S7、逐功能依賴／驗收、既有版本與機器證據。需求、待定事項、工程／真機／人工狀態分層；Q4尚未回答，不推定無線索探索策略已確認。本輪只改文件，沒有啟動App實作、訓練或部署。
+
+<details>
+<summary>展開既有維護紀錄（依當時日期解讀，不作現行派工）</summary>
+
+2026-11-05 grill-with-docs首輪需求對齊：同步統一任務入口、本機基本能力及選填雲端問答的用途分隔；陌生室內逐段探索列完整產品目標，與私人路線記憶／訓練資料分開。具體探索策略及接口未定，不把現有路線儲存或雲端模型回答當作已知目的地位置。本輪只更新文件。
+
+2026-11-05 DSH全實作／主控審核：依使用者新指示取代後續Sol實作分配，完成P2-A至D、P3、P4、P5的依賴、檔案範圍、接口、反例／命令、停止及交付要求。DSH負責全部程式／測試／修正，Codex只審核及機械驗證整合；不再代寫功能修正。現橋接仍為工具禁用的文字diff模式，不能宣稱DSH自行跑Xcode。P2四包合共US$0.40／八次為未批准候選上限，P1額度已耗完；本輪僅計劃及不付費準備，未提交新模型、改App、啟動訓練或裝機。詳細計劃見Frontend與`configs/planning/dsh-functional-execution-20261105.json`。 工作規格及阻擋關係已依新Issue tracker規則發布至[總票#2](https://github.com/actiondarr/pathguide/issues/2)與十張子票，首包為[P2-A #3](https://github.com/actiondarr/pathguide/issues/3)；目前皆為待預算／未派模型。
+
+2026-11-05 P1功能整合：新增獨立加密本機樣例路線庫、草稿／完整結構版本、重新開啟、明確回退、刪除及舊版本／暫存清理。21項儲存／adapter、6項controller、6項UI及2項screen測試，全App415項及analyze通過。DSH兩次文字草稿經Sol修正；估算US$0.0114939，非帳單，無第三次。實際相機／照片／語音及真機Keychain未驗，未發布／裝機／部署／訓練／換模型，B11及舊來源保留。使用者指定先完成功能，效能／耗電／容量調校留後；下一步P2真相機，再P3首次錄路／跨層及P4障礙／語音。見[P1證據](../verification/dsh-p1-route-store-20261105.json)。
+
+2026-11-04 P0跨樓層離線整合：新增樓層／有向轉層、預期／候選／實際樓層分離、單調時間與雙支序列、障礙frame及提示仲裁。G→3F、錯層／相似出口、樓梯平台、障礙打斷、過期感知、3F手動重定位及背景／刪除晚到事件有合成回歸。DSH兩次文字交付均需主控修正，沒有第三次；11556 input／9071 output按當日峰值價估算US$0.014352（非帳單）。新增27項、全App380項Flutter及analyze通過，中英文320×568兩倍字體圖已核對。N0保留，P0只有離線mock；真相機、TTS、持久儲存及實地／人工核准未做，未發布、裝機、部署、訓練或換權重，B11不動。見[P0覆核](../verification/dsh-p0-cross-floor-20261104.json)。
+
+2026-11-04 需求澄清／先完整規劃：使用者明確要求跨樓層，以及行走期間即時障礙偵測＋語音步行導航。移除「只可錄使用者熟悉路線」及「跨樓層延至後續」的範圍誤讀；區分首次錄製建資料與沿已有資料導航。補樓層／轉層、單相機並行感知、語音優先、工具／兼容、資料及驗收的完整方案。現有N0仍只有三個合成路標、沒有floor／transition或真實行走感知；353項歷史工程通過不代表新增需求已實作。此輪只改三份主文件及機器計劃／證據，不啟動實作、DSH模型請求、訓練、部署或裝機。
+
+2026-11-04 N0本機整合：新增熟路錄製／保存／選路、起點及方向分別確認、模擬重行、未知／歧義／方向不符、暫停／重確認、到達確認與刪除；只用記憶體合成路標。主控處理session／sequence／版本／過期、背景及刪除晚到回覆；DSH兩輪文字交付均需修正，未直接採納原diff。20項N0測試及全App 353項Flutter通過，analyze無問題；中英文320×568兩倍字體與合成畫面已核對。這不是相機定位、真機VoiceOver或實地通過；未發布、裝機、部署、訓練或換模型，Dataset及B11不動。DSH用兩次請求，峰值價估算US$0.0235686，非帳單回執；沒有第三次請求。完整來源、差異及限制見[本輪證據](../verification/dsh-n0-ui-20261104.json)。
+
+2026-11-03 導航主線更新：依使用者選擇改為一般iPhone自行錄熟路與穩定重行；路標比對為基本流程、普通ARKit可選、LiDAR與雲端理解另分層。更新現況／先後／S0–S7／逐功能計劃及N0–N3驗收；Dataset維持暫停。只改三份主文件及機器計劃證據，未派DSH、改App／模型、採集相片、訓練、部署或裝機。
+
+2026-11-02 DSH W1整合：已完成真實專案工具的兩輪文字diff交付、獨立覆核及本機驗收，費用估算約US$0.0147（批准上限US$0.10）。原始DSH成果與Sol整合差異分開保留；圖包5項事件差異待修，不表示模型改善或Backend部署。
+
+2026-10-31 DSH隔離smoke：API-key原生路由的一次真實Flash請求完成，diff回收及3項固定測試通過；重送無新請求。補無費用的DSH狀態／deadline／ACP指定取消控制測試，明列假模型與真實上游限制。僅更新本機工具／配置／機器證據與本文件，未派發專案實作、訓練、部署或裝機。
 
 2026-10-31 A10基準同步：Dataset完成第一版逐圖strict基準（1,082圖；person 98／19／179、door 5／3／34、fence 0正例）；本輪只同步服務邊界及執行次序，未改後端程式、部署、訓練或App權重。
 
@@ -437,3 +620,11 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 2026-10-29無障礙研究：核對Apple／Android／Flutter官方資料及現有語意／播音程式，加入跨平台整合、語言差異、Android公告干擾風險、替代操作及任務驗收。只更新方案；未改程式、切系統設定或執行真機／使用者測試。
 
 2026-10-31成本分工：加入DeepSeek日常執行、Sol關鍵整合／覆核、本地腳本與人工真值的完整工作包、依賴及交接規則。依目前1.4.3+8／候選拒用／覆核API本機進度規劃，不重做歷史工作；僅修改三份文件，未安裝agent工具、傳送外部資料、開訓練或部署。
+
+2026-11-02 DSH-W2-FP收尾：兩輪文字交付完成，11項生成器測試及27項既有測試通過，新包完整性pass。門FP事件8→3、person完整strict FP事件117→19，TP／FN未變；三份review CSV逐byte相同，原包24檔及三份輸入SHA保留。這是匯出修正，沒有模型改善或人工核准。生成器SHA由主控比對；檢查器既有producer_provenance仍為unknown。證據見[W2記錄](../verification/dsh-w2-fp-export-20261102.json)。
+
+目前透過隔離HOME的DSH headless CLI派工，DSH僅回傳來源文字，Sol產生diff、套用及執行本機驗收；session不會同步到既有Desktop workspace。提交／session ID／狀態／收件已實跑；Desktop可見任務及DSH自行工具改檔／跑測試仍未驗證。本包兩次額度已用完：17,955輸入／17,170輸出tokens，按當日已核實離峰價估算US$0.01299525，非帳單回執。
+
+2026-11-03 DSH前端派工收尾：文字請求兩輪完成；5項新教學及2項既有語言測試、analyze通過。產品驗收只用本機widget，不需使用者登入、帳戶、雲端或手機。後續依使用者指示自動按既有前端／後端計劃派工，每包維持US$0.10／20分鐘／最多兩請求，Dataset暫停。原始DSH與Sol小型整合差異分開保留，見[W3證據](../verification/dsh-w3-frontend-guide-20261103.json)。
+
+</details>
