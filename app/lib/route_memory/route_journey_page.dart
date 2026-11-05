@@ -35,6 +35,14 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       _leaving = false;
   bool _allowPop = false;
   String? _target;
+  ({
+    String name,
+    String floor,
+    ConnectorMode mode,
+    bool confirmed,
+    String? nodeId,
+  })?
+  _pendingLandmark;
   Timer? _expiry;
   String t(String zh, String en) =>
       widget.settings.language == AppLanguage.english ? en : zh;
@@ -129,7 +137,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       if (controller != null) {
         await controller.pause();
         if (!mounted || controller.notice == 'stopUnconfirmed') return;
-        if (controller.dirty) {
+        if (controller.dirty || _pendingLandmark != null) {
           final choice = await showDialog<String>(
             context: context,
             builder: (ctx) => AlertDialog(
@@ -148,7 +156,9 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                   child: Text(t('捨棄並離開', 'Discard and leave')),
                 ),
                 FilledButton(
-                  onPressed: () => Navigator.pop(ctx, 'save'),
+                  onPressed: _pendingLandmark != null
+                      ? null
+                      : () => Navigator.pop(ctx, 'save'),
                   child: Text(t('保存草稿並離開', 'Save draft and leave')),
                 ),
               ],
@@ -166,6 +176,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       if (controller != null && controller.mode != RecordedRouteMode.library) {
         await controller.showLibrary();
         if (!mounted) return;
+        _pendingLandmark = null;
         _target = null;
         _actualFloor.clear();
         _direction = false;
@@ -315,6 +326,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   }
 
   Future<void> _editLandmark({int? index, bool addView = false}) async {
+    if (_pendingLandmark != null) return;
     final controller = c!;
     final existing = index == null ? null : controller.nodes[index];
     final name = TextEditingController(text: existing?.nameZh ?? '');
@@ -460,14 +472,31 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     if (index != null && !addView) {
       controller.updateNode(index, n, f, mode, confirmed);
     } else {
-      await controller.recordLandmark(
-        n,
-        f,
+      _pendingLandmark = (
+        name: n,
+        floor: f,
         mode: mode,
         confirmed: confirmed,
         nodeId: addView ? existing!.id : null,
       );
+      await _retryPendingLandmark();
     }
+  }
+
+  Future<void> _retryPendingLandmark() async {
+    final pending = _pendingLandmark;
+    if (pending == null || c!.busy) return;
+    if (!c!.running) await c!.resume();
+    if (!mounted || !c!.canCapture) return;
+    final added = await c!.recordLandmark(
+      pending.name,
+      pending.floor,
+      mode: pending.mode,
+      confirmed: pending.confirmed,
+      nodeId: pending.nodeId,
+    );
+    if (mounted && added && identical(_pendingLandmark, pending))
+      setState(() => _pendingLandmark = null);
   }
 
   String _modeName(ConnectorMode mode) => switch (mode) {
@@ -601,6 +630,35 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       ),
     ),
     heading(c!.name),
+    if (_pendingLandmark != null) ...[
+      Text(
+        t('相片尚未加入，已保留輸入：', 'Photo not added. Input kept: ') +
+            _pendingLandmark!.name,
+      ),
+      button(
+        '重試剛才路標',
+        'Retry pending landmark',
+        c!.busy ? null : _retryPendingLandmark,
+        primary: true,
+      ),
+      button(
+        '捨棄這次輸入',
+        'Discard pending input',
+        c!.busy
+            ? null
+            : () async {
+                if (await _confirm(
+                      t('捨棄這次輸入？', 'Discard pending input?'),
+                      t(
+                        '只會捨棄尚未加入的路標輸入。',
+                        'Only the pending landmark input will be discarded.',
+                      ),
+                    ) &&
+                    mounted)
+                  setState(() => _pendingLandmark = null);
+              },
+      ),
+    ],
     Text(
       '${c!.nodes.length} ${t('個路標', 'landmarks')} · ${c!.document?.complete == true ? t('資料已齊，可保存重行版本', 'Ready to save for replay') : t('尚有資料未確認，只能保存草稿', 'Incomplete confirmations; draft only')}',
     ),

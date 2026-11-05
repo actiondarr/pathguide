@@ -99,7 +99,19 @@ void main() {
         1,
         reason: 'Busy indicator must not replace the native camera preview',
       );
+      native.sendEvent('paused');
+      await t.pumpAndSettle();
+      expect(c.nodes, isEmpty);
+      expect(find.text('相片尚未加入，已保留輸入：門口'), findsOneWidget);
       native.captureReply!.complete(native.capturedResponse);
+      native.delayCapture = false;
+      await t.scrollUntilVisible(
+        find.text('重試剛才路標'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await t.ensureVisible(find.text('重試剛才路標'));
+      await t.tap(find.text('重試剛才路標'));
       for (var i = 0; i < 10; i++) {
         await t.runAsync(() async {
           await Future<void>.delayed(const Duration(milliseconds: 20));

@@ -281,25 +281,25 @@ class RecordedRouteController extends ChangeNotifier {
     return (frame, value);
   }
 
-  Future<void> recordLandmark(
+  Future<bool> recordLandmark(
     String name,
     String floor, {
     ConnectorMode mode = ConnectorMode.walk,
     bool confirmed = false,
     String? nodeId,
   }) async {
-    if (!canCapture || name.trim().isEmpty || name.length > 120) return;
+    if (!canCapture || name.trim().isEmpty || name.length > 120) return false;
     final existing = nodeId == null
         ? null
         : _nodes.indexWhere((n) => n.id == nodeId);
-    if (existing != null && existing < 0) return;
+    if (existing != null && existing < 0) return false;
     if (_views.length >= 64 ||
         (nodeId != null &&
             _views.where((v) => v.nodeId == nodeId).length >= 4)) {
       problem = 'capacity';
       notice = 'error';
       _changed();
-      return;
+      return false;
     }
     final op = _epoch;
     _busy = true;
@@ -311,7 +311,7 @@ class RecordedRouteController extends ChangeNotifier {
       final id = nodeId ?? 'n-${_nodes.length + 1}';
       if (_views.any((v) => v.nodeId == id && v.imageSha == value.imageSha)) {
         notice = 'duplicate';
-        return;
+        return false;
       }
       final featureSha = sha256.convert(value.feature).toString();
       final view = CapturedRouteView(
@@ -340,6 +340,7 @@ class RecordedRouteController extends ChangeNotifier {
       _media[featureSha] = value.feature;
       _dirty = true;
       notice = 'captured';
+      return true;
     } catch (e) {
       if (_current(op)) _error(e);
     } finally {
@@ -348,6 +349,7 @@ class RecordedRouteController extends ChangeNotifier {
         _changed();
       }
     }
+    return false;
   }
 
   void updateNode(
