@@ -237,7 +237,7 @@ class _DepthPageState extends State<DepthPage> with WidgetsBindingObserver {
                   child: TextButton.icon(
                     onPressed: widget.onBack,
                     icon: const Icon(Icons.arrow_back),
-                    label: Text(_t('返回導航', 'Back to navigation')),
+                    label: Text(_t('返回測試列表', 'Back to testing')),
                   ),
                 ),
                 Text(

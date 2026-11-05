@@ -1,5 +1,52 @@
 // Product copy. Keep user and provider content unchanged.
 const english = <String, String>{
+  "返回": "Back",
+  "開始": "Start",
+  "語音": "Speech",
+  "返回測試列表": "Back to testing",
+  "用相機辨識支援的物件，聽取簡短結果。":
+      "Recognize supported objects with the camera and hear a short result.",
+  "搜尋目的地，取得戶外步行路線。":
+      "Search for a destination and get an outdoor walking route.",
+  "拍攝菜單，查詢菜名及價格。": "Photograph a menu and look up dishes and prices.",
+  "調整語言及語速，查看帳號、教學和私隱。":
+      "Adjust language and speech speed. View your account, help and privacy.",
+  "開發測試": "Developer testing",
+  "相機試驗、合成樣例及診斷工具；不提供室內導航。":
+      "Camera trials, synthetic samples and diagnostics. No indoor navigation.",
+  "返回設定": "Back to settings",
+  "以下工具用來檢查個別功能，尚未連成室內錄路及導航流程。": "These tools check individual features. They do not yet form an indoor route recording or navigation flow.",
+  "錄路相機試驗": "Route camera trial",
+  "只檢查預覽及取相；相片暫存此頁，不會保存路線或提供導航。": "Check the preview and take a photo held only on this page. This does not save a route or provide navigation.",
+  "用合成路標試錄製、回放及跨樓層；不會開相機或定位。": "Try recording, replay and floor changes with synthetic landmarks. No camera or location is used.",
+  "回放預設路標及提示；不會判斷你身處的位置。":
+      "Replay preset landmarks and cues. This does not locate you.",
+  "用相機及支援的深度感測檢查物件距離；不提供避障指令。": "Check object ranges with the camera and supported depth sensors. No obstacle avoidance instructions.",
+  "辨識與模型診斷": "Recognition and model diagnostics",
+  "比較辨識模型、模擬資料及門檻，查看技術資料。進入後會開相機。": "Compare models, mock data and thresholds, and view technical details. Entering starts the camera.",
+  "模型資料": "Model details",
+  "開始前": "Before you start",
+  "略過說明": "Skip introduction",
+  "將相機對準前方，開始後聽取物件名稱。": "Point the camera ahead. Start to hear object names.",
+  "只辨識支援的物件；不代表前方暢通。可隨時暫停或返回。": "Only supported objects are recognized. This does not establish clear space. Pause or go back at any time.",
+  "輸入或說出目的地，選擇地點後預覽並開始步行導航。": "Type or say a destination. Choose a place, preview the route, then start walking navigation.",
+  "提供戶外路線提示；室內樓層、樓梯及入口仍須自行確認。": "Provides outdoor route cues. Confirm indoor floors, stairs and entrances yourself.",
+  "拍攝或選取菜單，再用文字或語音查詢。":
+      "Take or choose a menu photo, then search by text or voice.",
+  "閱讀可確認的菜名及價格；讀不到或配對不明時可重拍。": "Reads identifiable dishes and prices. Retake the photo if text or price pairing is unclear.",
+  "按開始開啟相機，再按「取一張相」檢查畫面。":
+      "Press Start to open the camera, then Take photo to check the image.",
+  "只暫存一張相；停止或返回會清除，尚未保存為路線。": "Holds one photo temporarily. Stop or go back to clear it. No route is saved.",
+  "使用預設合成路標，試錄製、命名及回放；可開啟跨樓層樣例。": "Try recording, naming and replay with preset synthetic landmarks. Floor change samples are also available.",
+  "畫面只演示狀態轉換，不會開相機、定位或帶你行路。": "Demonstrates state changes only. No camera, positioning or walking guidance.",
+  "選擇預設樣例，逐步查看路標及提示。":
+      "Choose a preset sample and step through landmarks and cues.",
+  "提示來自樣例資料，不會判斷你身處的位置。":
+      "Cues come from sample data. This does not locate you.",
+  "將相機對準物件，查看辨識及支援硬件提供的距離。": "Point the camera at an object to view recognition and ranges from supported hardware.",
+  "距離功能需要支援的深度感測；此試驗不提供避障指令。": "Range needs supported depth sensing. This trial gives no obstacle avoidance instructions.",
+  "進入後開啟相機；在「更多操作」比較模型、模擬資料及門檻。": "Entering starts the camera. Use More actions to compare models, mock data and thresholds.",
+  "這些控制用於診斷；一般辨識毋須調整。可隨時暫停或返回。": "These controls are for diagnostics. Regular recognition needs no adjustment. Pause or go back at any time.",
   "室內路線工具（試驗）": "Indoor route tools (trial)",
   "辨識已取消，請重新開始": "Recognition cancelled. Start again.",
   "結果已過期，正在重新取得。可停止後重試或返回。":
@@ -365,6 +412,8 @@ const english = <String, String>{
 };
 
 const englishTemplates = <String, String>{
+  "版本 {} · {} 類 · {} MB": "Version {} · {} classes · {} MB",
+  "版本 {} · {} 類": "Version {} · {} classes",
   "版本 {}": "Version {}",
   "{} 類": "{} classes",
   "播報速度，目前為 {}": "Speech speed, currently {}",

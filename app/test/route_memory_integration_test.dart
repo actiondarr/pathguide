@@ -10,7 +10,7 @@ import 'package:pathguide/settings/app_settings.dart';
 void main() {
   for (final language in AppLanguage.values) {
     testWidgets(
-      '${language.name}: home entry preserves mock routes across leave and section switches without hardware',
+      '${language.name}: developer entry preserves mock routes across leave and section switches without hardware',
       (t) async {
         t.view.physicalSize = const Size(320, 568);
         t.view.devicePixelRatio = 1;
@@ -44,14 +44,59 @@ void main() {
           PathGuideApp(settings: AppSettings.memory(language: language)),
         );
         await t.pumpAndSettle();
+        String tr(String zh, String en) =>
+            language == AppLanguage.chinese ? zh : en;
         Future<void> open() async {
+          if (find.byKey(const ValueKey('task-home')).evaluate().isNotEmpty) {
+            await t.scrollUntilVisible(
+              find.text(tr('設定與使用教學', 'Settings and help')),
+              150,
+            );
+            await t.ensureVisible(
+              find.widgetWithText(
+                OutlinedButton,
+                tr('設定與使用教學', 'Settings and help'),
+              ),
+            );
+            await t.pumpAndSettle();
+            await t.tap(
+              find.widgetWithText(
+                OutlinedButton,
+                tr('設定與使用教學', 'Settings and help'),
+              ),
+            );
+            await t.pumpAndSettle();
+          }
+          if (find
+              .byKey(const ValueKey('settings-page'))
+              .evaluate()
+              .isNotEmpty) {
+            await t.scrollUntilVisible(
+              find.text(tr('開發測試', 'Developer testing')),
+              150,
+            );
+            await t.ensureVisible(
+              find.widgetWithText(
+                OutlinedButton,
+                tr('開發測試', 'Developer testing'),
+              ),
+            );
+            await t.pumpAndSettle();
+            await t.tap(
+              find.widgetWithText(
+                OutlinedButton,
+                tr('開發測試', 'Developer testing'),
+              ),
+            );
+            await t.pumpAndSettle();
+          }
           final entry = find.ancestor(
             of: find.text(
               language == AppLanguage.chinese
                   ? '室內路線工具（試驗）'
                   : 'Indoor route tools (trial)',
             ),
-            matching: find.byType(FilledButton),
+            matching: find.byType(OutlinedButton),
           );
           await t.scrollUntilVisible(
             entry,
@@ -61,6 +106,12 @@ void main() {
           await t.pumpAndSettle();
           await t.tap(entry);
           await t.pumpAndSettle();
+          final skip = find.text(tr('略過說明', 'Skip introduction'));
+          if (skip.evaluate().isNotEmpty) {
+            await t.ensureVisible(skip);
+            await t.tap(skip);
+            await t.pumpAndSettle();
+          }
         }
 
         await open();
@@ -102,9 +153,7 @@ void main() {
           same(c),
         );
         expect(c.routes.single.name, 'My route');
-        await t.tap(
-          find.text(language == AppLanguage.chinese ? '首頁' : 'Home').last,
-        );
+        await t.tap(find.byKey(const ValueKey('route-back')));
         await t.pumpAndSettle();
         expect(find.byType(RouteMemoryMockPage), findsNothing);
         await open();

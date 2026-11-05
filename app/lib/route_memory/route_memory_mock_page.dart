@@ -7,7 +7,6 @@ import 'cross_floor_contract.dart';
 import 'cross_floor_mock_fixtures.dart';
 import 'cross_floor_mock_page.dart';
 import 'route_library_screen.dart';
-import 'route_capture_page.dart';
 
 class RouteMemoryMockPage extends StatefulWidget {
   const RouteMemoryMockPage({
@@ -45,18 +44,6 @@ class _RouteMemoryMockPageState extends State<RouteMemoryMockPage>
     Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => RouteLibraryScreen(settings: widget.settings),
-      ),
-    );
-  }
-
-  void _openCapture() {
-    c.pause();
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => RouteCapturePage(
-          settings: widget.settings,
-          onBack: () => Navigator.of(context).pop(),
-        ),
       ),
     );
   }
@@ -262,12 +249,6 @@ class _RouteMemoryMockPageState extends State<RouteMemoryMockPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _btn(
-                        'route-open-camera',
-                        _t('錄路相機試驗', 'Route camera trial'),
-                        _openCapture,
-                      ),
-                      const SizedBox(height: 12),
                       _banner(),
                       const SizedBox(height: 12),
                       Text(

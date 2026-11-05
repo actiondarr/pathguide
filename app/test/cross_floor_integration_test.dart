@@ -37,6 +37,12 @@ void main() {
       final settings = AppSettings.memory();
       await t.pumpWidget(PathGuideApp(settings: settings));
       await t.pumpAndSettle();
+      await t.ensureVisible(find.text('設定與使用教學'));
+      await t.tap(find.text('設定與使用教學'));
+      await t.pumpAndSettle();
+      await t.ensureVisible(find.text('開發測試'));
+      await t.tap(find.text('開發測試'));
+      await t.pumpAndSettle();
       final entry = find.text('室內路線工具（試驗）');
       await t.scrollUntilVisible(
         entry,
@@ -44,6 +50,8 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       await t.tap(entry);
+      await t.pumpAndSettle();
+      await t.tap(find.text('略過說明'));
       await t.pumpAndSettle();
       final original = t
           .widget<RouteMemoryMockPage>(find.byType(RouteMemoryMockPage))
