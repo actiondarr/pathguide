@@ -4,7 +4,7 @@
   "status": "P2-D_engineering_passed_phone_prerelease_candidate",
   "version": "1.5.0+9",
   "source_sha256": {
-    "app/lib/route_memory/route_observation_source.dart": "986c06080fc6c56d05c03da137e1b877ceef6db58913452284bef21ac95f470e",
+    "app/lib/route_memory/route_observation_source.dart": "de9e27854197308791394d1db361860d078bf9f727babf634e8f16e168b895fd",
     "app/lib/route_memory/route_capture_controller.dart": "f952631bc35e03dc886515eaab68f17f827aa866b9383a0ed04ba5cd9589c9b4",
     "app/lib/route_memory/route_capture_page.dart": "b9fe3e73acc08168d2f3b00b15e7f0e1cc67fe281f85afb9e28028e271e539b1",
     "app/lib/route_memory/route_memory_mock_page.dart": "411434bbefba324f74520d997bcda7dc76bfc2a0bd7541df174174a29def2861",
@@ -40,26 +40,16 @@
   },
   "dart_checks": [
     {
-      "step": "flutter-tests-verified",
-      "command": [
-        "/Users/darr/Desktop/development/flutter/bin/flutter",
-        "test",
-        "--no-pub",
-        "--reporter",
-        "compact"
-      ],
+      "step": "flutter-tests-approved",
       "exit": 0,
-      "log": "/Users/darr/Desktop/development/pathguide-iphone-demo-source/dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/flutter-tests-verified.log"
+      "tests": 435,
+      "log": "dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/flutter-tests-approved.log"
     },
     {
-      "step": "analyze-verified",
-      "command": [
-        "/Users/darr/Desktop/development/flutter/bin/flutter",
-        "analyze",
-        "--no-pub"
-      ],
+      "step": "analyze-approved",
       "exit": 0,
-      "log": "/Users/darr/Desktop/development/pathguide-iphone-demo-source/dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/analyze-verified.log"
+      "issues": 0,
+      "log": "dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/analyze-approved.log"
     }
   ],
   "flutter_tests": 435,
@@ -85,7 +75,12 @@
     "native_before_note": "One assertion failed; xcodebuild hung finalizing failed results and was terminated after suite completion",
     "dart_before_log": "dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/dart-subscriber-before.log",
     "cache_before_log": "dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/cache-before.log",
-    "after": "45 native and 435 Dart tests pass; stopped image cache untracked"
+    "after": "45 native and 435 Dart tests pass; stopped image cache untracked",
+    "stop_retry": {
+      "red_log": "dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/repeated-stop-before.log",
+      "green_log": "dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/repeated-stop-after.log",
+      "behavior": "Retain unresolved identity; repeat native confirmation; block restart until confirmed"
+    }
   },
   "phone_build": {
     "status": "signed_release_build_passed",
@@ -93,8 +88,8 @@
     "version": "1.5.0",
     "build": "9",
     "codesign_verify_exit": 0,
-    "executable_sha256": "8b8f91cca2c47a54778c07f939803c154ad95e88fa52ed51f3e24a4147d4a90b",
-    "log": "dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/iphone-release-build.log"
+    "executable_sha256": "9b714948b4f4fb45b0608333f51f9b721fc6617246372a087e53b688254b8a22",
+    "log": "dataset_pipeline/review_artifacts/2026-11-05/codex-p2d/iphone-release-approved.log"
   },
   "model_sha256": {
     "app/assets/models/detector-hk9.json": "020c57899aeb91c8fedc0421f76a73c39c7aa79e1a90de6e353d69f98c1367bf",
@@ -106,5 +101,9 @@
   "installation": "not_run",
   "persistence": "none; JPEG and its display cache cleared on stop/background/exit",
   "scope": "live native camera entry, permission/retry/stop/lifecycle; no route storage/localization/walking guidance",
-  "next": "Publish source and immutable phone prerelease, install and collect first user results; then P3-A"
+  "next": "Publish source and immutable phone prerelease, install and collect first user results; then P3-A",
+  "review": {
+    "standards": "Unconfirmed stop retry finding fixed and re-reviewed; no remaining findings",
+    "spec": "Same stop retry finding fixed and re-reviewed; no remaining findings"
+  }
 }

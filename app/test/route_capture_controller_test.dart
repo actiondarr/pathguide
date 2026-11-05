@@ -62,6 +62,11 @@ void main() {
     expect(c.status, RouteCaptureStatus.stopUnconfirmed);
     expect(c.running, isFalse);
     expect(c.keyframe, isNull);
+    await c.stop();
+    expect(c.status, RouteCaptureStatus.stopUnconfirmed);
+    native.stopStatus = 'stopped';
+    await c.stop();
+    expect(c.status, RouteCaptureStatus.stopped);
     c.dispose();
     await Future<void>.delayed(Duration.zero);
     native.detach();

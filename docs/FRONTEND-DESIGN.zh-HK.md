@@ -479,6 +479,8 @@ header綁requestId／startRequestId、session／generation／sequence、routeId�
 
 `RouteCaptureController`用操作世代隔離權限／取相／停止回覆；等權限期間仍可停止。真正paused／hidden／detached會停機，權限sheet的inactive本身不當作背景；resumed只恢復可操作，不自動開始。`RouteCapturePage`以固定位置提供開始／取相、停止及返回，正文可捲動，繁中／English及兩倍字體可用；只以狀態live region回饋，沒有另開TTS。相片僅保留於此頁，換相、停止／背景及離頁清掉controller引用並逐張evict圖片快取，避免重複取相累積舊相片。
 
+覆核修正：停止未確認或平台回覆失敗時保留原session，重試仍須向原生取得相符的stopped確認；不以第二次按停止或本機清空狀態冒充成功。未確認期間重新開始亦先等停止確認。
+
 沿用工作票#6指定的三個測試介面：真實source對平台通道、controller公開操作、Widget按鈕／生命周期；只替換外部通道、時間及原生預覽。兩倍字體／鍵盤及中英文已作合成畫面覆核；真機相機、VoiceOver及人工品質分開待驗。版本候選為1.5.0+9；發佈／安裝狀態以版本收據為準，不以本段代表已裝機。
 
 首輪手機實測約10–15分鐘：

@@ -110,6 +110,7 @@ class RouteObservationSource {
   int _lastSequence = 0;
   String? _clockEpoch;
   _RouteSession? _current;
+  _RouteSession? _unconfirmedStop;
   Future<RouteCaptureStatus>? _stopping;
   Completer<RouteCaptureResult>? _pending;
   String? _pendingId;
@@ -142,6 +143,11 @@ class RouteObservationSource {
     required int routeVersion,
   }) async {
     if (!supported) return RouteCaptureStatus.unsupported;
+    if (_unconfirmedStop != null || _stopping != null) {
+      if (await stop() != RouteCaptureStatus.stopped) {
+        return RouteCaptureStatus.stopUnconfirmed;
+      }
+    }
     final current = _RouteSession(_id, ++_generation, routeId, routeVersion);
     _cancelLocal();
     _current = current;
@@ -342,24 +348,32 @@ class RouteObservationSource {
   }
 
   Future<RouteCaptureStatus> stop() async {
-    final current = _current;
+    final current = _current ?? _unconfirmedStop;
     _current = null;
     _cancelLocal();
+    if (_stopping != null) return _stopping!;
     if (current == null || !supported) {
-      return _stopping ?? RouteCaptureStatus.stopped;
+      return RouteCaptureStatus.stopped;
     }
+    _unconfirmedStop = current;
     final operation = () async {
       try {
-        return RouteCaptureStatus.parse(
-          (await _invoke('stop', current.args('stop')))['status'],
-        );
+        final reply = await _invoke('stop', current.args('stop'));
+        return reply['status'] == 'stopped' && _matches(reply, current)
+            ? RouteCaptureStatus.stopped
+            : RouteCaptureStatus.stopUnconfirmed;
       } catch (_) {
         return RouteCaptureStatus.stopUnconfirmed;
       }
     }();
     _stopping = operation;
     final status = await operation;
-    if (_stopping == operation) _stopping = null;
+    if (_stopping == operation) {
+      _stopping = null;
+      if (status == RouteCaptureStatus.stopped && _unconfirmedStop == current) {
+        _unconfirmedStop = null;
+      }
+    }
     return status;
   }
 }
