@@ -431,7 +431,7 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
-目前手機試驗版：**[1.7.0+13 P3-C錄路／逐點重行工程版](https://github.com/actiondarr/pathguide/releases/tag/v1.7.0%2B13)**。三入口、首次錄路、加密JPEG／Vision特徵保存、重開／修正／還原／刪除及跨層出口重認已接通；490項Flutter、53項原生Simulator、analyze、兩軸覆核及簽署建置／簽章／四個模型雜湊通過。損壞路線顯示不可重行，取消分析的回覆有上限且立即要求停止相機。不可變tag與分支遠端核對、prerelease建立後，iPhone安裝及正常啟動成功，見[交付收據](../verification/release-receipts/app-1.7.0+13.json)。1.7.0+13真人試用已回報首次相機後卡住、相片未保存，該版錄路驗收未通過；1.7.1+14修正已過493項Flutter、54項原生及analyze，兩軸覆核及簽署建置／簽章／模型核對已過，1.7.1+14不可變tag／prerelease已核遠端；手機連線中斷，尚未安裝，真人複測待完成；先前旁白無問題回報不外推新畫面。重行為逐點確認，沒有連續轉向語音、即時避障或GPS軌跡；P4與P5仍未完成，工程門檻不是行走可靠度。舊版本及P3-A儲存／P3-B生成圖硬件檢查證據保留，沒有上傳私人照片、位置或截圖。
+目前手機試驗版：**[1.7.1+14 錄路卡住修正版](https://github.com/actiondarr/pathguide/releases/tag/v1.7.1%2B14)**。1.7.0+13真人回報相機首次後卡住、照片未保存，該版錄路驗收未通過。修正版保持原生預覽生命週期、修正對話框輸入釋放及逾時隔離，拍攝中斷保留輸入供明確重試。493項Flutter、54項原生、analyze與兩軸覆核通過；簽署建置／簽章／模型雜湊及不可變tag／prerelease核對後，USB重連成功更新及正常啟動，沒有卸載或清空資料。見[交付收據](../verification/release-receipts/app-1.7.1+14.json)。新版手機拍攝／保存及VoiceOver複測待使用者回報，不因工程測試稱真人通過；逐點重認、連續語音／即時避障及場地品質界線不變。
 
 <a id="1-目標目前-app-與原計劃差距"></a>
 
@@ -1079,3 +1079,5 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 #15覆核修正：拍攝途中背景／native中斷時保留已提交名稱、樓層及確認資料；顯示尚未加入並提供明確重試／捨棄，不自動拍攝。對話框以DialogRoute.completed而非首個frame作釋放界線。
 
 2026-11-06 #15交付：493項Flutter、54項原生、analyze及兩軸覆核通過，1.7.1+14簽署建置／簽章／模型雜湊核對後已commit/push、發布不可變tag/prerelease並核對遠端。裝機嘗試因CoreDevice連線重設失敗，待USB連接解鎖後更新；手機仍為舊版，沒有清空資料。見verification/codex-p3c-hotfix-20261106.json。
+
+2026-11-06 #15裝機收據更新：首次連線中斷後，使用者接USB及解鎖；1.7.1+14更新安裝／正常啟動成功，本機資料保留，真人複測待回報。前述「尚未安裝」為第一次失敗嘗試歷史，不是目前交付狀態。

@@ -40,9 +40,9 @@
     "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.7.1%2B14"
   },
   "installation": {
-    "status": "pending",
-    "attempt": "failed CoreDevice connection reset by peer, transport error 4000",
-    "data_preservation": "no uninstall or clear performed",
+    "status": "installed_and_normal_launch_succeeded",
+    "previous_attempt": "connection reset; reconnected after user USB/unlock confirmation",
+    "data_preservation": "update only, no uninstall or clear",
     "human_retest": "pending"
   }
 }
