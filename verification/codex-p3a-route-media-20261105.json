@@ -35,8 +35,101 @@
     "executable_sha256": "c5732b9a1ddfe86f5ed5185b2a77d6e8df383f29ec3f11fedd17e08b30a0a55b",
     "log": "dataset_pipeline/review_artifacts/p3a-1.6.0-iphone-release.log"
   },
-  "device_storage_probe": "pending; isolated artificial fixture only",
-  "release": "pending",
+  "device_storage_probe": {
+    "status": "passed",
+    "device_family": "iPhone",
+    "separate_processes": [
+      "write",
+      "read",
+      "delete"
+    ],
+    "results": [
+      {
+        "filePolicy": {
+          "allExcludedFromBackup": true,
+          "allProtected": true,
+          "bytes": 4948,
+          "files": 5,
+          "protectionClasses": [
+            "NSFileProtectionComplete"
+          ]
+        },
+        "fixtureOnly": true,
+        "keyPolicy": {
+          "found": true,
+          "synchronizable": false,
+          "thisDeviceOnlyWhenUnlocked": true
+        },
+        "passed": true,
+        "phase": "write",
+        "reopenedAndVerified": true
+      },
+      {
+        "filePolicy": {
+          "allExcludedFromBackup": true,
+          "allProtected": true,
+          "bytes": 4948,
+          "files": 5,
+          "protectionClasses": [
+            "NSFileProtectionComplete"
+          ]
+        },
+        "fixtureOnly": true,
+        "keyPolicy": {
+          "found": true,
+          "synchronizable": false,
+          "thisDeviceOnlyWhenUnlocked": true
+        },
+        "passed": true,
+        "phase": "read",
+        "reopenedAndVerified": true
+      },
+      {
+        "afterDelete": {
+          "allExcludedFromBackup": true,
+          "allProtected": true,
+          "bytes": 195,
+          "files": 2,
+          "protectionClasses": [
+            "NSFileProtectionComplete"
+          ]
+        },
+        "filePolicy": {
+          "allExcludedFromBackup": true,
+          "allProtected": true,
+          "bytes": 4948,
+          "files": 5,
+          "protectionClasses": [
+            "NSFileProtectionComplete"
+          ]
+        },
+        "fixtureOnly": true,
+        "keyPolicy": {
+          "found": true,
+          "synchronizable": false,
+          "thisDeviceOnlyWhenUnlocked": true
+        },
+        "passed": true,
+        "phase": "delete",
+        "probeDirectoryRemoved": true,
+        "probeKeyRemoved": true,
+        "reopenedAndVerified": true
+      }
+    ],
+    "scope": "artificial fixtures and independent probe directory/key; no private route/camera media",
+    "not_tested": [
+      "locked-device interaction",
+      "iCloud backup/restore",
+      "real Vision feature extraction",
+      "actual route recording/localization/walking"
+    ]
+  },
+  "release": {
+    "tag": "v1.6.0+11",
+    "source_commit": "85a58cc2988c2656180f1bb0ddf6f579725dedde",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.6.0%2B11",
+    "remote_verified_before_install": true
+  },
   "human_acceptance": "not claimed",
   "private_media": "no private/reference screenshots or camera photos copied into repository",
   "ui_reference_scope": {
@@ -56,5 +149,8 @@
     "app/assets/models/detector-hk9.tflite": "8bbfa43b1fe2b440e608652e75fa86d15e571031c45b7b21f30689852468e3c9",
     "app/assets/models/detector.json": "172db9ff4f637fd4d6188a736d436533577a9ca015775961cdb0bb637f2ed327",
     "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
-  }
+  },
+  "installation": "success",
+  "normal_launch": "success",
+  "engineering_status": "accepted_engineering"
 }
