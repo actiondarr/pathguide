@@ -1,0 +1,20 @@
+{
+  "issue": 18,
+  "parent_issue": 16,
+  "baseline_commit": "f81b2a8ad697a43daa6fcb8f6b6aa7c9a3b04b8c",
+  "checks": {
+    "flutter_tests": 513,
+    "analyze": "passed",
+    "native": "running",
+    "logs": [
+      "dataset_pipeline/review_artifacts/floor-context-full-final.log",
+      "dataset_pipeline/review_artifacts/floor-context-analyze-final.log",
+      "dataset_pipeline/review_artifacts/floor-context-ui-final.log"
+    ]
+  },
+  "schema": "captured3 provenance; legacy1/2 retained; old reader rejects3",
+  "review": "pending",
+  "release": "1.8.0+15 candidate, not delivered",
+  "human_acceptance": "pending, prior1.7.1+14 also unconfirmed",
+  "privacy": "no user media, keys, location or screenshots included; no model/training/cloud changes"
+}

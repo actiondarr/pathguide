@@ -27,11 +27,26 @@ class RouteStoreFailure implements Exception {
   String toString() => 'RouteStoreFailure(${problem.name})';
 }
 
+enum FloorEvidence { unknown, confirmed, inherited, segmentConfirmed }
+
 @immutable
 class RoutePoint {
-  const RoutePoint(this.id, this.nameZh, this.nameEn, {this.floor});
+  const RoutePoint(
+    this.id,
+    this.nameZh,
+    this.nameEn, {
+    this.floor,
+    FloorEvidence? floorEvidence,
+    this.floorAnchorId,
+    this.isFloorContextAnchor = false,
+  }) : floorEvidence =
+           floorEvidence ??
+           (floor == null ? FloorEvidence.unknown : FloorEvidence.confirmed);
   final String id, nameZh, nameEn;
   final FloorRef? floor;
+  final FloorEvidence floorEvidence;
+  final String? floorAnchorId;
+  final bool isFloorContextAnchor;
 }
 
 @immutable
@@ -127,6 +142,40 @@ class RouteDocument {
         throw const RouteStoreFailure(RouteProblem.invalid);
       }
     }
+    for (var i = 0; i < nodes.length; i++) {
+      final n = nodes[i];
+      final derived = [
+        FloorEvidence.inherited,
+        FloorEvidence.segmentConfirmed,
+      ].contains(n.floorEvidence);
+      if ((n.floor == null) != (n.floorEvidence == FloorEvidence.unknown) ||
+          (derived != (n.floorAnchorId != null)) ||
+          (source == RouteContentSource.synthetic &&
+              (derived || n.isFloorContextAnchor)) ||
+          (n.isFloorContextAnchor &&
+              n.floorEvidence != FloorEvidence.confirmed)) {
+        throw const RouteStoreFailure(RouteProblem.invalid);
+      }
+      if (derived) {
+        final anchor = nodes.indexWhere((a) => a.id == n.floorAnchorId);
+        if (anchor < 0 ||
+            anchor >= i ||
+            nodes[anchor].floorEvidence != FloorEvidence.confirmed ||
+            !nodes[anchor].isFloorContextAnchor ||
+            nodes[anchor].floor != n.floor ||
+            nodes[anchor].floor!.label != n.floor!.label) {
+          throw const RouteStoreFailure(RouteProblem.invalid);
+        }
+        for (var j = anchor + 1; j <= i; j++) {
+          if (nodes[j].floor != n.floor ||
+              nodes[j].floor!.label != n.floor!.label ||
+              j - 1 >= edges.length ||
+              edges[j - 1].mode != ConnectorMode.walk) {
+            throw const RouteStoreFailure(RouteProblem.invalid);
+          }
+        }
+      }
+    }
     if (edges.length > (nodes.isEmpty ? 0 : nodes.length - 1)) {
       throw const RouteStoreFailure(RouteProblem.invalid);
     }
@@ -139,10 +188,27 @@ class RouteDocument {
     }
   }
 
+  bool get _hasProvenance =>
+      source == RouteContentSource.captured &&
+      nodes.any(
+        (n) =>
+            n.isFloorContextAnchor ||
+            n.floorAnchorId != null ||
+            n.floorEvidence == FloorEvidence.inherited ||
+            n.floorEvidence == FloorEvidence.segmentConfirmed,
+      );
+
   bool get complete {
     if (nodes.length < 2 ||
         edges.length != nodes.length - 1 ||
-        nodes.any((n) => n.floor == null)) {
+        nodes.any(
+          (n) =>
+              n.floor == null ||
+              ![
+                FloorEvidence.confirmed,
+                FloorEvidence.segmentConfirmed,
+              ].contains(n.floorEvidence),
+        )) {
       return false;
     }
     if (source == RouteContentSource.captured &&
@@ -165,7 +231,11 @@ class RouteDocument {
   }
 
   Map<String, Object?> toMap() => {
-    'schemaVersion': source == RouteContentSource.synthetic ? 1 : 2,
+    'schemaVersion': source == RouteContentSource.synthetic
+        ? 1
+        : _hasProvenance
+        ? 3
+        : 2,
     'source': source.name,
     if (source == RouteContentSource.captured)
       'views': [for (final view in views) view.toMap()],
@@ -179,6 +249,9 @@ class RouteDocument {
       for (final n in nodes)
         {
           'id': n.id,
+          if (_hasProvenance) 'floorEvidence': n.floorEvidence.name,
+          if (_hasProvenance) 'floorAnchor': n.floorAnchorId,
+          if (_hasProvenance) 'floorContextAnchor': n.isFloorContextAnchor,
           'zh': n.nameZh,
           'en': n.nameEn,
           'floor': n.floor == null
@@ -202,13 +275,33 @@ class RouteDocument {
     ],
   };
 
+  static FloorEvidence _decodeFloorEvidence(Object? raw) {
+    for (final value in FloorEvidence.values) {
+      if (value.name == raw) return value;
+    }
+    throw const RouteStoreFailure(RouteProblem.incompatible);
+  }
+
   factory RouteDocument.fromMap(Map<String, dynamic> v) {
     final synthetic =
         v['schemaVersion'] == 1 &&
         v['source'] == 'synthetic' &&
         !v.containsKey('views');
-    final captured = v['schemaVersion'] == 2 && v['source'] == 'captured';
+    final captured =
+        [2, 3].contains(v['schemaVersion']) && v['source'] == 'captured';
     if ((!synthetic && !captured) || v['direction'] != 'recorded') {
+      throw const RouteStoreFailure(RouteProblem.incompatible);
+    }
+    if (v['schemaVersion'] != 3 &&
+        (v['nodes'] as List).any(
+          (n) =>
+              n is Map &&
+              [
+                'floorEvidence',
+                'floorAnchor',
+                'floorContextAnchor',
+              ].any(n.containsKey),
+        )) {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
     return RouteDocument(
@@ -234,6 +327,15 @@ class RouteDocument {
             n['id'] as String,
             n['zh'] as String,
             n['en'] as String,
+            floorEvidence: v['schemaVersion'] == 3
+                ? _decodeFloorEvidence(n['floorEvidence'])
+                : null,
+            isFloorContextAnchor: v['schemaVersion'] == 3
+                ? (n['floorContextAnchor'] as bool? ?? false)
+                : false,
+            floorAnchorId: v['schemaVersion'] == 3
+                ? n['floorAnchor'] as String?
+                : null,
             floor: n['floor'] == null
                 ? null
                 : FloorRef(

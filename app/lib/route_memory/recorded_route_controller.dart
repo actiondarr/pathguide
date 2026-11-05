@@ -64,6 +64,115 @@ class RecordedRouteController extends ChangeNotifier {
       _stopping = false,
       _dirty = false,
       _reloadRequired = false;
+  FloorRef? _recordingFloor;
+  String? _recordingAnchor;
+  ConnectorMode? _recordingConnector;
+  List<String> _floorCandidates = const [];
+  final _floorClock = Stopwatch()..start();
+  Duration? _floorCandidatesAt;
+  FloorRef? get recordingFloor => _recordingFloor;
+  List<String> get floorCandidates =>
+      _floorCandidatesAt != null &&
+          _floorClock.elapsed - _floorCandidatesAt! <=
+              const Duration(seconds: 10)
+      ? _floorCandidates
+      : const [];
+  ConnectorMode? get recordingConnector => _recordingConnector;
+  List<RoutePoint> get floorAnchors =>
+      List.unmodifiable(_nodes.where((n) => n.isFloorContextAnchor));
+
+  void _withdrawFloorContext() {
+    _recordingFloor = null;
+    _recordingAnchor = null;
+  }
+
+  void markFloorUnknown() {
+    if (!canEdit) return;
+    _withdrawFloorContext();
+    notice = 'floorUnknown';
+    _changed();
+  }
+
+  Future<bool> confirmCurrentFloor(String label) async {
+    if (!canCapture || label.trim().isEmpty || label.trim().length > 40) {
+      return false;
+    }
+    final op = _epoch;
+    final added = await recordLandmark(
+      '路標 ${_nodes.length + 1}',
+      label,
+      confirmed: true,
+      connectionConfirmed: false,
+      mode: _recordingConnector ?? ConnectorMode.walk,
+    );
+    if (!added || !_current(op) || !_running) return false;
+    final point = _nodes.last;
+    _nodes[_nodes.length - 1] = RoutePoint(
+      point.id,
+      point.nameZh,
+      'Landmark ${_nodes.length}',
+      floor: point.floor,
+      isFloorContextAnchor: true,
+    );
+    _recordingFloor = _nodes.last.floor;
+    _recordingAnchor = _nodes.last.id;
+    _recordingConnector = null;
+    notice = 'floorConfirmed';
+    _changed();
+    return true;
+  }
+
+  Future<bool> beginFloorChange(ConnectorMode connector) async {
+    if (!canCapture || connector == ConnectorMode.walk) return false;
+    final op = _epoch;
+    final added = await recordLandmark(
+      '轉層入口 ${_nodes.length + 1}',
+      '',
+      inheritContext: true,
+    );
+    if (!_current(op)) return false;
+    _withdrawFloorContext();
+    _floorCandidates = const [];
+    _recordingConnector = connector;
+    notice = added ? 'floorChanging' : 'floorChangingNoPhoto';
+    _changed();
+    return added;
+  }
+
+  void confirmFloorSegment(String anchorId) {
+    if (!canEdit || _running) return;
+    final start = _nodes.indexWhere(
+      (n) => n.id == anchorId && n.isFloorContextAnchor,
+    );
+    if (start < 0) return;
+    final floor = _nodes[start].floor;
+    for (var i = start + 1; i < _nodes.length; i++) {
+      final n = _nodes[i];
+      if (n.isFloorContextAnchor ||
+          n.floor != floor ||
+          _edges[i - 1].mode != ConnectorMode.walk) {
+        break;
+      }
+      if (n.floorEvidence == FloorEvidence.confirmed) {
+        _edges[i - 1] = _edge(i, ConnectorMode.walk, true);
+        continue;
+      }
+      if (n.floorAnchorId != anchorId) break;
+      _nodes[i] = RoutePoint(
+        n.id,
+        n.nameZh,
+        n.nameEn,
+        floor: floor,
+        floorEvidence: FloorEvidence.segmentConfirmed,
+        floorAnchorId: anchorId,
+      );
+      _edges[i - 1] = _edge(i, ConnectorMode.walk, true);
+    }
+    _dirty = true;
+    notice = 'segmentReviewed';
+    _changed();
+  }
+
   bool finished = false;
   bool automaticRecording = false;
   Timer? _automaticTimer;
@@ -236,6 +345,9 @@ class RecordedRouteController extends ChangeNotifier {
     if (_disposed || !_foreground || notice == 'stopUnconfirmed') return;
     _localizer?.dispose();
     _localizer = null;
+    _withdrawFloorContext();
+    _recordingConnector = null;
+    _floorCandidates = const [];
     _manualEntryPending = false;
     automaticRecording = automatic;
     automaticCandidates = 0;
@@ -346,6 +458,8 @@ class RecordedRouteController extends ChangeNotifier {
     bool confirmed = false,
     String? nodeId,
     bool automatic = false,
+    bool inheritContext = false,
+    bool connectionConfirmed = true,
   }) async {
     if (!canCapture || name.trim().isEmpty || name.length > 120) return false;
     final existing = nodeId == null
@@ -367,15 +481,34 @@ class RecordedRouteController extends ChangeNotifier {
     _changed();
     try {
       final (frame, value) = await _capture(op);
+      final floorToken = RegExp(
+        r'^(?:[BL]?\d{1,2}F|G|GF|UG|LG|M|[0-9一二三四五六七八九十百零]{1,5}樓)$',
+      );
+      _floorCandidatesAt = _floorClock.elapsed;
+      _floorCandidates = List.unmodifiable(
+        value.text
+            .map(_normalizedFloor)
+            .where((v) => floorToken.hasMatch(v))
+            .toSet()
+            .take(5),
+      );
+      final conflicting =
+          _recordingFloor != null &&
+          _floorCandidates.any(
+            (v) => v != _normalizedFloor(_recordingFloor!.label),
+          );
+      if (conflicting) _withdrawFloorContext();
       if (automatic) {
         automaticCandidates++;
         if (!await RouteFrameQuality.usable(frame)) {
-          if (_current(op)) notice = 'automaticLowDetail';
+          if (_current(op)) {
+            notice = conflicting ? 'floorConflict' : 'automaticLowDetail';
+          }
           return false;
         }
         if (!_current(op) || !_running) return false;
         if (_views.any((v) => v.imageSha == value.imageSha)) {
-          notice = 'automaticDuplicate';
+          notice = conflicting ? 'floorConflict' : 'automaticDuplicate';
           return false;
         }
         if (_views.isNotEmpty) {
@@ -384,7 +517,7 @@ class RecordedRouteController extends ChangeNotifier {
           final distances = await analyzer.compare(value.feature, [last]);
           if (!_current(op) || !_running) return false;
           if (distances.single < 2) {
-            notice = 'automaticDuplicate';
+            notice = conflicting ? 'floorConflict' : 'automaticDuplicate';
             return false;
           }
         }
@@ -409,17 +542,27 @@ class RecordedRouteController extends ChangeNotifier {
       );
       view.validate(_id!);
       if (nodeId == null) {
-        final f = _floor(floor, confirmed);
+        final inherited =
+            (automatic || inheritContext) && _recordingFloor != null;
+        final f = inherited ? _recordingFloor : _floor(floor, confirmed);
         _nodes.add(
           RoutePoint(
             id,
             name.trim(),
             automatic ? 'Landmark ${_nodes.length + 1}' : name.trim(),
             floor: f,
+            floorEvidence: inherited ? FloorEvidence.inherited : null,
+            floorAnchorId: inherited ? _recordingAnchor : null,
           ),
         );
         if (_nodes.length > 1) {
-          _edges.add(_edge(_nodes.length - 1, mode, confirmed));
+          _edges.add(
+            _edge(
+              _nodes.length - 1,
+              _recordingConnector ?? mode,
+              confirmed && connectionConfirmed,
+            ),
+          );
         }
       }
       _views.add(view);
@@ -427,7 +570,7 @@ class RecordedRouteController extends ChangeNotifier {
           .asUnmodifiableView();
       _media[featureSha] = value.feature;
       _dirty = true;
-      notice = 'captured';
+      notice = conflicting ? 'floorConflict' : 'captured';
       return true;
     } catch (e) {
       if (_current(op)) {
@@ -470,14 +613,54 @@ class RecordedRouteController extends ChangeNotifier {
       return;
     }
     try {
-      final previous = _nodes[index], f = _floor(floor, confirmed);
+      final previous = _nodes[index];
+      final previousMode = index > 0
+          ? _edges[index - 1].mode
+          : ConnectorMode.walk;
+      final preserve =
+          previous.floor != null &&
+          _normalizedFloor(previous.floor!.label) == _normalizedFloor(floor) &&
+          previousMode == mode &&
+          confirmed == incomingConfirmed(index);
+      final f = preserve ? previous.floor : _floor(floor, confirmed);
       _nodes[index] = RoutePoint(
         previous.id,
         name.trim(),
         name.trim(),
         floor: f,
+        floorEvidence: preserve ? previous.floorEvidence : null,
+        floorAnchorId: preserve ? previous.floorAnchorId : null,
+        isFloorContextAnchor: previous.isFloorContextAnchor && f != null,
       );
       if (index > 0) _edges[index - 1] = _edge(index, mode, confirmed);
+      if (previous.floor != f || previousMode != mode) {
+        _withdrawFloorContext();
+        for (var j = index + 1; j < _nodes.length; j++) {
+          final n = _nodes[j];
+          if (n.floorAnchorId == null) continue;
+          final anchor = _nodes.indexWhere((p) => p.id == n.floorAnchorId);
+          if (anchor > index) continue;
+          _nodes[j] = RoutePoint(n.id, n.nameZh, n.nameEn);
+          final e = _edges[j - 1];
+          _edges[j - 1] = RouteSegment(
+            e.fromId,
+            e.toId,
+            e.mode,
+            connectorId: e.connectorId,
+            confirmed: false,
+          );
+          if (j < _edges.length) {
+            final next = _edges[j];
+            _edges[j] = RouteSegment(
+              next.fromId,
+              next.toId,
+              next.mode,
+              connectorId: next.connectorId,
+              confirmed: false,
+            );
+          }
+        }
+      }
       if (previous.floor != f && index < _edges.length) {
         final old = _edges[index];
         _edges[index] = RouteSegment(
@@ -503,6 +686,9 @@ class RecordedRouteController extends ChangeNotifier {
       if (name.trim().isEmpty || name.length > 120) return;
       _name = name.trim();
     }
+    _withdrawFloorContext();
+    _recordingConnector = null;
+    _floorCandidates = const [];
     _automaticTimer?.cancel();
     final op = ++_epoch;
     _busy = true;
@@ -767,6 +953,9 @@ class RecordedRouteController extends ChangeNotifier {
   }
 
   Future<void> pause() async {
+    _withdrawFloorContext();
+    _recordingConnector = null;
+    _floorCandidates = const [];
     _automaticTimer?.cancel();
     if (_disposed) return;
     final op = ++_epoch;

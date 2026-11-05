@@ -10,6 +10,8 @@ import 'package:pathguide/route_memory/encrypted_route_store.dart';
 import 'package:pathguide/route_memory/recorded_route_controller.dart';
 import 'package:pathguide/route_memory/route_journey_page.dart';
 import 'package:pathguide/route_memory/route_observation_source.dart';
+import 'package:pathguide/route_memory/route_package.dart';
+import 'package:pathguide/route_memory/cross_floor_contract.dart';
 import 'package:pathguide/settings/app_settings.dart';
 import 'package:pathguide/ui/app_theme.dart';
 
@@ -18,6 +20,111 @@ import 'captured_route_store_test.dart' show capturedDocument, capturedMedia;
 import 'route_camera_fixture.dart';
 
 void main() {
+  for (final language in AppLanguage.values) {
+    testWidgets(
+      '${language.name}: floor and lift choices are accessible at double text size',
+      (t) async {
+        final root = (await t.runAsync(
+          () => Directory.systemTemp.createTemp('floor-choice-ui-'),
+        ))!;
+        final store = (await t.runAsync(
+          () => EncryptedRouteStore.open(root: root, vault: Vault()),
+        ))!;
+        final native = RouteNativeFixture()..attach();
+        const channel = MethodChannel('hk.pathguide/route_landmark');
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'cancel') return null;
+          final f = Uint8List.fromList([1]);
+          return {
+            ...Map<String, Object?>.from(call.arguments as Map),
+            'status': 'ok',
+            'feature': f,
+            'featureSha': sha256.convert(f).toString(),
+            'text': <String>[],
+            'ocrRevision': 3,
+            'manualFloorConfirmationRequired': true,
+          };
+        });
+        final c = RecordedRouteController(
+          store: store,
+          source: RouteObservationSource(supported: true),
+        );
+        await c.startRecording('Floor test');
+        t.view.physicalSize = const Size(320, 568);
+        t.view.devicePixelRatio = 1;
+        t.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(t.view.resetPhysicalSize);
+        addTearDown(t.view.resetDevicePixelRatio);
+        addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
+        String label(String zh, String en) =>
+            language == AppLanguage.chinese ? zh : en;
+        Future<void> progress(bool Function() done) async {
+          for (var i = 0; i < 200 && !done(); i++) {
+            await t.runAsync(() async {
+              await Future<void>.delayed(const Duration(milliseconds: 10));
+            });
+            await t.pump();
+          }
+          await t.pumpAndSettle();
+          expect(done(), isTrue);
+        }
+
+        Future<void> tap(String value, {bool dialog = false}) async {
+          final f = find.text(value);
+          if (!dialog) {
+            await t.drag(find.byType(Scrollable).first, const Offset(0, 3000));
+            await t.pumpAndSettle();
+            await t.scrollUntilVisible(
+              f,
+              100,
+              scrollable: find.byType(Scrollable).first,
+            );
+          }
+          await t.ensureVisible(f);
+          await t.pumpAndSettle();
+          await t.tap(f);
+          await t.pumpAndSettle();
+        }
+
+        await t.pumpWidget(
+          MaterialApp(
+            theme: buildAppTheme(),
+            home: RouteJourneyPage(
+              settings: AppSettings.memory(language: language),
+              createController: () async => c,
+              previewBuilder: (_) => const SizedBox(),
+            ),
+          ),
+        );
+        await progress(
+          () => find.byType(Scrollable).evaluate().isNotEmpty && !c.busy,
+        );
+        await tap(label('確認／更新目前樓層', 'Confirm or update current floor'));
+        await tap(label('確認目前係 G', 'Confirm current floor G'), dialog: true);
+        await progress(() => c.recordingFloor != null);
+        expect(c.recordingFloor!.label, 'G');
+        expect(c.nodes.last.floorEvidence, FloorEvidence.confirmed);
+        await tap(label('記錄轉層入口', 'Mark floor-change entrance'));
+        await tap(label('升降機', 'Lift'), dialog: true);
+        await progress(() => c.recordingConnector == ConnectorMode.elevator);
+        expect(c.recordingFloor, isNull);
+        await tap(label('確認出口樓層', 'Confirm exit floor'));
+        await tap(label('確認目前係 3F', 'Confirm current floor 3F'), dialog: true);
+        await progress(() => c.recordingFloor?.label == '3F');
+        expect(c.document!.complete, isFalse);
+        expect(t.takeException(), isNull);
+        await t.pumpWidget(const SizedBox());
+        await t.runAsync(() async {
+          await Future<void>.delayed(Duration.zero);
+          await root.delete(recursive: true);
+        });
+        native.detach();
+        messenger.setMockMethodCallHandler(channel, null);
+      },
+    );
+  }
   testWidgets(
     'automatic entry needs no point form, finish names and reopens a real draft',
     (t) async {

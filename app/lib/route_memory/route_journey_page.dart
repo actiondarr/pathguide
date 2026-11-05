@@ -6,6 +6,7 @@ import '../settings/app_settings.dart';
 import 'cross_floor_contract.dart';
 import 'encrypted_route_store.dart';
 import 'recorded_route_controller.dart';
+import 'route_package.dart';
 
 /// Product recording and replay. Merely opening the library never opens camera.
 class RouteJourneyPage extends StatefulWidget {
@@ -40,6 +41,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     String floor,
     ConnectorMode mode,
     bool confirmed,
+    bool floorContext,
     String? nodeId,
   })?
   _pendingLandmark;
@@ -290,6 +292,30 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         '自動取樣已達試驗上限48張；仍可手動補記重要位置，或結束保存。',
         'Automatic sampling reached the pilot limit of 48 views. Add important points manually or finish and save.',
       ),
+      'floorConfirmed': (
+        '已記錄樓層確認點；之後只會沿用上下文。',
+        'Floor anchor recorded. Later points only inherit its context.',
+      ),
+      'floorUnknown': (
+        '樓層未知，繼續保存未確認草稿。',
+        'Floor unknown. Continue recording an unconfirmed draft.',
+      ),
+      'floorChanging': (
+        '轉層入口已記錄；目前樓層未知，到出口再確認。',
+        'Entrance recorded. Current floor unknown; confirm at the exit.',
+      ),
+      'floorChangingNoPhoto': (
+        '入口未能拍攝；目前樓層已改未知，路段保持草稿。',
+        'Entrance capture failed. Floor is unknown; connection remains draft.',
+      ),
+      'floorConflict': (
+        '畫面出現不同樓層線索；已撤回目前樓層上下文，繼續草稿。',
+        'Conflicting floor text. Current context withdrawn; draft recording continues.',
+      ),
+      'segmentReviewed': (
+        '已記錄這一段同層及步行確認；其他未知資料仍是草稿。',
+        'Same-floor walk segment reviewed. Other unknown data remains draft.',
+      ),
       'checking': ('正在比對路標。', 'Matching landmark.'),
       'confirmed': (
         '路標已確認；位置證據短暫有效。',
@@ -503,6 +529,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         floor: f,
         mode: mode,
         confirmed: confirmed,
+        floorContext: false,
         nodeId: addView ? existing!.id : null,
       );
       await _retryPendingLandmark();
@@ -514,13 +541,15 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     if (pending == null || c!.busy) return;
     if (!c!.running) await c!.resume();
     if (!mounted || !c!.canCapture) return;
-    final added = await c!.recordLandmark(
-      pending.name,
-      pending.floor,
-      mode: pending.mode,
-      confirmed: pending.confirmed,
-      nodeId: pending.nodeId,
-    );
+    final added = pending.floorContext
+        ? await c!.confirmCurrentFloor(pending.floor)
+        : await c!.recordLandmark(
+            pending.name,
+            pending.floor,
+            mode: pending.mode,
+            confirmed: pending.confirmed,
+            nodeId: pending.nodeId,
+          );
     if (mounted && added && _pendingLandmark == pending) {
       setState(() => _pendingLandmark = null);
       c!.setManualEntryPending(false);
@@ -650,6 +679,134 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             },
     ),
   ];
+  Future<void> _chooseRecordingFloor() async {
+    if (_pendingLandmark != null || !c!.canCapture) return;
+    c!.setManualEntryPending(true);
+    final controller = TextEditingController();
+    final suggestions = c!.floorCandidates;
+    final route = DialogRoute<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        scrollable: true,
+        title: Text(t('確認目前樓層', 'Confirm current floor')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              t(
+                '相片文字只係候選。知道目前樓層先確認；唔肯定可繼續錄草稿。',
+                'Image text is only a candidate. Confirm only if you know your floor; otherwise keep recording a draft.',
+              ),
+            ),
+            if (suggestions.isNotEmpty)
+              Text(t('剛才畫面嘅文字候選', 'Text candidates from the recent frame')),
+            for (final floor in {...suggestions, 'G', '1F', '2F', '3F'})
+              button(
+                '確認目前係 $floor',
+                'Confirm current floor $floor',
+                () => Navigator.pop(ctx, floor),
+              ),
+            TextField(
+              controller: controller,
+              maxLength: 40,
+              decoration: InputDecoration(
+                labelText: t('其他樓層（選填）', 'Other floor (optional)'),
+              ),
+            ),
+            button('確認輸入樓層', 'Confirm entered floor', () {
+              if (controller.text.trim().isNotEmpty) {
+                Navigator.pop(ctx, controller.text.trim());
+              }
+            }),
+            button(
+              '唔肯定，繼續未確認草稿',
+              'Unknown, continue draft',
+              () => Navigator.pop(ctx, ''),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(t('取消', 'Cancel')),
+          ),
+        ],
+      ),
+    );
+    final choice = await Navigator.of(context).push(route);
+    unawaited(route.completed.then((_) => controller.dispose()));
+    if (!mounted) return;
+    if (choice == null || choice.isEmpty) {
+      if (choice == '') c!.markFloorUnknown();
+      c!.setManualEntryPending(false);
+      return;
+    }
+    _pendingLandmark = (
+      name: t('確認樓層 $choice', 'Confirm floor $choice'),
+      floor: choice,
+      mode: ConnectorMode.walk,
+      confirmed: true,
+      floorContext: true,
+      nodeId: null,
+    );
+    await _retryPendingLandmark();
+  }
+
+  Future<void> _markFloorChange() async {
+    if (_pendingLandmark != null || !c!.canCapture) return;
+    c!.setManualEntryPending(true);
+    final choice = await showDialog<ConnectorMode>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        scrollable: true,
+        title: Text(t('記錄轉層入口', 'Mark floor-change entrance')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              t(
+                '喺入口停下補拍。之後樓層會改為未知；到出口再確認。',
+                'Stop at the entrance for a checkpoint. The floor becomes unknown; confirm again at the exit.',
+              ),
+            ),
+            for (final mode in [
+              ConnectorMode.elevator,
+              ConnectorMode.stairs,
+              ConnectorMode.escalator,
+            ])
+              button(
+                _modeName(mode),
+                _modeName(mode),
+                () => Navigator.pop(ctx, mode),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(t('取消', 'Cancel')),
+          ),
+        ],
+      ),
+    );
+    if (mounted && choice != null) await c!.beginFloorChange(choice);
+    if (mounted) c!.setManualEntryPending(false);
+  }
+
+  String _evidenceName(FloorEvidence evidence) => switch (evidence) {
+    FloorEvidence.unknown => t('未知', 'Unknown'),
+    FloorEvidence.confirmed => t('此點已確認', 'Confirmed at this point'),
+    FloorEvidence.inherited => t(
+      '沿用上下文，未逐點核實',
+      'Inherited context, not individually verified',
+    ),
+    FloorEvidence.segmentConfirmed => t(
+      '已核實整段同層',
+      'Same-floor segment reviewed',
+    ),
+  };
+
   Future<void> _finishAutomaticDraft() async {
     await c!.pause();
     if (!mounted || c!.notice == 'stopUnconfirmed') return;
@@ -704,6 +861,55 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       ),
     ),
     heading(c!.name),
+    heading(t('樓層紀錄', 'Recording floor')),
+    Text(
+      t(
+        '上下文只供錄路沿用，唔代表已定位或每點已核實。轉層請記錄入口及出口。',
+        'Context is for recording continuity, not a verified location at every point. Mark floor-change entrances and exits.',
+      ),
+    ),
+    Text(
+      '${t('目前上下文', 'Current context')}: ${c!.recordingFloor?.label ?? t('未知', 'Unknown')}',
+    ),
+    button(
+      c!.recordingConnector != null ? '確認出口樓層' : '確認／更新目前樓層',
+      c!.recordingConnector != null
+          ? 'Confirm exit floor'
+          : 'Confirm or update current floor',
+      c!.canCapture && _pendingLandmark == null ? _chooseRecordingFloor : null,
+    ),
+    button(
+      '記錄轉層入口',
+      'Mark floor-change entrance',
+      c!.canCapture && _pendingLandmark == null ? _markFloorChange : null,
+    ),
+    button(
+      '樓層唔肯定，繼續草稿',
+      'Floor unknown, continue draft',
+      c!.canEdit && _pendingLandmark == null ? c!.markFloorUnknown : null,
+    ),
+    if (!c!.running)
+      for (final anchor in c!.floorAnchors.where(
+        (a) => c!.nodes.any((n) => n.floorAnchorId == a.id),
+      ))
+        button(
+          '核實由 ${anchor.nameZh} 起嘅同層一段',
+          'Review same-floor segment from ${anchor.nameEn}',
+          c!.canEdit
+              ? () async {
+                  if (await _confirm(
+                        t('核實這一段？', 'Review this segment?'),
+                        t(
+                          '我確認這一段全部在 ${anchor.floor!.label}，並按錄製方向實際走過。這不會確認其他樓層或轉層設備。',
+                          'I confirm this segment stayed on ${anchor.floor!.label} and I walked it in the recorded direction. Other floors and connectors remain unconfirmed.',
+                        ),
+                      ) &&
+                      mounted) {
+                    c!.confirmFloorSegment(anchor.id);
+                  }
+                }
+              : null,
+        ),
     if (c!.automaticRecording)
       button(
         '結束錄路並命名保存',
@@ -753,7 +959,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                '${i + 1}. ${c!.nodes[i].nameZh} · ${c!.nodes[i].floor?.label ?? t('樓層未確認', 'Floor unknown')}',
+                '${i + 1}. ${c!.nodes[i].nameZh} · ${c!.nodes[i].floor?.label ?? t('樓層未確認', 'Floor unknown')} · ${_evidenceName(c!.nodes[i].floorEvidence)}',
               ),
               if (i > 0)
                 Text(

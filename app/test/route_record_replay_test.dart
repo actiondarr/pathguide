@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:pathguide/route_memory/encrypted_route_store.dart';
 import 'package:pathguide/route_memory/recorded_route_controller.dart';
 import 'package:pathguide/route_memory/cross_floor_contract.dart';
+import 'package:pathguide/route_memory/route_package.dart';
 import 'package:pathguide/route_memory/route_observation_source.dart';
 
 import 'route_camera_fixture.dart';
@@ -29,6 +30,7 @@ void main() {
   late RouteNativeFixture native;
   var ordinal = 0, match = 0;
   var ambiguous = false;
+  List<String> observedText = [];
   Completer<void>? analysisGate;
   const channel = MethodChannel('hk.pathguide/route_landmark');
   final messenger =
@@ -39,6 +41,7 @@ void main() {
     ordinal = 0;
     match = 0;
     ambiguous = false;
+    observedText = [];
     analysisGate = null;
     messenger.setMockMethodCallHandler(channel, (call) async {
       final a = Map<String, Object?>.from(call.arguments as Map);
@@ -60,7 +63,7 @@ void main() {
         'status': 'ok',
         'feature': f,
         'featureSha': sha256.convert(f).toString(),
-        'text': <String>[],
+        'text': observedText,
         'ocrRevision': 3,
         'manualFloorConfirmationRequired': true,
       };
@@ -136,6 +139,101 @@ void main() {
       await c.pause();
     },
   );
+  test(
+    'confirmed anchor is inherited, reviewed once and preserved as schema3',
+    () async {
+      useDetailedFrame();
+      await c.startRecording('context', automatic: true);
+      expect(await c.confirmCurrentFloor('G'), isTrue);
+      final anchor = c.nodes.first.id;
+      useDetailedFrame('synthetic-detail-grid-alt.jpg');
+      match = 1;
+      await c.sampleAutomatically();
+      expect(c.nodes.length, 2);
+      expect(c.nodes.last.floor!.label, 'G');
+      expect(c.nodes.last.floorEvidence, FloorEvidence.inherited);
+      expect(c.nodes.last.floorAnchorId, anchor);
+      expect(c.document!.complete, isFalse);
+      await c.pause();
+      expect(c.recordingFloor, isNull);
+      c.confirmFloorSegment(anchor);
+      expect(c.nodes.last.floorEvidence, FloorEvidence.segmentConfirmed);
+      expect(c.document!.complete, isTrue);
+      await c.save(activate: true);
+      await c.open((await store.list()).routes.single, recording: true);
+      expect(c.document!.toMap()['schemaVersion'], 3);
+      expect(c.nodes.last.floorEvidence, FloorEvidence.segmentConfirmed);
+      expect(c.recordingFloor, isNull);
+      c.updateNode(0, 'anchor', '1F', ConnectorMode.walk, true);
+      expect(c.nodes.last.floor, isNull);
+      expect(c.document!.complete, isFalse);
+    },
+  );
+  test('floor-change entry withdraws inherited context until a new explicit exit anchor', () async {
+    useDetailedFrame();
+    await c.startRecording('lift', automatic: true);
+    await c.confirmCurrentFloor('G');
+    expect(await c.beginFloorChange(ConnectorMode.elevator), isTrue);
+    expect(c.recordingFloor, isNull);
+    expect(await c.confirmCurrentFloor('3F'), isTrue);
+    expect(c.recordingFloor!.label, '3F');
+    expect(c.incomingMode(c.nodes.length - 1), ConnectorMode.elevator);
+    expect(c.document!.complete, isFalse);
+    await c.pause();
+    expect(c.recordingFloor, isNull);
+  });
+  test(
+    'conflicting OCR withdraws context even when candidate image is duplicate',
+    () async {
+      useDetailedFrame();
+      await c.startRecording('context', automatic: true);
+      await c.confirmCurrentFloor('G');
+      observedText = ['3F'];
+      await c.sampleAutomatically();
+      expect(c.recordingFloor, isNull);
+      expect(c.notice, 'floorConflict');
+      expect(c.floorCandidates, ['3F']);
+      expect(
+        c.nodes.length,
+        1,
+      ); // OCR is not an automatically confirmed anchor.
+      await c.pause();
+    },
+  );
+  test(
+    'new anchor after unknown does not approve the unknown connection',
+    () async {
+      useDetailedFrame();
+      await c.startRecording('context', automatic: true);
+      await c.confirmCurrentFloor('G');
+      c.markFloorUnknown();
+      expect(c.recordingFloor, isNull);
+      await c.confirmCurrentFloor('G');
+      await c.pause();
+      c.confirmFloorSegment(c.nodes.first.id);
+      expect(c.incomingConfirmed(1), isFalse);
+      expect(c.document!.complete, isFalse);
+    },
+  );
+  test('renaming inherited point retains its source and ancestor edit invalidates later inheritance', () async {
+    useDetailedFrame();
+    await c.startRecording('context', automatic: true);
+    await c.confirmCurrentFloor('G');
+    useDetailedFrame('synthetic-detail-grid-alt.jpg');
+    match = 1;
+    await c.sampleAutomatically();
+    c.updateNode(1, '已補名稱', 'G', ConnectorMode.walk, false);
+    expect(c.nodes[1].floorEvidence, FloorEvidence.inherited);
+    expect(c.nodes[1].floor!.label, 'G');
+    // A manual important checkpoint may inherit without becoming confirmed.
+    await c.recordLandmark('角位', '', inheritContext: true);
+    expect(c.nodes.last.floorEvidence, FloorEvidence.inherited);
+    c.updateNode(1, '新樓層', '1F', ConnectorMode.walk, true);
+    expect(c.nodes.last.floor, isNull);
+    expect(c.recordingFloor, isNull);
+    expect(c.document!.complete, isFalse);
+    await c.pause();
+  });
   testWidgets(
     'start once creates an automatic draft and pause prevents later additions',
     (t) async {
