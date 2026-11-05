@@ -1,7 +1,7 @@
 {
   "date_hk": "2026-11-05",
   "implementer": "Codex",
-  "status": "P2-D_engineering_passed_phone_prerelease_candidate",
+  "status": "P2-D_prerelease_published_installed_launched_human_acceptance_pending",
   "version": "1.5.0+9",
   "source_sha256": {
     "app/lib/route_memory/route_observation_source.dart": "de9e27854197308791394d1db361860d078bf9f727babf634e8f16e168b895fd",
@@ -98,12 +98,18 @@
     "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
   },
   "human_device_acceptance": "not_run",
-  "installation": "not_run",
+  "installation": "installed_and_launched",
   "persistence": "none; JPEG and its display cache cleared on stop/background/exit",
   "scope": "live native camera entry, permission/retry/stop/lifecycle; no route storage/localization/walking guidance",
-  "next": "Publish source and immutable phone prerelease, install and collect first user results; then P3-A",
+  "next": "Collect first user P2-D phone results; then P3-A bounded encrypted media/device checks",
   "review": {
     "standards": "Unconfirmed stop retry finding fixed and re-reviewed; no remaining findings",
     "spec": "Same stop retry finding fixed and re-reviewed; no remaining findings"
+  },
+  "release": {
+    "tag": "v1.5.0+9",
+    "source_commit": "b620ec4595ce8436a71f5df92e5b1ce8f9718b64",
+    "remote_verified": true,
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.5.0%2B9"
   }
 }

@@ -1,7 +1,7 @@
 # Frontend：PathGuide 整體流程、規格與裝置端
 
 更新：2026年11月5日。此文件是整體規格入口；產品介紹、Backend及Dataset各自維護所屬內容。
-**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，45項原生Simulator測試、435項Flutter測試及analyze通過。P2-D Flutter入口已接入，1.5.0+9簽署建置通過；發布／裝機收據及人工／VoiceOver驗收仍待記錄。**
+**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，45項原生Simulator測試、435項Flutter測試及analyze通過。P2-D Flutter入口已接入，1.5.0+9簽署建置通過；已推送不可變tag／prerelease並核對遠端，iPhone安裝及啟動成功；人工／VoiceOver驗收仍待完成。**
 
 
 規格快照及待定事項：[整體規格 #13](https://github.com/actiondarr/pathguide/issues/13)。既有導航P2–P5仍由[總票 #2](https://github.com/actiondarr/pathguide/issues/2)及其子票追蹤；本次重整不改寫其範圍或狀態。
@@ -402,7 +402,7 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
-目前交付：**[1.4.3+8 相機前處理修正版](https://github.com/actiondarr/pathguide/releases/tag/v1.4.3%2B8)** 已先備份GitHub並核對，再安裝／啟動iPhone 15 Pro Max。普通辨識與物件測距共用雙線性縮圖／取整修正；沿用十類試驗權重及原有恢復操作。自然圖仍漏門及誤認行人／圍欄，權重品質未通過；原場景、量尺及真機VoiceOver／跨任務驗收待補。真實graph、三維追蹤、空間音效與鳥瞰仍未完成。
+目前手機試驗版：**[1.5.0+9 錄路相機入口](https://github.com/actiondarr/pathguide/releases/tag/v1.5.0%2B9)**，來源、不可變tag及prerelease已先推送核對，再安裝及啟動iPhone成功；人工相機／VoiceOver結果待收集。沿用1.4.3+8相機前處理修正及十類試驗權重，模型品質未通過，原場景、量尺及跨任務驗收待補。真實路線保存／定位、行走提示、三維追蹤、空間音效與鳥瞰仍未完成。見[裝機收據](../verification/release-receipts/app-1.5.0+9.json)。
 
 <a id="1-目標目前-app-與原計劃差距"></a>
 
@@ -913,6 +913,8 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 </details>
 
 ### 維護紀錄
+
+2026-11-05 1.5.0+9 prerelease published from immutable tag b620ec4, remote verified before iPhone install and launch (both succeeded). Human camera/VoiceOver results remain pending. [Release and installation receipt](../verification/release-receipts/app-1.5.0+9.json).
 
 2026-11-05 P2-D: live Flutter camera entry passed 435 Dart tests, 45 native Simulator tests, clean analyze and signed 1.5.0+9 Release build. Fixed old event-subscriber interference and evicted captured-photo caches on stop/exit. Physical-device and VoiceOver acceptance remain pending. Evidence: [P2-D receipt](../verification/codex-p2d-camera-entry-20261105.json).
 
