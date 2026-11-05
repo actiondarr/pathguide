@@ -281,8 +281,9 @@ class RouteLocalizer extends ChangeNotifier {
     }
     if (_expected != null &&
         (_candidate?.nodeId != _expectedExit ||
-            !_candidate!.exitForConnectors.contains(_expectedConnector)))
+            !_candidate!.exitForConnectors.contains(_expectedConnector))) {
       return false;
+    }
     _actual = _candidate;
     notifyListeners();
     return true;
