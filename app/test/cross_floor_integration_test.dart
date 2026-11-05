@@ -37,7 +37,7 @@ void main() {
       final settings = AppSettings.memory();
       await t.pumpWidget(PathGuideApp(settings: settings));
       await t.pumpAndSettle();
-      final entry = find.text('熟路錄製與重行（模擬）');
+      final entry = find.text('室內路線工具（試驗）');
       await t.scrollUntilVisible(
         entry,
         150,

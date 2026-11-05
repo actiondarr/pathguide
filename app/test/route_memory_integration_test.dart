@@ -48,8 +48,8 @@ void main() {
           final entry = find.ancestor(
             of: find.text(
               language == AppLanguage.chinese
-                  ? '熟路錄製與重行（模擬）'
-                  : 'Record and retrace a route (mock)',
+                  ? '室內路線工具（試驗）'
+                  : 'Indoor route tools (trial)',
             ),
             matching: find.byType(FilledButton),
           );

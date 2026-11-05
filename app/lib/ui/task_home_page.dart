@@ -45,7 +45,7 @@ class TaskHomePage extends StatelessWidget {
         _task('設定與使用教學', Icons.settings_outlined, onSettings),
         AccountEntry(onManage: onAccount),
         if (onOpenRouteMemory != null)
-          _task('熟路錄製與重行（模擬）', Icons.route_outlined, onOpenRouteMemory!),
+          _task('室內路線工具（試驗）', Icons.route_outlined, onOpenRouteMemory!),
         const SizedBox(height: 8),
         TextButton(
           onPressed: () => showUsageGuide(context),

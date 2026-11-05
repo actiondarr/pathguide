@@ -1,7 +1,7 @@
 # Dataset Review：PathGuide 類別、資料與品質驗收
 
 更新：2026年11月5日。類別字典維持在前；產品及導航行為見[Frontend整體規格](FRONTEND-DESIGN.zh-HK.md)，服務與交付見[Backend](BACKEND-DESIGN.zh-HK.md)。
-**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，44項原生Simulator測試、415項Flutter測試及analyze通過。P2-D Flutter入口未實作；真機／VoiceOver驗收未做。**
+**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，45項原生Simulator測試、435項Flutter測試及analyze通過。P2-D Flutter入口已接入，1.5.0+9簽署建置通過；發布／裝機收據及人工／VoiceOver驗收仍待記錄。**
 
 
 **目前結論：A十類試驗模型的品質gate仍為false，修正候選拒用；B11未完成發佈／App整合。Dataset採集／標註／新訓練仍暫停。** 本機路線記憶及雲端看圖不等於訓練資料或人工真值。
@@ -528,7 +528,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | S1 現有App核心功能 | 校準A、菜單OCR與播報門檻，提供真機測試樣本 | 有A來源評估／parity與工程回歸；缺完整手機實景評估 | 不把PyTorch／mAP當手機任務成功率；按場景公布誤報／漏報 | 補TFLite與HKDI／菜單真值，與Frontend實測對照 |
 | S2 照片收集與管理員覆核 | 定義全圖答案、覆核清單、coverage、去重與場景 | 本地工具、Backend問題／覆核API及本機工作台已有；合成驗證通過、預設關閉，真人／App完整閉環未接 | 每張核准圖有來源／定義／答案／分組與審核版本，partial不冒充完整 | 先既有失敗場景試覆核，再接Backend角色與照片 |
 | S3 私人訓練與模型更新 | UID快照、基礎回放、固定評估／門檻與匯出 | 未形成服務；私人相對效益未驗證，付費worker待預算與資料 | 對照共用改善後仍有額外效益，樣本／任務驗收足夠才可下載 | 先修正案例及小型對照，再mock；證據不足保持待評估 |
-| S4 室內近距離感知與引導 | 保留路標位置／方向及任務真值規格；資料工作暫停 | N0／P0離線mock及P1樣例儲存、12-node合成樣例及表面測距工程試驗已有；真實錄路／重定位未驗收  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口及真機待驗。| 人工分報錯定位／拒答／轉彎／完成／資源，不以樣本數或物件class代位置真值 | 前後端先P2–P5；任何真實採集／測試影像與留集須另定用途，不重跑舊來源或訓練 |
+| S4 室內近距離感知與引導 | 保留路標位置／方向及任務真值規格；資料工作暫停 | N0／P0離線mock及P1樣例儲存、12-node合成樣例及表面測距工程試驗已有；真實錄路／重定位未驗收  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口亦已過工程測試，手機人工驗收待完成。| 人工分報錯定位／拒答／轉彎／完成／資源，不以樣本數或物件class代位置真值 | 前後端先P2–P5；任何真實採集／測試影像與留集須另定用途，不重跑舊來源或訓練 |
 | S5 圖示／文字與設施理解 | B11訓練／泛化、牌面OCR、圖示箭嘴配對 | B曾到epoch22後中斷；17:10交接Drive連接失敗，未resume／未部署 | 正式run／holdout／手機格式驗證完整，exit稀少如實標限制 | 先恢復同帳戶Drive、驗last.pt與optimizer，再正確resume；不Run all |
 | S6 HKDI整合驗收與試用發佈 | 新舊模型與整體任務比較、資料／產物封存 | 完整室內＋學習閉環未驗收 | HKDI陪同測試、手機格式、舊類退化及回退皆有報告 | 提供Frontend／Backend相同模型及snapshot識別 |
 | S7 多場地、複雜樓層網絡與平台擴充 | 新場地／新類別、設備時序及低光／透明細物 | 未來研究 | 場地／實體獨立、定義一致、相容映射與各任務驗收 | 先限定場景成熟，再擴展，不把更多類別當更準 |
@@ -670,6 +670,10 @@ A10本機control／repair及免費T4候選全部拒用，既有來源核對不�
 </details>
 
 ### 維護紀錄
+
+2026-11-05 P2-D: live Flutter camera entry passed 435 Dart tests, 45 native Simulator tests, clean analyze and signed 1.5.0+9 Release build. Fixed old event-subscriber interference and evicted captured-photo caches on stop/exit. Physical-device and VoiceOver acceptance remain pending. Evidence: [P2-D receipt](../verification/codex-p2d-camera-entry-20261105.json).
+
+2026-11-05 P2-D工程整合：Flutter錄路相機入口已接原生相機，核對同次路線／請求／時鐘、尺寸／方向及JPEG SHA；只作按需記憶體相片，停止／背景／離頁會清理。合成影像與Simulator／Widget證據不當人工真值，手機／VoiceOver結果另驗。沒有新資料採集到訓練集、標註、權重、class或品質gate變更；B11獨立交接保留。
 
 2026-11-05 GitHub checkpoint review: connected the shared camera coordinator to application background/foreground before registering camera plugins. Late background starts are blocked; foreground never resumes a camera automatically. All 44 native Simulator tests passed; the isolated source checkpoint also reproduced 415 Flutter tests and clean analyze. Historical P2-C receipt remains a snapshot of its earlier 43-test run. Evidence: [lifecycle check](../verification/codex-camera-lifecycle-20261105.json).
 

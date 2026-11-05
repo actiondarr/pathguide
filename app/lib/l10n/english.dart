@@ -1,6 +1,6 @@
 // Product copy. Keep user and provider content unchanged.
 const english = <String, String>{
-  "熟路錄製與重行（模擬）": "Record and retrace a route (mock)",
+  "室內路線工具（試驗）": "Indoor route tools (trial)",
   "辨識已取消，請重新開始": "Recognition cancelled. Start again.",
   "結果已過期，正在重新取得。可停止後重試或返回。":
       "Results expired. Getting new observations. Stop and retry, or go back.",

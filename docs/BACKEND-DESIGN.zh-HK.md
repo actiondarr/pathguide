@@ -1,7 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
 更新：2026年11月5日。只維護資料／服務／部署規格；使用者流程與導航主線集中在[Frontend整體規格](FRONTEND-DESIGN.zh-HK.md)，模型品質集中在[Dataset Review](DATASET-REVIEW.zh-HK.md)。
-**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，44項原生Simulator測試、415項Flutter測試及analyze通過。P2-D Flutter入口未實作；真機／VoiceOver驗收未做。**
+**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，45項原生Simulator測試、435項Flutter測試及analyze通過。P2-D Flutter入口已接入，1.5.0+9簽署建置通過；發布／裝機收據及人工／VoiceOver驗收仍待記錄。**
 
 
 **狀態用語：**「已確認需求」是產品決定；「待定」是尚未有答案；「已有程式／工程已驗」不代表真機或產品驗收；「已交付」須有版本收據。研究／候選能力不因列入文件就成為本輪實作或付費授權。
@@ -354,7 +354,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
 | S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理已有；問題／覆核API及本機工作台已有；Emulator與合成瀏覽器流程通過；預設關閉，正式部署／真人案例未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
 | S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；私人效益未驗證，付費GPU預算未定 | 私人／共用對照支持額外效益；mock工作及效果退化回退通過，真實工作受配額控制 | 先問題修正案例與對照，再mock；資料／權限／預算具備才開真實服務 |
-| S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；真實路線記憶與雲端看圖未實作／部署  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口及真機待驗。| 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
+| S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；真實路線記憶與雲端看圖未實作／部署  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口亦已過工程測試，手機人工驗收待完成。| 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
 | S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
 | S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
 | S7 多場地、複雜樓層網絡與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 本機typed graph／觀察原型已有；雲端及真實場地服務未實作 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
@@ -559,6 +559,10 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 </details>
 
 ### 維護紀錄
+
+2026-11-05 P2-D: live Flutter camera entry passed 435 Dart tests, 45 native Simulator tests, clean analyze and signed 1.5.0+9 Release build. Fixed old event-subscriber interference and evicted captured-photo caches on stop/exit. Physical-device and VoiceOver acceptance remain pending. Evidence: [P2-D receipt](../verification/codex-p2d-camera-entry-20261105.json).
+
+2026-11-05 P2-D本機相機入口：Flutter透過原生通道核對路線／請求／時鐘與影像契約，再交有界JPEG到頁面；停止、背景及離頁撤回回覆並清理圖片快取。沒有新增後端endpoint、媒體持久化、上傳或訓練用途；P3-A再定加密媒體／配額。手機候選1.5.0+9依既定tag／prerelease／遠端核對後才安裝，人工結果另記。
 
 2026-11-05 GitHub checkpoint review: connected the shared camera coordinator to application background/foreground before registering camera plugins. Late background starts are blocked; foreground never resumes a camera automatically. All 44 native Simulator tests passed; the isolated source checkpoint also reproduced 415 Flutter tests and clean analyze. Historical P2-C receipt remains a snapshot of its earlier 43-test run. Evidence: [lifecycle check](../verification/codex-camera-lifecycle-20261105.json).
 

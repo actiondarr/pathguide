@@ -227,6 +227,7 @@ final class RouteCameraPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var context: RouteCaptureContext?
   private var state = "stopped"
   private var sink: FlutterEventSink?
+  private var subscriber: String?
   private var pending: (id: String, token: UUID, reply: CameraOnceReply<Any?>)?
   // Remains busy through cancellation until the old encoder actually drains.
   private var encodingToken: UUID?
@@ -268,11 +269,13 @@ final class RouteCameraPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     let plugin = RouteCameraPlugin(messenger: registrar.messenger())
     registrar.register(RouteCameraPreviewFactory(plugin), withId: "hk.pathguide/route_camera/preview")
   }
-  func onListen(withArguments _: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+  func onListen(withArguments args: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    subscriber = (args as? [String: Any])?["subscriber"] as? String
     sink = events; return nil
   }
-  func onCancel(withArguments _: Any?) -> FlutterError? {
-    sink = nil; stop(status: "stopped") { _ in }; return nil
+  func onCancel(withArguments args: Any?) -> FlutterError? {
+    guard (args as? [String: Any])?["subscriber"] as? String == subscriber else { return nil }
+    sink = nil; subscriber = nil; stop(status: "stopped") { _ in }; return nil
   }
   @objc private func background() { stop(status: "paused") { _ in } }
   @objc private func interrupted() {

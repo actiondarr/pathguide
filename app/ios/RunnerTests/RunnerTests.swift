@@ -11,6 +11,17 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
+  func testRouteOldEventSubscriberCannotStopNewCameraSession() {
+    let driver = RouteTestDriver(), plugin = routePlugin(driver)
+    _ = plugin.onListen(withArguments: ["subscriber": "old"], eventSink: { _ in })
+    startRoute(plugin); stopRoute(plugin)
+    _ = plugin.onListen(withArguments: ["subscriber": "new"], eventSink: { _ in })
+    startRoute(plugin, generation: 2)
+    _ = plugin.onCancel(withArguments: ["subscriber": "old"])
+    XCTAssertEqual(routeQuery(plugin, method: "status", generation: 2)["status"] as? String, "running")
+    stopRoute(plugin, generation: 2)
+  }
+
   func testCameraApplicationLifecycleBlocksLateStartsAndDoesNotAutoResume() {
     let coordinator = CameraCoordinator(), center = NotificationCenter()
     let lifecycle = CameraApplicationLifecycle(coordinator: coordinator, center: center, initiallyActive: true)

@@ -1,7 +1,7 @@
 # Frontend：PathGuide 整體流程、規格與裝置端
 
 更新：2026年11月5日。此文件是整體規格入口；產品介紹、Backend及Dataset各自維護所屬內容。
-**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，44項原生Simulator測試、415項Flutter測試及analyze通過。P2-D Flutter入口未實作；真機／VoiceOver驗收未做。**
+**2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，45項原生Simulator測試、435項Flutter測試及analyze通過。P2-D Flutter入口已接入，1.5.0+9簽署建置通過；發布／裝機收據及人工／VoiceOver驗收仍待記錄。**
 
 
 規格快照及待定事項：[整體規格 #13](https://github.com/actiondarr/pathguide/issues/13)。既有導航P2–P5仍由[總票 #2](https://github.com/actiondarr/pathguide/issues/2)及其子票追蹤；本次重整不改寫其範圍或狀態。
@@ -435,11 +435,11 @@ flutter test
 
 使用者已確定：導航最高優先、先一般iPhone，目標是行走期間即時障礙偵測＋語音步行導航，包含室內跨樓層。首次錄製就是建立App尚未有的路線資料；不要求使用者先熟悉該地方。跨樓層是正式主線，同樓層只是首個工程測試案例，不能作整項功能的完成標準。既有戶外MapKit＋Core Location已有程式，室內目前有12-node樣例、N0互動mock及P0跨樓層／障礙提示mock。DepthPlugin同時要求ARKit及sceneDepth，且沿用站定取樣規則；一般iPhone錄路追蹤及行走中幾何風險判定均未接通。
 
-本輪未發布N0入口位於首頁「熟路錄製與重行（模擬）」，不啟動戶外導航服務。可加入三個明示合成的固定路標、暫停／手動繼續、命名保存、選路，再分別確認起點及已錄方向。模擬未知／多個相似位置／方向不符會撤回提示；重確認只從樣例起點重行，不假稱能在任意真實位置恢復。到達須另按確認，刪除有確認且舊對話／回覆不能復活路線；返回保留本次App記憶體路線，關閉App後清除。重讀只更新語意live region，沒有接TTS或真正導航播音；真人VoiceOver另驗。狀態及版本規則在`app/lib/route_memory/route_memory_contract.dart`，UI與合成fixture在同目錄；現有12-node graph樣例保持獨立。
+本輪未發布N0入口位於首頁「室內路線工具（試驗）」，不啟動戶外導航服務。可加入三個明示合成的固定路標、暫停／手動繼續、命名保存、選路，再分別確認起點及已錄方向。模擬未知／多個相似位置／方向不符會撤回提示；重確認只從樣例起點重行，不假稱能在任意真實位置恢復。到達須另按確認，刪除有確認且舊對話／回覆不能復活路線；返回保留本次App記憶體路線，關閉App後清除。重讀只更新語意live region，沒有接TTS或真正導航播音；真人VoiceOver另驗。狀態及版本規則在`app/lib/route_memory/route_memory_contract.dart`，UI與合成fixture在同目錄；現有12-node graph樣例保持獨立。
 
-本節固定產品結果、架構、工具、依賴與驗收，按P0–P6推進。P0離線mock及P1本機樣例儲存已在未發布工作區完成，P2-A/B及P2-C原生來源已由Codex接續並通過本機工程驗證，P2-D及P3–P6未啟動。使用者要求先完成功能：P2真相機→P3首次錄路／跨層→P4障礙／語音→P5整趟任務；效能、耗電、快取及容量調校放後，必要的資料完整性、停止／取消及功能驗證保留。N0仍為無floor的舊mock；不能把本機樣例工程通過當真實導航通過。
+本節固定產品結果、架構、工具、依賴與驗收，按P0–P6推進。P0離線mock及P1本機樣例儲存已在未發布工作區完成，P2-A/B及P2-C原生來源已由Codex接續並通過本機工程驗證，P2-D亦已通過工程驗證，手機待驗；P3–P6未啟動。使用者要求先完成功能：P2真相機→P3首次錄路／跨層→P4障礙／語音→P5整趟任務；效能、耗電、快取及容量調校放後，必要的資料完整性、停止／取消及功能驗證保留。N0仍為無floor的舊mock；不能把本機樣例工程通過當真實導航通過。
 
-P0入口：首頁「熟路錄製與重行（模擬）」→「跨樓層與障礙提示模擬」。確認G起點／方向、到轉層入口、注入錯2F／相似出口／3F，再確認樓層、出口及方向，最後確認課室終點。預計3F不等於實際樓層；暫停／未知後可明確注入3F出口確認，不強制回G。急需障礙及感知不可用撤回下一路標，解除後重新計算當前提示，不補播舊queue。重讀只更新單一live region，不接TTS。按鈕使用合成答案及凍結時鐘；離開此子頁清除該preset，原N0記憶體路線保留。
+P0入口：首頁「室內路線工具（試驗）」→「跨樓層與障礙提示模擬」。確認G起點／方向、到轉層入口、注入錯2F／相似出口／3F，再確認樓層、出口及方向，最後確認課室終點。預計3F不等於實際樓層；暫停／未知後可明確注入3F出口確認，不強制回G。急需障礙及感知不可用撤回下一路標，解除後重新計算當前提示，不補播舊queue。重讀只更新單一live region，不接TTS。按鈕使用合成答案及凍結時鐘；離開此子頁清除該preset，原N0記憶體路線保留。
 
 來源為`app/lib/route_memory/cross_floor_contract.dart`及同目錄fixture／page，測試為三份`app/test/cross_floor_*_test.dart`。19項核心、7項UI、1項入口整合及全App380項通過，analyze無問題，中英文320×568兩倍字體圖已核對。2秒定位／500ms感知窗僅供離線失效測試，並非行走閾值；P4須重新實測。P0契約是可執行合成子集；正式blob／序列化、原生來源及播音adapter於P1–P4補齊，preset不代表首次建路工具已可用。見[P0機器證據](../verification/dsh-p0-cross-floor-20261104.json)。
 
@@ -449,7 +449,7 @@ Vision、Depth及Menu各次啟動先取得不可混用的lease，權限及排隊
 
 工程證據：30項Foundation核心檢查、26項原生Simulator測試、415項Flutter測試、analyze及Xcode專案格式均通過；Vision以受控session queue實驗證明先start排清→stop完成→下一owner，而非只測mock仲裁。AR pause及AVCapture stop的接口依據見[Apple ARSession](https://developer.apple.com/documentation/arkit/arsession/pause())及[AVCaptureSession](https://developer.apple.com/documentation/avfoundation/avcapturesession/stoprunning())。真實相機、picker切換及VoiceOver仍須真機驗收，未構成版本交付。完整命令、SHA及失敗／修正紀錄見[機器證據](../verification/codex-p2b-camera-adapters-20261105.json)。
 
-其後P2-C原生來源已通過下節本機工程驗證；下一依賴改為P2-D Flutter入口。真機及walking時效仍未實測。
+其後P2-C原生來源已通過下節本機工程驗證；P2-D Flutter入口亦已過工程驗證，下一依賴為P3-A媒體儲存。真機及walking時效仍未實測。
 
 ### P2-C原生錄路相機與觀察契約（2026-11-05，本機工程已驗）
 
@@ -469,11 +469,32 @@ header綁requestId／startRequestId、session／generation／sequence、routeId�
 
 固定route-camera-engineering-v1：native最大幀齡1000ms、walkingValidated=false，屬按需錄路工程值，不能作P4行走時效驗收。記憶體只留最新buffer及最多一個編碼工作，不錄影／落盤／上傳。JPEG正向化為up、長邊≤1280、bytes≤512KiB；三次有界壓縮仍超限則encoding_failed。payload width／height是縮圖尺寸，header upright尺寸仍屬原圖；SHA256綁實際JPEG bytes。
 
-17項新增錄路測試包括真實合成JPEG與四方向角落顏色、時鐘／元資料、取消／背景／同步重入及停機逾時；連既有共43項原生Simulator、415項Flutter及analyze通過。命令／來源SHA見[機器證據](../verification/codex-p2c-route-camera-20261105.json)。Flutter錄路入口、持久路線影像、定位、真機／VoiceOver尚未驗收；續P2-D #6，再接P3。
+17項新增錄路測試包括真實合成JPEG與四方向角落顏色、時鐘／元資料、取消／背景／同步重入及停機逾時；連既有共43項原生Simulator、415項Flutter及analyze通過。命令／來源SHA見[機器證據](../verification/codex-p2c-route-camera-20261105.json)。Flutter相機入口其後已於P2-D接入並過工程驗證；持久路線影像、定位、真機／VoiceOver仍待驗，下一步P3-A。
+
+### P2-D Flutter錄路相機入口（2026-11-05，工程已驗、手機待驗）
+
+入口改為首頁「室內路線工具（試驗）」→「錄路相機試驗」。使用者明確開始後才開相機，可預覽、取一張相、停止或返回；無需載入辨識模型／LiDAR。樣例路線、跨層mock及P1樣例庫仍分開標示，取相不產生已保存路線、已定位或可導航狀態。
+
+`RouteObservationSource`對接原生method／event／preview契約，逐次核對session／generation、route／version、request、序列、clock epoch／host時間／age、尺寸／方向／profile、JPEG大小及SHA，亦核對JPEG實際尺寸。原生age加Dart本次往返耗時作保守過期判斷，不相減兩種時鐘。資料不符便拒絕影像；一次只等一張取相，停止／背景立即作廢舊回覆。每個engine共用一個raw event訂閱，逐source以session篩選；原生亦以subscriber識別取消，防止舊頁清掉新頁事件或停止新相機。
+
+`RouteCaptureController`用操作世代隔離權限／取相／停止回覆；等權限期間仍可停止。真正paused／hidden／detached會停機，權限sheet的inactive本身不當作背景；resumed只恢復可操作，不自動開始。`RouteCapturePage`以固定位置提供開始／取相、停止及返回，正文可捲動，繁中／English及兩倍字體可用；只以狀態live region回饋，沒有另開TTS。相片僅保留於此頁，換相、停止／背景及離頁清掉controller引用並逐張evict圖片快取，避免重複取相累積舊相片。
+
+沿用工作票#6指定的三個測試介面：真實source對平台通道、controller公開操作、Widget按鈕／生命周期；只替換外部通道、時間及原生預覽。兩倍字體／鍵盤及中英文已作合成畫面覆核；真機相機、VoiceOver及人工品質分開待驗。版本候選為1.5.0+9；發佈／安裝狀態以版本收據為準，不以本段代表已裝機。
+
+首輪手機實測約10–15分鐘：
+
+1. 從上述入口開始相機，核對預覽方向；取一張相，確認畫面為當下場景及方向正常，沒有顯示已保存路線。
+2. 連續取相數次，再按停止；相片清除，相機使用指示停止。返回首頁後再開，能明確重新開始。
+3. 切到背景及返回；不自行恢復相機或補交舊相片。等待取相時停止／返回，亦不出現晚到畫面。
+4. 拒絕相機權限後，狀態及返回仍可操作；到系統設定檢查權限，再明確重試。
+5. 在錄路相機、辨識、菜單及可用測距之間切換，確認相機不互搶、沒有黑畫面卡死；不支援測距的裝置保留可返回狀態。
+6. 開VoiceOver及大字，核對每個控制可找到／操作、狀態只回饋一路；記錄等待、異常及重現步驟。這輪測相機流程，不將既有模型誤認判作已修好。
+
+下一步為P3-A有界媒體儲存及其工程真機檢查；P3完整錄路／定位、P4行走提示及P5整趟人工驗收仍待完成。
 
 ### P1本機路線庫與影像保存邊界（2026-11-05）
 
-入口為首頁「熟路錄製與重行（模擬）」→「本機路線庫（樣例儲存）」。可命名保存草稿或完整結構樣例、建立新版本、離頁重開、明確回退、刪除與清理舊版本／暫存。此頁使用真實本機加密檔案，但內容僅為合成G→3F結構，沒有拍照、影片、真實錄路或導航；「使用中版本」不代表實地可導航。原N0路線仍只在記憶體，沒有自動遷移。
+入口為首頁「室內路線工具（試驗）」→「本機路線庫（樣例儲存）」。可命名保存草稿或完整結構樣例、建立新版本、離頁重開、明確回退、刪除與清理舊版本／暫存。此頁使用真實本機加密檔案，但內容僅為合成G→3F結構，沒有拍照、影片、真實錄路或導航；「使用中版本」不代表實地可導航。原N0路線仍只在記憶體，沒有自動遷移。
 
 來源為`app/lib/route_memory/route_package.dart`、`encrypted_route_store.dart`、`device_route_library.dart`、`route_library_controller.dart`及page／screen；主控固定儲存／時序，DSH提供頁面及測試草稿後由主控修正。新增35項、全App415項Flutter及analyze通過；中英文320×568兩倍字體、鍵盤280 inset下返回／暫停均可達。儲存可重新開啟、檢查SHA／加密完整性及明確回退；缺金鑰／損壞保留資料報錯，不自動清空或重建金鑰。詳見[P1證據](../verification/dsh-p1-route-store-20261105.json)。
 
@@ -538,7 +559,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | S1 現有App核心功能 | 辨識、語音、首頁、Google帳號、聯絡、菜單、戶外導航 | 1.4.3+8前處理已核，沿用恢復操作；328項Flutter、14項原生、33項數值及簽署建置通過，已交付。權重、三任務／VoiceOver及原場景仍待驗 | VoiceOver／大字／權限／背景與實際操作逐項通過 | 補HKDI及戶外真機清單，不把測試替身當實走 |
 | S2 照片收集與管理員覆核 | 同意、回報、抽樣、待傳及覆核狀態 | iPhone擷取／加密佇列已有；Backend問題／覆核API與本機工作台已合成驗證，App未接；照片開關關閉、雲端未接通 | 本人同幀照片可到覆核佇列；拒絕、撤回、斷網及切帳號正確 | Backend部署／App Check與Dataset覆核流程 |
 | S3 私人訓練與模型更新 | 我的模型、學習進度、更新同意及回退 | 尚未接通；私人效益未驗證，付費GPU預算未定 | 對照實驗有額外效益；mock閉環及更新後主動回退可驗，不合格不更新 | 先一個修正案例及私人／共用對照，再mock；真實服務另過資料／權限／預算條件 |
-| S4 室內近距離感知與引導 | 路線錄製、跨樓層步行導航與即時障礙／語音；ARKit追蹤和LiDAR分層 | N0／P0離線mock及P1樣例儲存、12-node樣例與既有表面測距試驗已有；真實錄路／重定位及硬件分層未接通  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口及真機待驗。| 本機未知／歧義／方向錯誤不出指令；Pro Max及無LiDAR一般iPhone、陪同實地任務分開驗收 | P0／P1本機已驗，先P2相機再P3–P5；鳥瞰／自動繞障另驗 |
+| S4 室內近距離感知與引導 | 路線錄製、跨樓層步行導航與即時障礙／語音；ARKit追蹤和LiDAR分層 | N0／P0離線mock及P1樣例儲存、12-node樣例與既有表面測距試驗已有；真實錄路／重定位及硬件分層未接通  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口亦已過工程測試，手機人工驗收待完成。| 本機未知／歧義／方向錯誤不出指令；Pro Max及無LiDAR一般iPhone、陪同實地任務分開驗收 | P0／P1本機已驗，先P2相機再P3–P5；鳥瞰／自動繞障另驗 |
 | S5 圖示／文字與設施理解 | 主動拍牌、B圖示、OCR及箭嘴關係 | 菜單OCR已有；B正式run曾到22輪後中斷，未完成／未入App | 合格B可手機查牌，配對不明拒答，不把箭嘴當樓層方向 | Dataset恢復／評估B；首版不依賴A自動找牌 |
 | S6 HKDI整合驗收與試用發佈 | 同一任務的資源／語音協調、實地測試及版本說明 | 完整室內＋學習閉環未驗收 | 陪同實測、退化／回退／耗電與版本備份均有紀錄 | 驗收本次納入的S1–S5功能；未通過功能保持試驗標示或關閉 |
 | S7 多場地、複雜樓層網絡與平台擴充 | 更多場地／複雜樓層網絡、Android及方向研究；基本跨樓層屬S4 | 單層graph及N0已有；真實跨層尚未實作，完成條件歸S4主線 | 每項新增任務有場地資料、相容性及獨立驗收 | 先完成限定場景，再逐項擴，不一次承諾任意室內 |
@@ -551,7 +572,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 |---|---|---|
 | P0 契約＋跨樓層／障礙語音mock（離線已驗） | Sol合成契約／fixture及仲裁；DSH頁面／測試經Sol修正整合 | 27項P0、全App380項及analyze通過；G→3F、錯層、相似出口、障礙打斷、晚到事件及中途重定位已驗。沒有實際語音或行走放行 |
 | P1 版本化本機路線儲存（合成結構已驗） | Sol格式、獨立加密、版本切換及刪除；DSH列表／draft／錯誤UI經覆核整合 | 新35項、全App415項及analyze通過；重開、損壞、額滿、晚到寫入及回退已驗。沒有圖像blob／實機Keychain驗收，下一步P2相機 |
-| P2 單相機與雙節奏取幀 | Codex直接實作及驗收；P2-A/B及C原生已驗，續P2-D入口 | 不需YOLO成功也能錄路；停止、背景、拒權、慢回覆及原有三任務回歸通過 |
+| P2 單相機與雙節奏取幀 | Codex直接實作及驗收；P2-A至D工程已驗，手機人工驗收待完成 | 不需YOLO成功也能錄路；停止、背景、拒權、慢回覆及原有三任務回歸通過 |
 | P3 首次建路線／跨樓層定位 | DSH媒體儲存／配對／樓層與UI全實作，Codex審核 | 特徵小集比較、實際升降機及樓梯跨層；錯層／相似出口不誤續行；無氣壓／無AR仍有明示確認模式 |
 | P4 行走障礙與語音 | DSH感知／追蹤／語音與測試全實作，Codex審核，腳本評估 | 行走誤報／漏報、人群、玻璃／細物／未知、語音打斷與恢復分報；模型gate未過就保持試驗／關閉，沒有新訓練或換權重自動授權 |
 | P5 室內外整合與人工驗收 | DSH整合及測試修正，Codex覆核證據，人工場地／視障驗收 | 同一旅程入口交接、跨層後重定位、終點、斷網／來電／耳機／讀屏／熱耗電；一般iPhone與Pro Max分報，缺裝置不外推 |
@@ -583,7 +604,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | F14 個人路標重行、場地graph與跨樓層／S4–S7 | 12-node／10情境／47觀察樣例已回放；真實重定位未開始，現升為主線 | 先對照私人已錄路線的固定node、多觀察與有向路段，確認起點／方向再重行；既有無向BFS只保留樣例用途。圖片／OCR、路線次序與可用追蹤產生候選，歧義保留未知；跨樓層連接列P0–P3，全場地自動建圖後續 | B14／D09；P0–P5見導航主線，首次錄製可為App尚未有的新路線；不由一張門／欄杆照片確認位置或推導未走通路 |
 | F15 扶手電梯方向與門推拉／S7 | 研究，未開始 | 扶手電梯以同設備追蹤、上下端幾何、入口標誌及補償手機移動的梯級光流交叉判斷，衝突拒答；門推拉只在可確認文字／標示證據時描述，不能只看門把或門框 | Dataset D11時間序列與文字真值；上／下端、相鄰設備、啟停、反射及持機移動均測，不叫使用者試踏設備驗證 |
 | F16 懸空障礙與近身提醒／S7 | 研究，未開始 | 在地面／重力校準及使用者通行範圍設定後，檢查深度佔用是否侵入身體／頭部高度；動態碰撞風險需可靠距離、相對運動及時序證據。初版只描述觀測，不把物件在中央當碰撞預警 | Dataset D09／D11的高度、細物與時序資料；不能由未標註或稀疏深度聲稱全面覆蓋 |
-| F17 路線錄製、路標記憶與場景理解／S1–S4 | N0／P0 mock及P1加密樣例庫已有，未發布；P2-C原生相機可按需交有界關鍵幀；Flutter錄路／定位未接 | 明確開始／停止，首次錄路保存有上限的關鍵幀／特徵／樓層及有向連接；平常重行只即時分析，不累積影片。P1可保存／重開／回退／刪除結構樣例，真實媒體由P2–P3擴充 | B15；先P2相機、P3首次錄路／跨層及P4障礙／語音，系統調校後置；路線用途與訓練照片分開 |
+| F17 路線錄製、路標記憶與場景理解／S1–S4 | N0／P0 mock及P1加密樣例庫已有，未發布；P2-C/D相機及Flutter入口已接；建路／定位未接 | 明確開始／停止，首次錄路保存有上限的關鍵幀／特徵／樓層及有向連接；平常重行只即時分析，不累積影片。P1可保存／重開／回退／刪除結構樣例，真實媒體由P2–P3擴充 | B15；先P2相機、P3首次錄路／跨層及P4障礙／語音，系統調校後置；路線用途與訓練照片分開 |
 | F18 一般iPhone、Android與更多登入方式／S1–S7 | 一般iPhone列首輪目標；無LiDAR真機與Android新導航未驗證 | 基本路標流程不要求LiDAR／登入；按能力選普通相機或ARKit觀察來源，追蹤不足降為路標確認而非假米數。Android保留adapter後續驗證，帳戶連結仍保留UID | B16；至少一部無LiDAR一般iPhone另測；A9／iOS版本門檻不等於效能驗收，不承諾Android同步交付 |
 | F19 空間音效／S4–S7 | 參考產品引出的候選，未實作 | 在F09–F10提供有效方位／距離後，原生AVAudioEngine搭配AVAudioEnvironmentNode產生單聲道定位提示音，設定listener／source座標；與TTS／VoiceOver共同排程。先校準左／右／前後與近遠，未知不合成假距離 | 先幾何可信再做聲音，耳機／揚聲器／讀屏及外界聲音負擔均測；不把現有普通TTS標作空間音效 |
 | F20 路口燈號與斑馬線／S7 | 新研究候選，不列現有十類能力 | 先定行人燈／車燈、斑馬線與對應路口／方向的真值，另建資料與相容模型；時序檢查遮擋與狀態變化，只描述可確認觀測，不由單一框發可過路指令 | Dataset D13；陌生路口、錯燈、反光、閃爍與未知要測，未通過維持關閉 |
@@ -890,6 +911,8 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 </details>
 
 ### 維護紀錄
+
+2026-11-05 P2-D: live Flutter camera entry passed 435 Dart tests, 45 native Simulator tests, clean analyze and signed 1.5.0+9 Release build. Fixed old event-subscriber interference and evicted captured-photo caches on stop/exit. Physical-device and VoiceOver acceptance remain pending. Evidence: [P2-D receipt](../verification/codex-p2d-camera-entry-20261105.json).
 
 2026-11-05 GitHub checkpoint review: connected the shared camera coordinator to application background/foreground before registering camera plugins. Late background starts are blocked; foreground never resumes a camera automatically. All 44 native Simulator tests passed; the isolated source checkpoint also reproduced 415 Flutter tests and clean analyze. Historical P2-C receipt remains a snapshot of its earlier 43-test run. Evidence: [lifecycle check](../verification/codex-camera-lifecycle-20261105.json).
 
