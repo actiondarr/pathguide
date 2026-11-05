@@ -6,8 +6,8 @@ const english = <String, String>{
   "返回測試列表": "Back to testing",
   "用相機辨識支援的物件，聽取簡短結果。":
       "Recognize supported objects with the camera and hear a short result.",
-  "搜尋目的地，取得戶外步行路線。":
-      "Search for a destination and get an outdoor walking route.",
+  "搜尋戶外目的地，或錄製室內路標路線。":
+      "Search outdoor destinations or record indoor landmark routes.",
   "拍攝菜單，查詢菜名及價格。": "Photograph a menu and look up dishes and prices.",
   "調整語言及語速，查看帳號、教學和私隱。":
       "Adjust language and speech speed. View your account, help and privacy.",
@@ -29,8 +29,9 @@ const english = <String, String>{
   "略過說明": "Skip introduction",
   "將相機對準前方，開始後聽取物件名稱。": "Point the camera ahead. Start to hear object names.",
   "只辨識支援的物件；不代表前方暢通。可隨時暫停或返回。": "Only supported objects are recognized. This does not establish clear space. Pause or go back at any time.",
-  "輸入或說出目的地，選擇地點後預覽並開始步行導航。": "Type or say a destination. Choose a place, preview the route, then start walking navigation.",
-  "提供戶外路線提示；室內樓層、樓梯及入口仍須自行確認。": "Provides outdoor route cues. Confirm indoor floors, stairs and entrances yourself.",
+  "選擇搜尋目的地、我的路線或錄製新路線。":
+      "Choose Search destination, My routes or Record new route.",
+  "搜尋提供戶外步行路線；室內可錄路標並逐點重認，樓層及方向須自行確認。": "Search provides outdoor routes. Record and rematch indoor landmarks; check floors and direction yourself.",
   "拍攝或選取菜單，再用文字或語音查詢。":
       "Take or choose a menu photo, then search by text or voice.",
   "閱讀可確認的菜名及價格；讀不到或配對不明時可重拍。": "Reads identifiable dishes and prices. Retake the photo if text or price pairing is unclear.",

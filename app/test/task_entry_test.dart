@@ -10,7 +10,7 @@ void main() {
     await t.pumpWidget(PathGuideApp(settings: AppSettings.memory()));
     await t.pumpAndSettle();
     expect(find.text('用相機辨識支援的物件，聽取簡短結果。'), findsOneWidget);
-    expect(find.text('搜尋目的地，取得戶外步行路線。'), findsOneWidget);
+    expect(find.text('搜尋戶外目的地，或錄製室內路標路線。'), findsOneWidget);
     expect(find.text('拍攝菜單，查詢菜名及價格。'), findsOneWidget);
     expect(find.text('室內路線工具（試驗）'), findsNothing);
     expect(find.text('首頁'), findsNothing);

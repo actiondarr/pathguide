@@ -135,6 +135,39 @@ void main() {
   Matcher failure(RouteProblem problem) =>
       isA<RouteStoreFailure>().having((e) => e.problem, 'problem', problem);
 
+  test('batch feature read returns only requested immutable blobs and still verifies images', () async {
+    final saved = await put();
+    final doc = capturedDocument();
+    final feature = doc.views.first.featureSha!;
+    final values = await testStore.readMediaBatch(
+      doc.id,
+      saved.version,
+      hashes: {feature},
+    );
+    expect(values.keys, [feature]);
+    expect(() => values[feature]![0] = 0, throwsUnsupportedError);
+    final all = await testStore.readMediaBatch(doc.id, saved.version);
+    expect(all.length, 2);
+    await expectLater(
+      testStore.readMediaBatch(doc.id, saved.version, hashes: {'missing'}),
+      throwsA(isA<RouteStoreFailure>()),
+    );
+    final files = await testRoot
+        .list(recursive: true)
+        .where(
+          (f) =>
+              f is File &&
+              f.path.endsWith('.enc') &&
+              !f.path.endsWith('/catalog.enc'),
+        )
+        .toList();
+    expect(files, isNotEmpty);
+    await File(files.first.path).writeAsBytes([1]);
+    await expectLater(
+      testStore.readMediaBatch(doc.id, saved.version, hashes: {feature}),
+      throwsA(isA<RouteStoreFailure>()),
+    );
+  });
   test('format caps reject oversized image/feature references and wrong capture flags', () {
     final original = jsonDecode(
       jsonEncode(capturedDocument().toMap()),

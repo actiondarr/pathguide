@@ -40,7 +40,7 @@ class TaskHomePage extends StatelessWidget {
         ),
         _task(
           '路線導航',
-          '搜尋目的地，取得戶外步行路線。',
+          '搜尋戶外目的地，或錄製室內路標路線。',
           Icons.navigation_outlined,
           onNavigation,
         ),

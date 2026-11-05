@@ -13,6 +13,8 @@ import '../route_memory/route_capture_page.dart';
 import '../account/account_ui.dart';
 import '../menu/menu_page.dart';
 import '../navigation/navigation_page.dart';
+import '../navigation/navigation_hub_page.dart';
+import '../route_memory/route_journey_page.dart';
 import '../indoor/graph_replay_page.dart';
 import '../depth/depth_page.dart';
 import '../route_memory/route_memory_contract.dart';
@@ -22,6 +24,7 @@ enum AppSection {
   home,
   explore,
   navigation,
+  outdoor,
   settings,
   developer,
   visionDiagnostics,
@@ -70,7 +73,7 @@ class _AppShellState extends State<AppShell> {
         !_routeMemoryVisible) {
       return;
     }
-    if (_section == AppSection.navigation &&
+    if (_section == AppSection.outdoor &&
         _navigationTask &&
         section != _section) {
       if (_confirmingNavigationExit) return;
@@ -123,6 +126,15 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  void _openRoutes(bool recording) => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => RouteJourneyPage(
+        settings: widget.settings,
+        initialRecording: recording,
+      ),
+    ),
+  );
+
   void _openAccount() => setState(() => _accountVisible = true);
 
   Widget _page() => switch (_section) {
@@ -140,11 +152,18 @@ class _AppShellState extends State<AppShell> {
       settings: widget.settings,
       onBack: () => _select(AppSection.home),
     ),
-    AppSection.navigation => NavigationPage(
+    AppSection.navigation => NavigationHubPage(
+      settings: widget.settings,
+      onSearch: () => _select(AppSection.outdoor),
+      onLibrary: () => _openRoutes(false),
+      onRecord: () => _openRoutes(true),
+      onBack: () => _select(AppSection.home),
+    ),
+    AppSection.outdoor => NavigationPage(
       settings: widget.settings,
       onTaskChanged: (active) => _navigationTask = active,
       speechSuspended: _confirmingNavigationExit,
-      onBack: () => _select(AppSection.home),
+      onBack: () => _select(AppSection.navigation),
     ),
     AppSection.settings => SettingsPage(
       onAccount: _openAccount,

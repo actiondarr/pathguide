@@ -570,6 +570,7 @@ class RunnerTests: XCTestCase {
     let coordinator = CameraCoordinator()
     var starts = 0, pauses = 0
     let plugin = DepthPlugin(messenger: NavigationTestMessenger(), cameraCoordinator: coordinator,
+      isApplicationActive: { true },
       supportsDepth: { true }, cameraAuthorizationStatus: { .authorized },
       runSession: { _ in starts += 1 }, pauseSession: { pauses += 1 })
     plugin.handle(FlutterMethodCall(methodName: "start", arguments: ["session": "background"])) { value in
@@ -650,6 +651,7 @@ class RunnerTests: XCTestCase {
     coordinator.request(owner: .route, stop: { acknowledge = $0 }) { _ in }
     var permissions = 0, pauses = 0, starts = 0, replies = 0
     let plugin = DepthPlugin(messenger: NavigationTestMessenger(), cameraCoordinator: coordinator,
+      isApplicationActive: { true },
       supportsDepth: { true }, cameraAuthorizationStatus: { .notDetermined },
       requestCameraAccess: { _ in permissions += 1 },
       runSession: { _ in starts += 1 }, pauseSession: { pauses += 1 })
@@ -671,6 +673,7 @@ class RunnerTests: XCTestCase {
     var permission: ((Bool) -> Void)?
     var starts = 0, pauses = 0, replies = 0
     let plugin = DepthPlugin(messenger: NavigationTestMessenger(), cameraCoordinator: coordinator,
+      isApplicationActive: { true },
       supportsDepth: { true }, cameraAuthorizationStatus: { .notDetermined },
       requestCameraAccess: { permission = $0 },
       runSession: { _ in starts += 1 }, pauseSession: { pauses += 1 })
@@ -696,6 +699,7 @@ class RunnerTests: XCTestCase {
     let coordinator = CameraCoordinator()
     var starts = 0, pauses = 0
     let plugin = DepthPlugin(messenger: NavigationTestMessenger(), cameraCoordinator: coordinator,
+      isApplicationActive: { true },
       supportsDepth: { true }, cameraAuthorizationStatus: { .authorized },
       runSession: { _ in starts += 1 }, pauseSession: { pauses += 1 })
     plugin.handle(FlutterMethodCall(methodName: "start", arguments: ["session": "running"])) { value in
@@ -1123,4 +1127,44 @@ private final class NavigationTestLocationManager: CLLocationManager {
   override var accuracyAuthorization: CLAccuracyAuthorization { accuracy }
   override func startUpdatingLocation() { starts += 1 }
   override func stopUpdatingLocation() { stops += 1 }
+}
+
+
+extension RunnerTests {
+  func testLandmarkChannelBindsIdentityAndRejectsInvalidHash() {
+    let plugin = RouteLandmarkPlugin()
+    let done = expectation(description: "invalid image hash replied")
+    plugin.handle(FlutterMethodCall(methodName: "analyze", arguments: [
+      "requestId": "hash-check", "inputSha": "wrong", "jpeg": FlutterStandardTypedData(bytes: Data([1])),
+      "width": 1, "height": 1,
+      "featureRevision": RouteLandmarkAnalyzer.featureRevision,
+      "preprocessRevision": RouteLandmarkAnalyzer.preprocessRevision])) { value in
+      let reply = value as? [String: Any]
+      XCTAssertEqual(reply?["requestId"] as? String, "hash-check")
+      XCTAssertEqual(reply?["status"] as? String, "invalid")
+      done.fulfill()
+    }
+    wait(for: [done], timeout: 5)
+  }
+  func testLandmarkChannelSingleFlightAndExactCancellation() {
+    let plugin = RouteLandmarkPlugin()
+    let jpeg = RouteLandmarkProbe.fixtureJPEG()
+    let args: [String: Any] = ["requestId": "first", "inputSha": SHA256.hash(data: jpeg).map { String(format: "%02x", $0) }.joined(),
+      "jpeg": FlutterStandardTypedData(bytes: jpeg), "width": 320, "height": 240,
+      "featureRevision": RouteLandmarkAnalyzer.featureRevision, "preprocessRevision": RouteLandmarkAnalyzer.preprocessRevision]
+    let done = expectation(description: "cancelled analysis drained")
+    plugin.handle(FlutterMethodCall(methodName: "analyze", arguments: args)) { value in
+      XCTAssertEqual((value as? [String: Any])?["status"] as? String, "cancelled")
+      done.fulfill()
+    }
+    plugin.handle(FlutterMethodCall(methodName: "cancel", arguments: ["requestId": "other"])) { _ in }
+    plugin.handle(FlutterMethodCall(methodName: "analyze", arguments: args)) { value in
+      XCTAssertEqual((value as? [String: Any])?["status"] as? String, "busy")
+    }
+    plugin.handle(FlutterMethodCall(methodName: "cancel", arguments: ["requestId": "first"])) { _ in }
+    plugin.handle(FlutterMethodCall(methodName: "analyze", arguments: args)) { value in
+      XCTAssertEqual((value as? [String: Any])?["status"] as? String, "busy")
+    }
+    wait(for: [done], timeout: 10)
+  }
 }

@@ -1,6 +1,6 @@
 # Backend：PathGuide 資料、服務契約與交付
 
-更新：2026年11月5日。只維護資料／服務／部署規格；使用者流程與導航主線集中在[Frontend整體規格](FRONTEND-DESIGN.zh-HK.md)，模型品質集中在[Dataset Review](DATASET-REVIEW.zh-HK.md)。
+更新：2026年11月6日。只維護資料／服務／部署規格；使用者流程與導航主線集中在[Frontend整體規格](FRONTEND-DESIGN.zh-HK.md)，模型品質集中在[Dataset Review](DATASET-REVIEW.zh-HK.md)。
 **2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，45項原生Simulator測試、435項Flutter測試及analyze通過。P2-D Flutter入口已接入，1.5.0+9簽署建置通過；已推送不可變tag／prerelease並核對遠端，iPhone安裝及啟動成功；人工／VoiceOver驗收仍待完成。**
 
 
@@ -372,7 +372,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
 | S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理已有；問題／覆核API及本機工作台已有；Emulator與合成瀏覽器流程通過；預設關閉，正式部署／真人案例未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
 | S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；私人效益未驗證，付費GPU預算未定 | 私人／共用對照支持額外效益；mock工作及效果退化回退通過，真實工作受配額控制 | 先問題修正案例與對照，再mock；資料／權限／預算具備才開真實服務 |
-| S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；P3-A媒體schema／加密儲存候選已有454項Flutter／49原生及analyze證據、真機儲存probe亦過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，旅程接線／雲端看圖未完成／部署  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口亦已過工程測試，手機人工驗收待完成。| 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
+| S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；P3-A媒體schema／加密儲存候選已有454項Flutter／49原生及analyze證據、真機儲存probe亦過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選488項Flutter／53原生通過；雲端看圖未完成／部署  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口亦已過工程測試，手機人工驗收待完成。| 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
 | S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
 | S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
 | S7 多場地、複雜樓層網絡與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 本機typed graph／觀察原型已有；雲端及真實場地服務未實作 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
@@ -397,7 +397,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B12 發佈、診斷與預算／S0–S6 | 1.4.1+6工程／簽署建置與遠端核對通過；之後安裝及啟動成功，舊版保留，場景覆驗待補 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依「部署、設定與版本回退」先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
 | B13 室內即時資料邊界／S4 | 1.4.1+6辨識框與深度已本機處理，無雲端服務 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
 | B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
-| B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，旅程接線留P3-C | 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接 | F17；下一步真相機／功能閉環，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
+| B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選488項Flutter／53原生及analyze通過，手機實測未完成 | 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接 | F17；P3-C已接真相機／本機閉環，下一步真人實測及P4障礙／語音，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
 
 管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
@@ -577,6 +577,8 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 </details>
 
 ### 維護紀錄
+
+2026-11-06 P3-C候選接通本機首次錄路與重行：RouteLandmark原生通道只收有界JPEG／feature，回覆綁requestId、SHA及revision；精確取消及單一工作排空。store新增batch讀取，完整核驗版本／所有媒體而只留所需特徵，重行不寫照片。沿用本機Keychain、保護／備份排除及容量；沒有新增API、同步、訓練或部署。488項Flutter、53項原生及analyze通過；兩軸覆核／發布及真人實測待完成，見[P3-C證據](../verification/codex-p3c-journey-20261106.json)。
 
 2026-11-05 P3-B核心工程檢查：471項Flutter、51項原生Simulator及analyze通過，兩軸覆核指出的出口綁定已先紅後綠修正並重驗；1.6.1+12最終簽署建置／簽章／模型雜湊通過，不可變tag／prerelease遠端核對後已安裝及啟動；手機generated-fixture真實feature12902bytes、自距離0及zh-Hant／en-US OCR能力通過；正常模式已重啟，並非實地導航驗收。新增Vision feature print／版本封裝、runtime OCR能力及人工確認回退；樓層localizer區分預期／候選／實際，合併同node多視角，拒絕歧義、錯層、方向未確認及舊／過期回覆。相機、儲存與平台／UI接線留P3-C；本輪不稱已能實地導航，實際檢查及發布狀態見[P3-B證據](../verification/codex-p3b-landmarks-20261105.json)。
 

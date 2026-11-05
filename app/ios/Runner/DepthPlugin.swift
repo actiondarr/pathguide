@@ -27,6 +27,7 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
   private var epoch = 0
   private let cameraCoordinator: CameraCoordinator
   private var cameraAccess: CameraLeaseClient?
+  private let isApplicationActive: () -> Bool
   private let supportsDepth: () -> Bool
   private let cameraAuthorizationStatus: () -> AVAuthorizationStatus
   private let requestCameraAccess: (@escaping (Bool) -> Void) -> Void
@@ -35,6 +36,7 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
 
   init(messenger: FlutterBinaryMessenger,
        cameraCoordinator: CameraCoordinator = .shared,
+       isApplicationActive: @escaping () -> Bool = { UIApplication.shared.applicationState == .active },
        supportsDepth: @escaping () -> Bool = {
          ARWorldTrackingConfiguration.isSupported &&
            ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
@@ -48,6 +50,7 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
        runSession: ((ARWorldTrackingConfiguration) -> Void)? = nil,
        pauseSession: (() -> Void)? = nil) {
     self.cameraCoordinator = cameraCoordinator
+    self.isApplicationActive = isApplicationActive
     self.supportsDepth = supportsDepth
     self.cameraAuthorizationStatus = cameraAuthorizationStatus
     self.requestCameraAccess = requestCameraAccess
@@ -153,7 +156,7 @@ final class DepthPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, ARSessio
       cameraAccess = access
       func begin(_ granted: Bool) {
         guard expected == self.generation, access.isCurrent,
-          UIApplication.shared.applicationState == .active else {
+          self.isApplicationActive() else {
           reply.finish(["status": "paused"]); access.cancel(); return
         }
         guard granted else {

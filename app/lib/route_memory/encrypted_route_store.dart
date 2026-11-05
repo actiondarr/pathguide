@@ -419,8 +419,10 @@ class EncryptedRouteStore {
     String id,
     int version,
     Map entry,
-    SecretKey key,
-  ) async {
+    SecretKey key, {
+    Set<String>? collect,
+    Map<String, Uint8List>? into,
+  }) async {
     final info = entry['versions']['$version'];
     if (info == null) throw const RouteStoreFailure(RouteProblem.notFound);
     final file = File('${_routeDir(id).path}/${info['file']}');
@@ -449,7 +451,7 @@ class EncryptedRouteStore {
         throw const RouteStoreFailure(RouteProblem.corrupt);
       }
       for (final ref in references.entries) {
-        await _readBlob(
+        final payload = await _readBlob(
           id,
           version,
           ref.key,
@@ -457,6 +459,9 @@ class EncryptedRouteStore {
           index[ref.key] as Map,
           key,
         );
+        if (into != null && (collect == null || collect.contains(ref.key))) {
+          into[ref.key] = Uint8List.fromList(payload).asUnmodifiableView();
+        }
       }
       return RouteSnapshot(
         document,
@@ -582,6 +587,23 @@ class EncryptedRouteStore {
       throw const RouteStoreFailure(RouteProblem.corrupt);
     }
   }
+
+  /// Verify the version once and retain only requested immutable blobs. This
+  /// prevents N individual feature reads from repeating full-image verification.
+  Future<Map<String, Uint8List>> readMediaBatch(
+    String id,
+    int version, {
+    Set<String>? hashes,
+  }) => _locked((key) async {
+    final cat = await _catalog(key), entry = cat['routes'][id] as Map?;
+    if (entry == null) throw const RouteStoreFailure(RouteProblem.notFound);
+    final values = <String, Uint8List>{};
+    await _read(id, version, entry, key, collect: hashes, into: values);
+    if (hashes != null && hashes.any((hash) => !values.containsKey(hash))) {
+      throw const RouteStoreFailure(RouteProblem.notFound);
+    }
+    return Map.unmodifiable(values);
+  });
 
   /// Replay is read-only: it never archives a newly observed camera frame.
   Future<List<int>> readMedia(String id, int version, String sha) =>

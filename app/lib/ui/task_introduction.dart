@@ -7,8 +7,8 @@ Future<bool?> showTaskIntroduction(BuildContext context, AppTask task) {
   final (action, result) = switch (task) {
     AppTask.recognition => ('將相機對準前方，開始後聽取物件名稱。', '只辨識支援的物件；不代表前方暢通。可隨時暫停或返回。'),
     AppTask.navigation => (
-      '輸入或說出目的地，選擇地點後預覽並開始步行導航。',
-      '提供戶外路線提示；室內樓層、樓梯及入口仍須自行確認。',
+      '選擇搜尋目的地、我的路線或錄製新路線。',
+      '搜尋提供戶外步行路線；室內可錄路標並逐點重認，樓層及方向須自行確認。',
     ),
     AppTask.menu => ('拍攝或選取菜單，再用文字或語音查詢。', '閱讀可確認的菜名及價格；讀不到或配對不明時可重拍。'),
     AppTask.routeCamera => (

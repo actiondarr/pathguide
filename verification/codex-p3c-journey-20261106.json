@@ -1,0 +1,28 @@
+{
+  "issue": 9,
+  "baseline_commit": "7b3e43e51b7f79c3c6bd34ee47da16ce07362dd2",
+  "scope": "P3-C capture/Vision/encrypted store and recorded checkpoint replay UI; transit/taxi excluded",
+  "checks": {
+    "flutter_tests": 488,
+    "native_simulator_tests": 53,
+    "analyze_issues": 0,
+    "diff_check": "passed",
+    "logs": [
+      "dataset_pipeline/review_artifacts/p3c-full-final.log",
+      "dataset_pipeline/review_artifacts/p3c-native-final.log",
+      "dataset_pipeline/review_artifacts/p3c-analyze-final2.log"
+    ],
+    "initial_native_failure": "Depth tests depended on simulator application foreground; introduced injectable OS foreground boundary with unchanged production default; 53 tests then passed"
+  },
+  "review": {
+    "standards": "pending",
+    "spec": "pending"
+  },
+  "release": {
+    "version": "1.7.0+13",
+    "status": "not built or delivered yet"
+  },
+  "human_navigation_acceptance": "pending, not claimed",
+  "limits": "checkpoint replay only; distance threshold engineering, no live obstacle avoidance/continuous spoken turns, no GPS trace recording, no inferred reverse route",
+  "private_data": "no private photos, GPS records, keys or user screenshots included"
+}

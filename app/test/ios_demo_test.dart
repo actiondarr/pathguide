@@ -257,7 +257,7 @@ void main() {
   testWidgets(
     'navigation entry exposes search without starting camera or location',
     (tester) async {
-      await start(tester, initialSection: AppSection.navigation);
+      await start(tester, initialSection: AppSection.outdoor);
       expect(find.text('路線導航'), findsOneWidget);
       expect(find.text('搜尋目的地'), findsOneWidget);
       expect(find.text('此手機收藏'), findsOneWidget);
@@ -280,7 +280,7 @@ void main() {
     await tester.tap(find.text('略過說明'));
     await tester.pumpAndSettle();
     expect(find.text('搜尋目的地'), findsOneWidget);
-    await tester.tap(find.text('返回首頁'));
+    await tester.tap(find.byTooltip('返回首頁'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('設定與使用教學'));
     await tester.pumpAndSettle();
