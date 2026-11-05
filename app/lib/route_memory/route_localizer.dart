@@ -237,6 +237,21 @@ class RouteLocalizer extends ChangeNotifier {
         if (ocr.any((text) => normalize(text) == normalize(n.floor.label)))
           n.floor,
     };
+    final floorToken = RegExp(
+      r'^(?:[BL]?\d{1,2}F|G|GF|UG|LG|M|[0-9一二三四五六七八九十百零]{1,5}樓)$',
+    );
+    final unfamiliarFloor = ocr
+        .map(normalize)
+        .any(
+          (text) =>
+              floorToken.hasMatch(text) &&
+              !landmarks.any((n) => normalize(n.floor.label) == text),
+        );
+    if (unfamiliarFloor) {
+      _result = RouteMatchState.ambiguous;
+      notifyListeners();
+      return;
+    }
     if (hints.isNotEmpty &&
         (hints.length != 1 || !hints.contains(node.floor))) {
       _result = RouteMatchState.ambiguous;

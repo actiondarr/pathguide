@@ -132,7 +132,7 @@ P0分開expected／candidate／actual floor；先確認fresh樓層候選，再�
 | PerceptionFrame | 同幀session／seq／捕捉時間、模型SHA／profile、detections及短時track、可選深度／pose及其有效性；分類score不是深度信心。缺距離為null，不使用未知class ID代填 |
 | GuidanceEvent | eventId、journey／generation／routeVersion、eventKind、priority、目標node／floor／track、來源seq、monotonic expiry、reasonCode及本地化參數。文字由受控規則產生；AI自由文字不直接成步行指令 |
 
-轉層狀態：walkingOnFloor→approachingConnector→transitioning→awaitingFloorConfirmation→relocalizingExit→walkingOnFloor；任一步可到unknown／paused／cancelled。離開設備不代表到達預期層；錯層、相似出口、AR重設、氣壓漂移或OCR衝突會阻止續行。原則上可在已確認的中途路標重定位，不把N0回起點mock變成正式跨層恢復策略。回程需另驗視角／方向，不能默認所有連線雙向可靠。
+轉層狀態：walkingOnFloor→approachingConnector→transitioning→awaitingFloorConfirmation→relocalizingExit→walkingOnFloor；任一步可到unknown／paused／cancelled。離開設備不代表到達預期層；錯層、相似出口、AR重設、氣壓漂移或OCR衝突（包括路線未錄但有明確樓層格式的字樣）會阻止續行。原則上可在已確認的中途路標重定位，不把N0回起點mock變成正式跨層恢復策略。回程需另驗視角／方向，不能默認所有連線雙向可靠。
 
 原生CameraCoordinator管理取用權；新增RouteObservationSource與WalkingPerception adapter，但不是另開競爭相機。現有VisionFrame只有偵測結果，新的原生觀察契約另建，保持舊辨識／菜單／測距方法語意。Swift處理最新幀偵測／可用深度及節流後關鍵幀OCR／features，Flutter只接必要精簡事件；session、取消、時序與停止屏障由Sol負責。普通ARKit與LiDAR分開能力檢查；無AR／無Motion授權時仍可明示路標及樓層確認。
 

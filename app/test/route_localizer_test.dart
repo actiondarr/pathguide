@@ -12,6 +12,27 @@ void main() {
     List<String> ocr = const [],
   }) => l.accept(t, d, feature: feature, preprocess: preprocess, ocr: ocr);
 
+  test('unrecorded floor sign is conflicting evidence, not ignored', () {
+    const floor = FloorRef('b', 'three', '3F');
+    final l = RouteLocalizer(
+      routeId: 'route',
+      routeVersion: 1,
+      landmarks: const [
+        RouteLandmarkIdentity(
+          'exit',
+          floor,
+          ['front'],
+          exitForConnectors: ['lift'],
+        ),
+      ],
+    );
+    l.expectFloor(floor, exitNodeId: 'exit', connectorId: 'lift');
+    final t = l.beginObservation(frameAge: Duration.zero);
+    accept(l, t, const [RouteViewDistance('exit', 'front', 0)], ocr: ['2F']);
+    l.confirmFloor(floor);
+    l.confirmExit(directionConfirmed: true);
+    expect(l.actualFloor, isNull);
+  });
   test('room cannot confirm a cross-floor exit', () {
     const floor = FloorRef('b', 'three', '3F');
     final l = RouteLocalizer(
