@@ -37,8 +37,14 @@
     "executable_sha256": "4d7e36af7bbc9f0e8e01c7bd2a706671fe94debb68c50939e61bc3c464e9f048",
     "log": "dataset_pipeline/review_artifacts/ui-1.5.1-iphone-release.log"
   },
-  "release": "pending",
-  "human_ui_acceptance": "pending; do not reuse previous version VoiceOver report",
+  "release": {
+    "tag": "v1.5.1+10",
+    "source_commit": "a00a2fbea41d3f6eb0ddbcf63b83af8dc15fbaa9",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.5.1%2B10",
+    "prerelease": true,
+    "remote_branch_and_tag_verified_before_install": true
+  },
+  "human_ui_acceptance": "pending user feedback for this version",
   "private_media": "No user screenshot or camera photo committed",
   "limitations": [
     "No intent-routing assistant or indoor recording/localization/navigation delivered",
@@ -49,5 +55,7 @@
     "app/assets/models/detector-hk9.tflite": "8bbfa43b1fe2b440e608652e75fa86d15e571031c45b7b21f30689852468e3c9",
     "app/assets/models/detector.json": "172db9ff4f637fd4d6188a736d436533577a9ca015775961cdb0bb637f2ed327",
     "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
-  }
+  },
+  "installation": "success",
+  "launch": "success"
 }
