@@ -11,6 +11,16 @@
     "p3c-hotfix-ui-cycles3.log",
     "p3c-hotfix-old-timeout-red.log"
   ],
-  "verification": "full suite, native, review and signed build pending",
-  "human_acceptance": "1.7.0+13 failed user report; hotfix pending retest"
+  "verification": "signed final build pending",
+  "human_acceptance": "1.7.0+13 failed user report; hotfix pending retest",
+  "checks": {
+    "flutter": 493,
+    "native": 54,
+    "analyze": "passed",
+    "latest_equality_widget_suite": 6
+  },
+  "review": {
+    "standards": "passed",
+    "spec": "passed after retained pending input and record value equality fixes"
+  }
 }

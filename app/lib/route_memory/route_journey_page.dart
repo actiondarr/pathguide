@@ -495,8 +495,9 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       confirmed: pending.confirmed,
       nodeId: pending.nodeId,
     );
-    if (mounted && added && identical(_pendingLandmark, pending))
+    if (mounted && added && _pendingLandmark == pending) {
       setState(() => _pendingLandmark = null);
+    }
   }
 
   String _modeName(ConnectorMode mode) => switch (mode) {
@@ -654,8 +655,9 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                         'Only the pending landmark input will be discarded.',
                       ),
                     ) &&
-                    mounted)
+                    mounted) {
                   setState(() => _pendingLandmark = null);
+                }
               },
       ),
     ],
