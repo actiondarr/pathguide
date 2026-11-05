@@ -2,6 +2,7 @@
 
 更新：2026年11月6日。只維護資料／服務／部署規格；使用者流程與導航主線集中在[Frontend整體規格](FRONTEND-DESIGN.zh-HK.md)，模型品質集中在[Dataset Review](DATASET-REVIEW.zh-HK.md)。
 **2026-11-06現況：Codex直接開發及驗收，保留較早DSH失敗歷史而不再派模型。1.8.0+15自動草稿及樓層來源／必要確認已通過516項Flutter、54項原生、analyze及兩軸覆核；最終簽署建置／模型與App程式雜湊及不可變GitHub tag／prerelease核對後，iPhone更新安裝／正常啟動成功，資料保留。1.7.0+13曾獲使用者回報卡住；新版真人複測仍待回報，沒有新增雲端部署、訓練或同步。**
+**2026-11-06新增規格：** [已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)已確認及發布；路標改善候選、真正權重訓練及更新閉環仍未實作／驗收。原有A／B、雲端與手機交付狀態不因此升格。
 
 
 **狀態用語：**「已確認需求」是產品決定；「待定」是尚未有答案；「已有程式／工程已驗」不代表真機或產品驗收；「已交付」須有版本收據。研究／候選能力不因列入文件就成為本輪實作或付費授權。
@@ -40,6 +41,19 @@
 活動程式來源為 [Functions](../backend/functions/index.js)、[照片政策](../backend/functions/photo_policy.js)、[規則](../backend/firestore.rules)。舊firebaseCode-2的signed URL原型只作歷史參考，不是目前App接口。
 
 下一版三任務驗收不依賴新增私人訓練服務。現有15個Functions export中，新增七個涵蓋問題接收、本人進度／撤回、人工覆核、分頁待辦及修訂歷史；均未部署、預設關閉。本機工作台已完成合成操作驗證，容量／抽覆／爭議裁定、修正案例後半段及私人模型拒用／撤回仍是規劃；既有照片上傳開關保持關閉。
+
+<a id="route-landmark-learning"></a>
+### 已錄路標私人批次訓練契約（2026-11-06，規格已確認／未接通）
+
+服務現況不變：[已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)已發布，路標訓練、快照／worker／registry／更新尚未實作或部署。新增路標用途獨立於A物件認錯／漏認，不能直接擴用現有照片同意、十類coverage或A／B模型namespace。基本本機路線不依賴此服務，普通重行不累積影像；只有明確改善模式才留有界候選，真人行程後核實。
+
+擴充時沿用UID／App Check、purpose及consent epoch、request／revision、SHA／generation、到期／撤回／刪除契約；提交另綁route／version、trip、candidate及review revision。只收另同意的必要已核實資料，不自動上傳全部記憶或影片，不跨UID混訓。原預測與人工答案分離；覆核A物件的現有API不冒充路標真值服務。
+
+先人監督的單批實驗與效益比較，再接排隊／worker。不可變快照及owner＋snapshot＋config去重，單owner有效lease、取消／恢復及預算檢查需可驗；不套用舊A模型03:00／50張三場景規則。真實provider、限額、時限及並發未配置不提交付費GPU，本次也未開啟任何服務。
+
+核准registry／offer綁本人scope、模型／index／profile SHA、訓練來源及獨立評估。若特徵空間變更，先由合法原始關鍵幀重建相容索引；缺資料保留舊組合。導航停止後完整驗證並原子切換model＋index＋profile；失敗回退完整舊組合，不將不同特徵空間互相比。撤回阻止新快照、在途發佈及新下載；受影響候選停用／回退，不聲稱已訓練權重可精確移除單張影響。離線副本限制明示。
+
+服務驗收沿用Emulator外部權限／revision／重試／撤回先例，新增核實提交→snapshot→worker→評估→offer→App更新／回退的整合邊界；資料不足／不合格不出offer。模型hash改變、job完成或收到照片均不是品質證據。私人原圖、權重及評估內容不得上共享Git。
 
 ### 本輪核對的服務邊界
 
@@ -389,7 +403,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.8.0+15來源／簽署建置／簽章／模型及App程式雜湊已核；不可變tag／prerelease及遠端分支核對後，iPhone更新安裝／正常啟動成功。516項Flutter、54項原生及兩軸覆核通過；真人／場地驗收待回報。舊版及原權重品質限制保留 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
 | S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
 | S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理已有；問題／覆核API及本機工作台已有；Emulator與合成瀏覽器流程通過；預設關閉，正式部署／真人案例未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
-| S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；私人效益未驗證，付費GPU預算未定 | 私人／共用對照支持額外效益；mock工作及效果退化回退通過，真實工作受配額控制 | 先問題修正案例與對照，再mock；資料／權限／預算具備才開真實服務 |
+| S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；私人效益未驗證，付費GPU預算未定；[已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)已確認，未部署 | 私人／共用對照支持額外效益；mock工作及效果退化回退通過，真實工作受配額控制 | 先問題修正案例與對照，再mock；資料／權限／預算具備才開真實服務 |
 | S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；P3-A媒體schema／加密儲存候選已有454項Flutter／49原生及analyze證據、真機儲存probe亦過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生通過；雲端看圖未完成／部署  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D基本操作／旁白已獲使用者無問題回報；P3-C新流程真人實測待完成。；1.8.0+15自動草稿／樓層來源及必要確認已裝機，516項Flutter／54原生已過，真人待驗 | 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
 | S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
 | S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
@@ -415,7 +429,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B12 發佈、診斷與預算／S0–S6 | 1.4.1+6工程／簽署建置與遠端核對通過；之後安裝及啟動成功，舊版保留，場景覆驗待補 | 記匿名request／job ID、階段、耗時與錯誤類別，監察心跳、清理積壓、評估失敗與花費；提交前配額／worker時限與預算配置缺一拒絕。App發佈依「部署、設定與版本回退」先GitHub再安裝 | 日誌無照片／私人位置／憑證；告警不等於硬性花費上限；回退演練與版本報告可追溯 |
 | B13 室內即時資料邊界／S4 | 1.4.1+6辨識框與深度已本機處理，無雲端服務 | 深度／pose／網格留手機，不新增即時雲端避障API；只提供相容模型與設定。若日後要上傳序列，需獨立用途、保留／刪除及安全設計，不能沿用照片同意 | Frontend F09–F12與Dataset D09；關閉網絡不影響已載入的本機感知 |
 | B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
-| B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生及analyze通過，手機實測未完成 ；#18樓層證據／必要確認已有516項Flutter工程候選，1.8.0+15已交付，真人複測待完成| 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接 | F17；P3-C已接真相機／本機閉環，下一步真人實測及P4障礙／語音，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
+| B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生及analyze通過，手機實測未完成 ；#18樓層證據／必要確認已有516項Flutter工程候選，1.8.0+15已交付，真人複測待完成| 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接；選填路標訓練另立用途／快照／model-index交付，見持續改善契約；未接通 | F17；P3-C已接真相機／本機閉環，下一步真人實測及P4障礙／語音，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
 
 管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
@@ -476,6 +490,8 @@ python3 tool/configure_firebase_ios.py /完整路徑/GoogleService-Info.plist
 </details>
 
 ## 7. 範圍限制與待定事項
+
+[已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)確認私人已錄路標的批次訓練方向，不授權本次上傳、GPU或部署；供應商、可驗預算／配額、保留及清理期限與評估profile仍須落實。舊A十類私人微調條件不代替路標服務條件。
 
 雲端問答的provider、預算、最少傳送欄位及保存期限尚未選定；分析、回報及訓練用途分開授權。陌生室內探索只接受方向，無線索時停定掃描及保留未知已確認，具體線索搜尋／定位及正式接口未定，不把自由文字回答轉成已確認位置。私人訓練及付費GPU沒有因本規格獲得啟動授權。
 
@@ -595,6 +611,8 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 </details>
 
 ### 維護紀錄
+
+2026-11-06 /to-spec：使用者接受本聊天全部建議，已發布[已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)及ready-for-agent標籤，連到整體規格。同步本文件負責的持續改善範圍、與記憶補強的區別、行程後核實、另行用途、批次真實訓練／獨立重行比較及完整版本回退。此為規格及文件檢查，沒有改App／服務、採集／上傳、訓練、部署或裝機；既有工程／真人驗收狀態保持。
 
 2026-11-06 P3-C候選接通本機首次錄路與重行：RouteLandmark原生通道只收有界JPEG／feature，回覆綁requestId、SHA及revision；精確取消及單一工作排空。store新增batch讀取，完整核驗版本／所有媒體而只留所需特徵，重行不寫照片。沿用本機Keychain、保護／備份排除及容量；沒有新增API、同步、訓練或部署。490項Flutter、53項原生及analyze通過；兩軸覆核及簽署建置／模型雜湊已過；不可變tag／prerelease及遠端分支核對後，1.7.0+13已安裝／正常啟動，真人實測待完成，見[P3-C證據](../verification/codex-p3c-journey-20261106.json)。
 
