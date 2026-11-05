@@ -543,7 +543,7 @@ OCR在iOS15選revision2、iOS16以上選revision3，逐次查supportedRecognitio
 
 Localizer以building/floor/node穩定身份及最多4視角／node、64視角／route分組；同node多視角先合併最小距離，再與其他node比較，不能把另一視角當第二個實體路標。缺比較、重複、非有限／負距離或不相容版本均不產生位置。固定工程候選門檻distance≤8、不同node gap≥2、證據≤5秒；不是正確率，也未經行走場測。呼叫端須明確傳入含捕捉往返及分析耗時的保守frameAge，不混算Swift／Dart時鐘。
 
-預期／候選／實際樓層分開；候選新鮮且唯一，先明確確認同一樓層，再確認出口方向，才記actual node/floor。錯層、相似出口、OCR衝突及方向未確認保持未知；可在已存3F中途路標重新確認，不強制回G。每輪ticket綁localizer instance／世代／序列，回覆只接收一次；新觀察、暫停、背景或版本換實例清掉舊位置。這個核心不產生自動步行指令，未錄反向路線仍不可推斷回程。
+預期／候選／實際樓層分開；跨層預期必須綁已錄exit node及connector role，錯node或非出口不可確認，無效轉層設定即撤回舊位置；候選新鮮且唯一，先明確確認同一樓層，再確認出口方向，才記actual node/floor。錯層、相似出口、OCR衝突及方向未確認保持未知；可在已存3F中途路標重新確認，不強制回G。每輪ticket綁localizer instance／世代／序列，回覆只接收一次；新觀察、暫停、背景或版本換實例清掉舊位置。這個核心不產生自動步行指令，未錄反向路線仍不可推斷回程。
 
 Simulator第一次Vision inference context失敗，明確CPU-only後真實特徵／archive／距離測試通過；硬件另以明確launch flag、人工生成小圖測試，沒有收集私人照片。完整結果、覆核及發布狀態見[P3-B證據](../verification/codex-p3b-landmarks-20261105.json)，設定見[候選profile](../configs/planning/codex-p3b-landmarks-20261105.json)。官方API依據：[Feature print](https://developer.apple.com/documentation/vision/vngenerateimagefeatureprintrequest)、[OCR語言能力](https://developer.apple.com/documentation/vision/vnrecognizetextrequest/supportedrecognitionlanguages())；API可用不等於實地定位品質已通過。
 

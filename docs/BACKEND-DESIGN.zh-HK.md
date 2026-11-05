@@ -100,7 +100,7 @@ P1當時每份JSON256 KiB、每route8版本、整庫32 MiB，P3-A擴為下節有
 
 P3-B原生核心產生真正Vision feature print revision1，固定upright JPEG／scaleFit；有界secure archive外包schema1、featureRevision=vision-featureprint-v1、preprocessRevision=upright-jpeg-v1及Vision revision，整包≤64KiB。比較驗包內／呼叫版本及VN observation實際revision，損壞或不相容不回部分結果；距離不是正確率。P3-A仍把完整feature blob作opaque bytes加密並綁SHA，未更改已存synthetic v1或金鑰。
 
-OCR按runtime版本／語言能力提供有界文字候選，永不直接寫actual floor。Dart核心把同building/floor/node多視角合併後判斷未知／歧義／錯層；需fresh ticket加明確樓層與方向確認。工程門檻8／gap2／5秒不代表行走可靠，caller須傳保守frameAge；camera／store／平台通道及旅程UI接線由P3-C處理。沒有新endpoint、雲端服務、私人照片採集或訓練。驗證及硬件fixture結果見[P3-B證據](../verification/codex-p3b-landmarks-20261105.json)。
+OCR按runtime版本／語言能力提供有界文字候選，永不直接寫actual floor。Dart核心把同building/floor/node多視角合併後判斷未知／歧義／錯層；需fresh ticket加明確樓層與方向確認；跨層出口還要綁定已錄exit node／connector role，房間路標不能代替出口。工程門檻8／gap2／5秒不代表行走可靠，caller須傳保守frameAge；camera／store／平台通道及旅程UI接線由P3-C處理。沒有新endpoint、雲端服務、私人照片採集或訓練。驗證及硬件fixture結果見[P3-B證據](../verification/codex-p3b-landmarks-20261105.json)。
 
 #### P3-A媒體版本、容量與裝置政策（2026-11-05）
 

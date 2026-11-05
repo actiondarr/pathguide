@@ -9,15 +9,21 @@ enum RouteMatchState {
   ambiguous,
   wrongFloor,
   wrongDirection,
+  wrongNode,
   incompatible,
   stale,
 }
 
 class RouteLandmarkIdentity {
-  const RouteLandmarkIdentity(this.nodeId, this.floor, this.viewIds);
+  const RouteLandmarkIdentity(
+    this.nodeId,
+    this.floor,
+    this.viewIds, {
+    this.exitForConnectors = const [],
+  });
   final String nodeId;
   final FloorRef floor;
-  final List<String> viewIds;
+  final List<String> viewIds, exitForConnectors;
 }
 
 class RouteViewDistance {
@@ -52,6 +58,7 @@ class RouteLocalizer extends ChangeNotifier {
              n.nodeId,
              n.floor,
              List.unmodifiable(n.viewIds),
+             exitForConnectors: List.unmodifiable(n.exitForConnectors),
            ),
          ),
        ) {
@@ -69,6 +76,10 @@ class RouteLocalizer extends ChangeNotifier {
               n.floor.label.isEmpty ||
               n.floor.label.length > 40 ||
               n.viewIds.any((id) => !RouteDocument.validId(id)) ||
+              n.exitForConnectors.length > 64 ||
+              n.exitForConnectors.any((id) => !RouteDocument.validId(id)) ||
+              n.exitForConnectors.toSet().length !=
+                  n.exitForConnectors.length ||
               n.viewIds.isEmpty ||
               n.viewIds.length > 4 ||
               n.viewIds.toSet().length != n.viewIds.length ||
@@ -90,6 +101,7 @@ class RouteLocalizer extends ChangeNotifier {
   RouteLocalizationTicket? _ticket;
   RouteLandmarkIdentity? _candidate, _actual;
   FloorRef? _expected;
+  String? _expectedExit, _expectedConnector;
   RouteMatchState _result = RouteMatchState.unknown;
   bool get _fresh =>
       _ticket != null &&
@@ -107,18 +119,35 @@ class RouteLocalizer extends ChangeNotifier {
     _result = RouteMatchState.unknown;
   }
 
-  void expectFloor(FloorRef? floor) {
+  void expectFloor(FloorRef? floor, {String? exitNodeId, String? connectorId}) {
     if (_disposed) return;
-    if (floor != null && !landmarks.any((n) => n.floor == floor)) {
-      throw ArgumentError('Unknown floor');
-    }
     _generation++;
     _ticket = null;
-    _expected = floor == null
-        ? null
-        : landmarks.firstWhere((n) => n.floor == floor).floor;
+    _expected = null;
+    _expectedExit = _expectedConnector = null;
     _clear();
-    notifyListeners();
+    try {
+      if (floor == null) {
+        if (exitNodeId != null || connectorId != null) {
+          throw ArgumentError('Recovery has no expected connector');
+        }
+      } else {
+        final nodes = landmarks.where((n) => n.nodeId == exitNodeId).toList();
+        if (nodes.length != 1 ||
+            nodes.single.floor != floor ||
+            connectorId == null ||
+            !nodes.single.exitForConnectors.contains(connectorId)) {
+          throw ArgumentError('Unknown recorded exit/connector');
+        }
+      }
+      _expectedExit = exitNodeId;
+      _expectedConnector = connectorId;
+      _expected = floor == null
+          ? null
+          : landmarks.firstWhere((n) => n.floor == floor).floor;
+    } finally {
+      notifyListeners();
+    }
   }
 
   RouteLocalizationTicket beginObservation({required Duration frameAge}) {
@@ -217,6 +246,8 @@ class RouteLocalizer extends ChangeNotifier {
     _candidate = node;
     _result = _expected != null && node.floor != _expected
         ? RouteMatchState.wrongFloor
+        : _expectedExit != null && node.nodeId != _expectedExit
+        ? RouteMatchState.wrongNode
         : RouteMatchState.candidate;
     notifyListeners();
   }
@@ -248,6 +279,10 @@ class RouteLocalizer extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+    if (_expected != null &&
+        (_candidate?.nodeId != _expectedExit ||
+            !_candidate!.exitForConnectors.contains(_expectedConnector)))
+      return false;
     _actual = _candidate;
     notifyListeners();
     return true;

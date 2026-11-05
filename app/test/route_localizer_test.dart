@@ -12,17 +12,55 @@ void main() {
     List<String> ocr = const [],
   }) => l.accept(t, d, feature: feature, preprocess: preprocess, ocr: ocr);
 
+  test('room cannot confirm a cross-floor exit', () {
+    const floor = FloorRef('b', 'three', '3F');
+    final l = RouteLocalizer(
+      routeId: 'route',
+      routeVersion: 1,
+      landmarks: const [
+        RouteLandmarkIdentity(
+          'exit',
+          floor,
+          ['front'],
+          exitForConnectors: ['lift'],
+        ),
+        RouteLandmarkIdentity('room', floor, ['front']),
+      ],
+    );
+    l.expectFloor(floor, exitNodeId: 'exit', connectorId: 'lift');
+    final t = l.beginObservation(frameAge: Duration.zero);
+    accept(l, t, const [
+      RouteViewDistance('exit', 'front', 9),
+      RouteViewDistance('room', 'front', 0),
+    ]);
+    l.confirmFloor(floor);
+    l.confirmExit(directionConfirmed: true);
+    expect(l.actualFloor, isNull);
+    expect(
+      () => l.expectFloor(floor, exitNodeId: 'room', connectorId: 'lift'),
+      throwsArgumentError,
+    );
+    expect(
+      () => l.expectFloor(floor, exitNodeId: 'exit', connectorId: 'stairs'),
+      throwsArgumentError,
+    );
+  });
   test('multiple views of a node form one candidate; floor and direction require confirmation', () {
     const floor = FloorRef('building', 'three', '3F');
     final localizer = RouteLocalizer(
       routeId: 'route',
       routeVersion: 1,
       landmarks: const [
-        RouteLandmarkIdentity('exit', floor, ['front', 'side']),
+        RouteLandmarkIdentity(
+          'exit',
+          floor,
+          ['front', 'side'],
+          exitForConnectors: ['lift'],
+        ),
         RouteLandmarkIdentity('room', floor, ['front']),
       ],
     );
-    localizer.expectFloor(floor);
+    localizer.expectFloor(floor, exitNodeId: 'exit', connectorId: 'lift');
     final ticket = localizer.beginObservation(frameAge: Duration.zero);
     accept(localizer, ticket, const [
       RouteViewDistance('exit', 'front', 1),
@@ -38,6 +76,12 @@ void main() {
     expect(localizer.confirmExit(directionConfirmed: true), isTrue);
     expect(localizer.actualFloor, floor);
     expect(localizer.actualNodeId, 'exit');
+    expect(
+      () =>
+          localizer.expectFloor(floor, exitNodeId: 'room', connectorId: 'lift'),
+      throwsArgumentError,
+    );
+    expect(localizer.actualFloor, isNull);
   });
 
   for (final scenario in [
@@ -64,11 +108,21 @@ void main() {
         routeVersion: 1,
         elapsed: () => now,
         landmarks: const [
-          RouteLandmarkIdentity('three-exit', three, ['front']),
-          RouteLandmarkIdentity('two-exit', two, ['front']),
+          RouteLandmarkIdentity(
+            'three-exit',
+            three,
+            ['front'],
+            exitForConnectors: ['lift'],
+          ),
+          RouteLandmarkIdentity(
+            'two-exit',
+            two,
+            ['front'],
+            exitForConnectors: ['lift'],
+          ),
         ],
       );
-      l.expectFloor(three);
+      l.expectFloor(three, exitNodeId: 'three-exit', connectorId: 'lift');
       final old = l.beginObservation(
         frameAge: scenario == 'age'
             ? const Duration(seconds: 6)
@@ -129,7 +183,12 @@ void main() {
         routeId: 'route',
         routeVersion: 2,
         landmarks: const [
-          RouteLandmarkIdentity('exit', floor, ['front']),
+          RouteLandmarkIdentity(
+            'exit',
+            floor,
+            ['front'],
+            exitForConnectors: ['lift'],
+          ),
         ],
       );
       final t = l.beginObservation(frameAge: Duration.zero);
