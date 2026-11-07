@@ -7,6 +7,13 @@ exports.createSceneFunction=(db,options)=>{
 const scene = require('./scene_description');
 const sceneTrial = require('./scene_trial');
 const qwenKey = defineSecret('DASHSCOPE_API_KEY');
+if (process.env.SCENE_PROVIDER_PREFLIGHT === 'true') {
+  // onInit runs only in the deployed runtime, not CLI source discovery.
+  require('firebase-functions/v2/core').onInit(async()=>{
+    const result=await require('./scene_provider_probe').probeProvider(qwenKey.value());
+    console.info(JSON.stringify(result));
+  });
+}
 return onCall({...options,timeoutSeconds:40,secrets:[qwenKey]}, async request => {
   try {
     const rate = name => process.env[name]?.trim() ? Number(process.env[name]) : null;

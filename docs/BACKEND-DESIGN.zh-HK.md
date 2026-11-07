@@ -82,6 +82,8 @@ Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成
 
 2026-11-08手機首次實試：Auth／App Check有效；503約1.635秒，後續429。帳本count=1、halted=true、inFlight=false、usage未知；保留2458 microUSD估算，不能宣稱已扣款。現有錯誤統一為unavailable，未保留上游HTTP狀態／傳輸分類，故不能據此斷言Key錯誤、端點故障或模型不可用；本機無憑證GET models可連通且401，只證明本機DNS／TLS／HTTP，不能代替雲端認證與模型驗證。先核對供應商usage及改善安全錯誤分類，未核清不重設試驗或付費重試。
 
+2026-11-08診斷修補：舊503紀錄缺上游分類，不能憑推測解除帳本。新增顯式SCENE_PROVIDER_PREFLIGHT=true後端啟動診斷，只GET固定香港/models、10秒逾時、不讀response body；輸出HTTP數字或allowlist傳輸分類，不送圖／prompt、不生成、不讀出Key，不改試驗帳本／額度。預設不啟動，診斷完移除開關。新增兩項mock，連同場景／帳本24項通過；部署後實際結果另記機器證據。官方QwenCloud區域／模型文件確認香港域名及qwen3-vl-plus；此確認不能證明所存Secret具正確區域及權限。
+
 ### 2026-11-08 App Check 開發試驗修正
 
 手機1.8.1+16請求Auth有效但App Check無效，未呼叫Qwen。核對發現正式DeviceCheck缺Key ID／Team ID，且專案App Check API未啟用；API已啟用。使用者選擇官方debug工程方案，已註冊私人測試憑證並實測成功換token；帶有效App Check而無Auth的探測仍401，未使用圖片／Qwen。後端未放寬App Check、指定Google帳戶、20次／估算US$0.01及未知usage停止規則。正式裝置驗證仍未通過。
