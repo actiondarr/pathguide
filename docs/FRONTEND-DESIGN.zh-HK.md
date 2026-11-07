@@ -451,6 +451,8 @@ flutter test
 
 ### 單次「描述前方」（2026-11-07，來源／離線流程已接；未部署或手機驗收）
 
+2026-11-07香港區更新：使用者已表示有香港Key，要求將單次描述後端改用香港端點。現時固定並預設cn-hongkong；若部署環境仍有新加坡QWEN_VL_BASE_URL，必須改成香港，否則拒絕請求。DASHSCOPE_API_KEY名稱不變，須由使用者設定同區Key及重新部署才生效。未讀取Key、部署或付費測試，未有香港實際延遲／費用／品質數據；不保證香港端點等於只在香港推理，須另核workspace部署範圍。歷史CLI／新加坡試驗證據保留，見[香港區離線核對](../verification/scene-description-hong-kong-20261107.json)。
+
 首頁「描述前方」→ 明示一張相會傳雲端及可能計費 → 按鈕觸發既有RouteObservationSource／原生camera lease → 驗新鮮JPEG → 確認相機停止 → Firebase describeScene → 整段驗證 → 顯示兩至三句繁體廣東話 → SpeechCoordinator的environment channel播音。沿用普通相機，不要求LiDAR或載入YOLO，不另開相機服務；現有原生取幀只支援iOS，Android／桌面顯示未支援。這是獨立任務，並未加入行走導航頁的持續感知。現有YOLO未過品質門檻，Qwen亦不代即時障礙感知或路線／樓層狀態。
 
 SceneController同時最多一個操作，不排隊。取消、退出、背景、相機失效及35秒工程新鮮度期限會增加generation、清除回答並停止／作廢待播語音；回前景不自動重新取相。已發出的Firebase呼叫仍等到本機終態才放開鎖，跨頁重新建立adapter亦不能同時再發請求；本機取消／逾時不證明上游停止計費，沒有自動重試。新鮮度期限為未校準工程限制，不能代替轉向訊號。
@@ -465,7 +467,7 @@ SceneController同時最多一個操作，不排隊。取消、退出、背景�
 
 1. 在目標電腦用git rev-parse --show-toplevel定位checkout，確認feature/cross-platform-navigation與來源checkpoint；不用另一部電腦的絕對路徑。先在app執行flutter test --no-pub及flutter analyze --no-pub；mock測試用人工生成JPEG及注入後端，不接外網。Windows可做Dart／後端檢查，不能代iOS編譯／相機。
 2. Mac按既有簽署流程編譯iOS、跑RunnerTests；先核對App／模型雜湊，依AGENTS.md建立不可變tag／prerelease並核遠端，才更新安裝iPhone，保留資料。此來源checkpoint不代表手機新版本，今輪沒有編譯／裝機結果。
-3. 真實付費步驟須先由使用者選定可上傳畫面及具體請求／費用額度，核對供應商資料政策、帳戶區域與費率，再由操作者配置Backend並另行批准部署（見Backend同節）；Mac Terminal的Key不會自動轉Windows、Secret Manager或手機。App用既有Firebase設定＋SCENE_DESCRIPTION_ENABLED=true編譯，登入已啟用Google帳戶及通過App Check。未啟用應顯示服務未配置，不能嘗試繞過驗證。
+3. 真實付費步驟須先由使用者選定可上傳畫面及具體請求／費用額度，核對供應商資料政策、香港帳戶區域與費率，再由操作者配置Backend並另行批准部署（見Backend同節）；Mac Terminal的Key不會自動轉Windows、Secret Manager或手機。App用既有Firebase設定＋SCENE_DESCRIPTION_ENABLED=true編譯，登入已啟用Google帳戶及通過App Check。未啟用應顯示服務未配置，不能嘗試繞過驗證。
 4. 手機站定，VoiceOver逐項找到「描述前方」、分析中、取消及返回；測相機拒絕／允許、首幀未到的明示重試、成功兩至三句繁體廣東話、無廣東話音包及大字320×568。每次傳送均屬已選定圖片／額度內的明確操作，不自動補發。
 5. 以mock／受控延遲後端先測取消、背景、退出後才回覆，確認無文字／舊聲音；導航優先用共用協調器測試，實機導航並行及真實轉向保護仍列未完成，不能為測試而當作已接線。檢查再次開頁不排第二個在途呼叫、回前景不自動開始。
 6. 只記數值耗時／usage／估算及結果狀態；核對缺usage、length、空回覆、上游429／失敗均不播部分答案。實際聲學延遲、描述品質與實地導航須另記，不以工程通過代驗收。
@@ -1055,6 +1057,8 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 </details>
 
 ### 維護紀錄
+
+2026-11-07 單次描述後端改香港固定端點，保留封閉網址驗證；同區Key及部署環境須配套更新。僅來源／離線檢查，未部署、付費或手機驗收。
 
 2026-11-07 單次描述來源整合：相機→後端→完整驗證→顯示／廣東話TTS及離線取消／導航優先測試已接。僅來源checkpoint，無付費、部署、iOS編譯或裝機；真實轉向、Android相機及手機驗收未完成，詳見本節及單次描述證據。
 

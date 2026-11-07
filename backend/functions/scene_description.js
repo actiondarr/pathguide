@@ -2,7 +2,7 @@
 // No logging, persistence of content, retry, streaming speech or client-selected URL.
 const sharp = require('sharp');
 const {performance} = require('node:perf_hooks');
-const BASE = 'https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1';
+const BASE = 'https://cn-hongkong.maas.qwencloudapi.com/compatible-mode/v1';
 const MAX_BYTES = 524288;
 class SceneFailure extends Error {
   constructor(code) { super(code); this.code = code; }

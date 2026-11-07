@@ -96,7 +96,9 @@ N0仍為記憶體mock；P1另立本機加密樣例庫，可保存／重開／回
 
 ### 單次場景描述代理（2026-11-07，來源／離線已接，預設關閉未部署）
 
-沿用現有asia-east2 Firebase callable describeScene、Google Auth（expectedUid綁登入）、App Check、active profile／account_deletions guard及Secret Manager，沒有另起HTTP服務。手機取一張有界JPEG後送schemaVersion=1、requestId（32位hex）、expectedUid、mimeType=image/jpeg、jpegBase64；不接受client URL、模型、prompt或Key。scene_description.js保守解碼驗實際JPEG、≤512KiB／長寬≤1280及像素上限，rotate後重新編碼剝EXIF，再發一次固定QwenCloud新加坡chat/completions，qwen3-vl-plus、enable_thinking=false、stream=false、max_tokens=512。CLI舊256上限保持歷史試驗，不將截斷當成功。
+2026-11-07香港區更新：使用者已表示有香港Key，要求將單次描述後端改用香港端點。現時固定並預設cn-hongkong；若部署環境仍有新加坡QWEN_VL_BASE_URL，必須改成香港，否則拒絕請求。DASHSCOPE_API_KEY名稱不變，須由使用者設定同區Key及重新部署才生效。未讀取Key、部署或付費測試，未有香港實際延遲／費用／品質數據；不保證香港端點等於只在香港推理，須另核workspace部署範圍。歷史CLI／新加坡試驗證據保留，見[香港區離線核對](../verification/scene-description-hong-kong-20261107.json)。
+
+沿用現有asia-east2 Firebase callable describeScene、Google Auth（expectedUid綁登入）、App Check、active profile／account_deletions guard及Secret Manager，沒有另起HTTP服務。手機取一張有界JPEG後送schemaVersion=1、requestId（32位hex）、expectedUid、mimeType=image/jpeg、jpegBase64；不接受client URL、模型、prompt或Key。scene_description.js保守解碼驗實際JPEG、≤512KiB／長寬≤1280及像素上限，rotate後重新編碼剝EXIF，再發一次固定QwenCloud香港chat/completions，qwen3-vl-plus、enable_thinking=false、stream=false、max_tokens=512。CLI舊256上限保持歷史試驗，不將截斷當成功。
 
 上游整個fetch／讀body期限30秒、回覆≤32KiB、拒redirect；callable40秒。同時最多一個client callable；伺服器transaction在active帳戶下先預留45秒排斥窗及UTC每日最多20次嘗試，保留當日requestId拒重送，失敗／取消不退次數。此為防濫用工程限制，不是使用者費用預算、全帳戶用量保證或自動付費授權；maxInstances=2亦不是消費硬上限。取消本機UI／TTS不會取消Firebase callable或證明Qwen停止計費；逾時只證明本機終態，上游帳單仍可能晚到。沒有付費自動重試。
 
@@ -104,9 +106,9 @@ N0仍為記憶體mock；P1另立本機加密樣例庫，可保存／重開／回
 
 原圖、完整回答、Key不寫Storage／Firestore／應用日誌。users/{uid}/private/sceneDescriptionLimit只存UTC日、次數、當日最多20個requestId、排斥期限及最新一次成功讀完回覆的狀態／modelMs／usage／estimate；不存描述。沿用default-deny規則，client不可讀寫此文件；帳戶刪除的recursiveDelete涵蓋，晚回覆記量測前再驗active／deletion，不重建已刪資料。usage缺失／非完整非負整數／總和不符保留null；input/output費率未配置或usage缺失，estimate為null，不編零元。費率由操作者依區域／模型／時效配置，估算包含token項，不含其他服務／稅，明示notBillingCap，不能宣稱為帳單硬上限。只保留最新安全數值並在下一次回覆替換，失敗無usage不假造；供應商保留政策另核。
 
-啟用需要：SCENE_DESCRIPTION_ENABLED=true（後端及App各自開關，預設關閉）、DASHSCOPE_API_KEY（Firebase Secret Manager，沿用defineSecret；不要放App／Git／CLI參數）、QWEN_VL_BASE_URL（只接受https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1，未填採此預設）、選填QWEN_INPUT_USD_PER_MILLION／QWEN_OUTPUT_USD_PER_MILLION（未填無估價）。登入須已由現有帳戶流程建立active profile；場景分析同意由入口逐次明示操作，不授予照片收集／回報／訓練同意。
+啟用需要：SCENE_DESCRIPTION_ENABLED=true（後端及App各自開關，預設關閉）、DASHSCOPE_API_KEY（Firebase Secret Manager，沿用defineSecret；不要放App／Git／CLI參數）、QWEN_VL_BASE_URL（只接受https://cn-hongkong.maas.qwencloudapi.com/compatible-mode/v1，未填採此預設）、選填QWEN_INPUT_USD_PER_MILLION／QWEN_OUTPUT_USD_PER_MILLION（未填無估價）。登入須已由現有帳戶流程建立active profile；場景分析同意由入口逐次明示操作，不授予照片收集／回報／訓練同意。
 
-**未部署／付費驗收前的操作者步驟：** 先選可上傳圖片及具體請求／費用額度、核服務政策與新加坡帳戶，再在目標電腦定位repo根目錄；不沿用Mac絕對路徑，Key不隨Git／Terminal跨電腦。由有權操作者在backend目錄使用firebase functions:secrets:set DASHSCOPE_API_KEY --project <測試project>的互動輸入設定，並在未追蹤的部署環境配置非秘密開關／URL／有效費率。確認Google Auth、App Check與active帳戶、limit文件拒client讀寫後，另行批准才部署describeScene；本輪沒有執行以上操作，不因文檔命令便獲部署／消費授權。手機編譯／安裝須先按AGENTS.md版本checkpoint，逐步驗收見Frontend「單次描述」。
+**未部署／付費驗收前的操作者步驟：** 先選可上傳圖片及具體請求／費用額度、核服務政策與香港帳戶，再在目標電腦定位repo根目錄；不沿用Mac絕對路徑，Key不隨Git／Terminal跨電腦。由有權操作者在backend目錄使用firebase functions:secrets:set DASHSCOPE_API_KEY --project <測試project>的互動輸入設定，並在未追蹤的部署環境配置非秘密開關／URL／有效費率。確認Google Auth、App Check與active帳戶、limit文件拒client讀寫後，另行批准才部署describeScene；本輪沒有執行以上操作，不因文檔命令便獲部署／消費授權。手機編譯／安裝須先按AGENTS.md版本checkpoint，逐步驗收見Frontend「單次描述」。
 
 離線重現：repo根目錄node --test backend/functions/test/scene_description.test.cjs；app目錄flutter test --no-pub test/scene_description_test.dart test/flutter_tts_speaker_test.dart test/speech_coordinator_test.dart。Windows在checkout用git rev-parse --show-toplevel定位，PowerShell用Join-Path切入app／backend，不需要Mac路徑。新測試均用合成JPEG／mock fetch，不讀真Key、不傳真圖。限流跨實例／刪除競態用transaction seam測試；真實Firebase部署、Secret／App Check及網絡仍待帳戶操作，不能當已驗。
 
@@ -649,6 +651,8 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 </details>
 
 ### 維護紀錄
+
+2026-11-07 單次描述後端改香港固定端點，保留封閉網址驗證；同區Key及部署環境須配套更新。僅來源／離線檢查，未部署、付費或手機驗收。
 
 2026-11-07 單次Qwen代理及App來源整合：沿用callable／Auth／App Check／Secret Manager，有界圖片、完整回答驗證、拒付費重試、transaction限流及安全usage量測；預設關閉未部署。既有CLI三檔原未追蹤，今輪同步；使用者曾收到length文字但無usage／延遲，代理無真實付費呼叫。未完成轉向感測／手機驗收，詳見本節及單次描述證據。
 
