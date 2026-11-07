@@ -8,6 +8,19 @@ import 'package:pathguide/vision/labels.dart';
 import 'package:pathguide/vision/model_class_map.dart';
 
 void main() {
+  test('HKDI 十類模型映射保留合併樓梯、圍欄及通用門', () {
+    final mapping = resolveMapping(
+      modelClassCount: 10,
+      declared: const [6, 11, 7, 8, 9, 24, 1, 49, 26, 18],
+    )!;
+    expect(List.generate(10, (i) => labelOf(mapping.appIdFor(i)!)!.nameEn), [
+      'pedestrian', 'bicycle', 'bin', 'bollard', 'traffic_cone',
+      'caution_slippery', 'stairs', 'escalator', 'fence', 'door',
+    ]);
+    expect(labelOf(mapping.appIdFor(6)!)!.nameZh, '樓梯');
+    expect(labelOf(mapping.appIdFor(9)!)!.nameZh, '門');
+    expect(mapping.appIdFor(10), isNull);
+  });
   test('香港九類映射保留上下樓梯及既有類別語義', () {
     final mapping = resolveMapping(
       modelClassCount: 9,

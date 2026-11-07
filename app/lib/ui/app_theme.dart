@@ -67,6 +67,18 @@ ThemeData buildAppTheme() {
       overlayColor: Color(0x3338BDF8),
       trackHeight: 5,
     ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(56, 56),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(minimumSize: const Size(56, 56)),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(minimumSize: const Size(56, 56)),
+    ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         minimumSize: const WidgetStatePropertyAll(Size(0, 52)),
