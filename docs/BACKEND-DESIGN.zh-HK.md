@@ -84,6 +84,8 @@ Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成
 
 2026-11-08診斷修補：舊503紀錄缺上游分類，不能憑推測解除帳本。新增顯式SCENE_PROVIDER_PREFLIGHT=true後端啟動診斷，只GET固定香港/models、10秒逾時、不讀response body；輸出HTTP數字或allowlist傳輸分類，不送圖／prompt、不生成、不讀出Key，不改試驗帳本／額度。預設不啟動，診斷完移除開關。新增兩項mock，連同場景／帳本24項通過；部署後實際結果另記機器證據。官方QwenCloud區域／模型文件確認香港域名及qwen3-vl-plus；此確認不能證明所存Secret具正確區域及權限。
 
+2026-11-08診斷部署實測：後端使用現有Secret GET香港/models回200，匿名callable仍401，帳本仍1次／halted且無inFlight。這只證明模型清單端點認證，不能證明圖片推理成功或帳戶無計費限制。補上後續失敗的安全分類：只記HTTP狀態數字或allowlist網絡碼，仍不保留上游body／Key／圖片／回答；25項離線測試通過。
+
 ### 2026-11-08 App Check 開發試驗修正
 
 手機1.8.1+16請求Auth有效但App Check無效，未呼叫Qwen。核對發現正式DeviceCheck缺Key ID／Team ID，且專案App Check API未啟用；API已啟用。使用者選擇官方debug工程方案，已註冊私人測試憑證並實測成功換token；帶有效App Check而無Auth的探測仍401，未使用圖片／Qwen。後端未放寬App Check、指定Google帳戶、20次／估算US$0.01及未知usage停止規則。正式裝置驗證仍未通過。

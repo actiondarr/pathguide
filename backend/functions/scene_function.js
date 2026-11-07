@@ -22,6 +22,11 @@ return onCall({...options,timeoutSeconds:40,secrets:[qwenKey]}, async request =>
       key:()=>qwenKey.value(),base:process.env.QWEN_VL_BASE_URL,
       rates:{input:rate('QWEN_INPUT_USD_PER_MILLION'),output:rate('QWEN_OUTPUT_USD_PER_MILLION')}});
   } catch (error) {
+    if (error instanceof scene.SceneFailure && error.diagnostic) {
+      // Diagnostic values are constructed locally from numeric HTTP status or
+      // an allowlisted transport enum; never serialize upstream errors/bodies.
+      console.warn(JSON.stringify({event:'scene-provider-failure',...error.diagnostic}));
+    }
     const code = error instanceof scene.SceneFailure || error instanceof sceneTrial.TrialFailure ? error.code : 'unavailable';
     throw new HttpsError(code,'場景描述未完成；沒有自動重試。取消後上游仍可能計費。');
   }

@@ -153,3 +153,12 @@ test('exported Firebase callable remains closed by default, before secret/Firest
     else process.env.SCENE_DESCRIPTION_ENABLED=previous;
   }
 });
+
+test('HTTP failure diagnostics retain only numeric status and never upstream content',async()=>{
+ for(const status of [400,401,403,404,429,500]) {
+  await assert.rejects(describe(await request(),{key:'private-key',fetcher:async()=>response({error:'private-key and private content'},status)}),e=>{
+   assert.deepEqual(e.diagnostic,{stage:'upstream-http',httpStatus:status});
+   assert.ok(!JSON.stringify(e).includes('private-key'));return true;
+  });
+ }
+});

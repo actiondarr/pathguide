@@ -6,7 +6,7 @@ const {performance} = require('node:perf_hooks');
 const BASE = 'https://cn-hongkong.maas.qwencloudapi.com/compatible-mode/v1';
 const MAX_BYTES = 524288;
 class SceneFailure extends Error {
-  constructor(code) { super(code); this.code = code; }
+  constructor(code, diagnostic) { super(code); this.code = code; if (diagnostic) this.diagnostic = diagnostic; }
 }
 const fail = code => { throw new SceneFailure(code); };
 function validateText(text) {
@@ -46,7 +46,11 @@ async function cleanImage(data) {
   } catch (_) { fail('invalid-argument'); }
 }
 async function boundedJson(response) {
-  if (!response.ok) fail(response.status === 429 ? 'resource-exhausted' : 'unavailable');
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new SceneFailure(response.status === 429 ? 'resource-exhausted' : 'unavailable',
+      {stage:'upstream-http',httpStatus:response.status});
+  }
   if (!response.headers.get('content-type')?.includes('application/json')) fail('data-loss');
   const reader = response.body.getReader();
   const chunks = []; let count = 0;
@@ -81,7 +85,8 @@ async function describe(data, {key, base=BASE, fetcher=fetch, rates=null, signal
   } catch(e) {
     if (combined.aborted) fail(signal?.aborted ? 'cancelled' : 'deadline-exceeded');
     if (e instanceof SceneFailure) throw e;
-    fail('unavailable');
+    const transport=['ENOTFOUND','EAI_AGAIN','ECONNREFUSED','ECONNRESET','ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT'].includes(e?.cause?.code)?e.cause.code:'unknown';
+    throw new SceneFailure('unavailable',{stage:'upstream-transport',transport});
   }
   const usage = usageOf(payload?.usage);
   const metrics = {modelMs:Math.round(performance.now()-started),usage,estimate:estimate(usage,rates)};

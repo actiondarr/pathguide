@@ -1,13 +1,22 @@
 {
   "checks": {
-    "offline_scene_trial_probe_tests": 24,
+    "offline_scene_trial_probe_tests": 25,
     "review": "GET-only fixed endpoint, no body/key logging, explicit disabled-by-default flag; no trial mutation"
   },
-  "rootCause": "pending backend non-inference preflight; historical upstream detail unavailable",
+  "rootCause": "Model-list authentication accepted; original chat failure not reconstructible from old telemetry; provider account review in progress",
   "paidRequestsByAgent": 0,
   "trialLedgerReset": false,
   "officialSources": [
     "https://docs.qwencloud.com/developer-guides/getting-started/regions",
     "https://docs.qwencloud.com/models/qwen3-vl-plus"
-  ]
+  ],
+  "backend_preflight": {
+    "httpStatus": 200,
+    "operation": "GET models; no inference",
+    "timeUtc": "2026-11-07T20:13:14.696609Z",
+    "anonymousCallableHttpStatus": 401,
+    "trialCount": 1,
+    "trialHalted": true,
+    "trialInFlight": false
+  }
 }
