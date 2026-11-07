@@ -1,3 +1,4 @@
+import '../scene/scene_page.dart';
 import '../l10n/app_language.dart';
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,7 @@ import '../route_memory/route_memory_mock_page.dart';
 
 enum AppSection {
   home,
+  scene,
   explore,
   navigation,
   outdoor,
@@ -138,7 +140,12 @@ class _AppShellState extends State<AppShell> {
   void _openAccount() => setState(() => _accountVisible = true);
 
   Widget _page() => switch (_section) {
+    AppSection.scene => ScenePage(
+      settings: widget.settings,
+      onBack: () => _select(AppSection.home),
+    ),
     AppSection.home => TaskHomePage(
+      onDescribe: () => _select(AppSection.scene),
       onExplore: () =>
           _openTask(AppTask.recognition, () => _select(AppSection.explore)),
       onNavigation: () =>
@@ -413,8 +420,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.shield_outlined,
                   title: '私隱保障',
                   value: '辨識在裝置處理',
-                  semanticLabel: '私隱保障，相機畫面在裝置處理；登入與聯絡資料由 Firebase 保存',
-                  detail: '基本辨識不儲存或上傳畫面。個人模型照片須另行配置及同意；聯絡資料不加入訓練。',
+                  semanticLabel:
+                      '私隱保障，基本辨識在裝置處理；描述前方會上傳一張相作雲端分析；登入與聯絡資料由 Firebase 保存',
+                  detail: '基本辨識不儲存或上傳畫面。「描述前方」會在明確操作後上傳一張相作雲端分析。個人模型照片須另行配置及同意；聯絡資料不加入訓練。',
                 ),
               ],
             ),

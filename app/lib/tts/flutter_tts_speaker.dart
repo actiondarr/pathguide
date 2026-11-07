@@ -22,6 +22,8 @@ import '../settings/app_settings.dart';
 class FlutterTtsSpeaker implements Speaker {
   FlutterTtsSpeaker({
     FlutterTts? tts,
+    this.cantoneseOnly = false,
+    this.onStarted,
     double speechRate = defaultSpeechRate,
     AppLanguage language = AppLanguage.chinese,
   }) : _tts = tts ?? FlutterTts(),
@@ -39,6 +41,9 @@ class FlutterTtsSpeaker implements Speaker {
   ];
 
   final FlutterTts _tts;
+  final bool cantoneseOnly;
+  final VoidCallback? onStarted;
+  int _speechGeneration = 0;
   double _speechRate;
   bool _ready = false;
   AppLanguage _language;
@@ -90,6 +95,9 @@ class FlutterTtsSpeaker implements Speaker {
     await _tts.setVolume(1.0);
     // iOS flutter_tts does not complete its awaitSpeakCompletion result on
     // cancellation. Track completion here so Pause always releases the caller.
+    _tts.setStartHandler(() {
+      if (_pendingSpeech != null) onStarted?.call();
+    });
     _tts.setCompletionHandler(_finishSpeech);
     _tts.setCancelHandler(_finishSpeech);
     _tts.setErrorHandler((message) {
@@ -130,6 +138,7 @@ class FlutterTtsSpeaker implements Speaker {
         ? const <String>['zh-HK', 'yue-HK', 'zh-TW', 'zh-CN']
         : candidates;
     for (final c in ordered) {
+      if (cantoneseOnly && c != 'zh-HK' && c != 'yue-HK') continue;
       final exact =
           available.isEmpty ||
           available.any((l) => l.toLowerCase() == c.toLowerCase());
@@ -153,8 +162,13 @@ class FlutterTtsSpeaker implements Speaker {
 
   @override
   Future<void> speak(String text) async {
+    final generation = ++_speechGeneration;
     if (!_ready) await initialize();
-    if (_resolved == null) return;
+    if (generation != _speechGeneration) return;
+    if (_resolved == null) {
+      if (cantoneseOnly) throw StateError('Cantonese voice unavailable');
+      return;
+    }
     // Recording temporarily changes the shared iOS audio session. Restore it on
     // every utterance, including when language initialization was cached.
     if (defaultTargetPlatform == TargetPlatform.iOS) {
@@ -166,6 +180,7 @@ class FlutterTtsSpeaker implements Speaker {
         ],
       );
     }
+    if (generation != _speechGeneration) return;
     _finishSpeech();
     final pending = Completer<void>();
     _pendingSpeech = pending;
@@ -183,6 +198,7 @@ class FlutterTtsSpeaker implements Speaker {
 
   @override
   Future<void> stop() async {
+    ++_speechGeneration;
     _finishSpeech();
     try {
       await _tts.stop();

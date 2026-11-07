@@ -6,12 +6,14 @@ class TaskHomePage extends StatelessWidget {
   const TaskHomePage({
     super.key,
     required this.onExplore,
+    this.onDescribe,
     required this.onNavigation,
     required this.onSettings,
     required this.onMenu,
   });
 
   final VoidCallback onExplore;
+  final VoidCallback? onDescribe;
   final VoidCallback onNavigation;
   final VoidCallback onSettings;
   final VoidCallback onMenu;
@@ -38,6 +40,13 @@ class TaskHomePage extends StatelessWidget {
           Icons.visibility_rounded,
           onExplore,
         ),
+        if (onDescribe != null)
+          _task(
+            '描述前方',
+            '取一張相作雲端分析，聽取廣東話描述。',
+            Icons.camera_alt_outlined,
+            onDescribe!,
+          ),
         _task(
           '路線導航',
           '搜尋戶外目的地，或錄製室內路標路線。',

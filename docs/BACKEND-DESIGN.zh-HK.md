@@ -94,7 +94,38 @@ N0現碼為RouteMemory／LandmarkNode與ObservationTicket＋RouteMemoryControlle
 
 N0仍為記憶體mock；P1另立本機加密樣例庫，可保存／重開／回退／刪除合成路線結構，沒有正式雲端endpoint、照片或影片。自動候選不改已確認穩定路線，清理路線不影響照片佇列或帳戶。未來自願備份／同步另定UID隔離、保留與刪除，不沿用照片收集同意或默認公開地圖。平常重行不按次保存影像；錄路／明確更新才留有大小、數量及總庫上限的必要關鍵幀／特徵，實際媒體由P2–P3接入。
 
-SceneAnalyzer以本機實作／mock先驗證；可選雲端只做必要關鍵幀的場景描述與候選核對。provider、金鑰管理、授權／配額、每次／每session費用上限、保留及失敗策略確認後才接真實服務；目前未選provider、未給視覺API預算，DSH程式派工的US$0.10不是雲端看圖費用授權。明確同意後才送圖，撤回／取消後丟棄晚到結果，不把私人路線相片默認加進既有training photo流程。
+### 單次場景描述代理（2026-11-07，來源／離線已接，預設關閉未部署）
+
+沿用現有asia-east2 Firebase callable describeScene、Google Auth（expectedUid綁登入）、App Check、active profile／account_deletions guard及Secret Manager，沒有另起HTTP服務。手機取一張有界JPEG後送schemaVersion=1、requestId（32位hex）、expectedUid、mimeType=image/jpeg、jpegBase64；不接受client URL、模型、prompt或Key。scene_description.js保守解碼驗實際JPEG、≤512KiB／長寬≤1280及像素上限，rotate後重新編碼剝EXIF，再發一次固定QwenCloud新加坡chat/completions，qwen3-vl-plus、enable_thinking=false、stream=false、max_tokens=512。CLI舊256上限保持歷史試驗，不將截斷當成功。
+
+上游整個fetch／讀body期限30秒、回覆≤32KiB、拒redirect；callable40秒。同時最多一個client callable；伺服器transaction在active帳戶下先預留45秒排斥窗及UTC每日最多20次嘗試，保留當日requestId拒重送，失敗／取消不退次數。此為防濫用工程限制，不是使用者費用預算、全帳戶用量保證或自動付費授權；maxInstances=2亦不是消費硬上限。取消本機UI／TTS不會取消Firebase callable或證明Qwen停止計費；逾時只證明本機終態，上游帳單仍可能晚到。沒有付費自動重試。
+
+完整stop且文字通過與App相同的兩至三句／≤240字／禁猜距離、樓層、目的地及通行指令規則，才回{status:complete,requestId,text,metrics}。length／refusal／空／字詞不符回rejected與安全metrics，不含部分text；上游非2xx、格式／過大body、網絡、逾時與取消使用固定錯誤類別，不回供應商body或exception文字。這些規則不能證明語意真確，描述品質另驗。
+
+原圖、完整回答、Key不寫Storage／Firestore／應用日誌。users/{uid}/private/sceneDescriptionLimit只存UTC日、次數、當日最多20個requestId、排斥期限及最新一次成功讀完回覆的狀態／modelMs／usage／estimate；不存描述。沿用default-deny規則，client不可讀寫此文件；帳戶刪除的recursiveDelete涵蓋，晚回覆記量測前再驗active／deletion，不重建已刪資料。usage缺失／非完整非負整數／總和不符保留null；input/output費率未配置或usage缺失，estimate為null，不編零元。費率由操作者依區域／模型／時效配置，估算包含token項，不含其他服務／稅，明示notBillingCap，不能宣稱為帳單硬上限。只保留最新安全數值並在下一次回覆替換，失敗無usage不假造；供應商保留政策另核。
+
+啟用需要：SCENE_DESCRIPTION_ENABLED=true（後端及App各自開關，預設關閉）、DASHSCOPE_API_KEY（Firebase Secret Manager，沿用defineSecret；不要放App／Git／CLI參數）、QWEN_VL_BASE_URL（只接受https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1，未填採此預設）、選填QWEN_INPUT_USD_PER_MILLION／QWEN_OUTPUT_USD_PER_MILLION（未填無估價）。登入須已由現有帳戶流程建立active profile；場景分析同意由入口逐次明示操作，不授予照片收集／回報／訓練同意。
+
+**未部署／付費驗收前的操作者步驟：** 先選可上傳圖片及具體請求／費用額度、核服務政策與新加坡帳戶，再在目標電腦定位repo根目錄；不沿用Mac絕對路徑，Key不隨Git／Terminal跨電腦。由有權操作者在backend目錄使用firebase functions:secrets:set DASHSCOPE_API_KEY --project <測試project>的互動輸入設定，並在未追蹤的部署環境配置非秘密開關／URL／有效費率。確認Google Auth、App Check與active帳戶、limit文件拒client讀寫後，另行批准才部署describeScene；本輪沒有執行以上操作，不因文檔命令便獲部署／消費授權。手機編譯／安裝須先按AGENTS.md版本checkpoint，逐步驗收見Frontend「單次描述」。
+
+離線重現：repo根目錄node --test backend/functions/test/scene_description.test.cjs；app目錄flutter test --no-pub test/scene_description_test.dart test/flutter_tts_speaker_test.dart test/speech_coordinator_test.dart。Windows在checkout用git rev-parse --show-toplevel定位，PowerShell用Join-Path切入app／backend，不需要Mac路徑。新測試均用合成JPEG／mock fetch，不讀真Key、不傳真圖。限流跨實例／刪除競態用transaction seam測試；真實Firebase部署、Secret／App Check及網絡仍待帳戶操作，不能當已驗。
+
+後續自動描述維持未實作：變化／明顯轉向後穩定才取相，首次全景、之後重要變化，不固定輪詢；10秒曾受質疑，5秒亦待實測，最終值未定。單次入口真實轉向訊號尚未接通；App只驗收到invalidate事件後不補播。US$5不是設定預算；自動模式用量提醒及上限尚未接。見[單次描述證據](../verification/scene-description-offline-20261107.json)。
+
+### Qwen-VL單張試驗（2026-11-07，離線可驗；使用者回報收到雲端文字）
+
+已有[單張工具](../scripts/qwen_vl_trial.py)與[離線測試](../scripts/test_qwen_vl_trial.py)，只需Python標準庫。使用者提供QwenCloud新加坡範例；已核對[官方端點文件](https://docs.qwencloud.com/developer-guides/getting-started/regions)，`https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1`不含Workspace ID，使用同區按量計費Key。舊Model Studio workspace端點仍保留支援；Token Plan Key不適用本試驗。Key只存本機環境變數DASHSCOPE_API_KEY，Base URL設於QWEN_VL_BASE_URL，不貼聊天或寫入repo。使用者本輪已自行設定Key並回報真實圖片的模型文字，結尾因length截斷；未取得usage／延遲／帳單，並非完整回答或手機整合驗收。代理未執行付費模型請求，既有離線證據不改寫為雲端實測。
+
+```sh
+python3 scripts/qwen_vl_trial.py
+python3 scripts/qwen_vl_trial.py --image /absolute/path/approved-photo.jpg
+# 帳戶、圖片用途及測試額度確認後，才明確傳送選定照片：
+python3 scripts/qwen_vl_trial.py --image /absolute/path/approved-photo.jpg --send-image
+```
+
+預設只檢查設定／照片格式，不連網；只有--send-image發出一次可能計費的請求，沒有自動重試、取相或讀私人路線。試驗接受單張JPEG／PNG且≤1MiB，預設qwen3-vl-plus，可選qwen3-vl-flash；模型支援依帳戶區域確認。串流、停用thinking、最多256輸出tokens，讀取回覆有時間／大小限制，拒絕redirect；原圖、Key、請求／回答不自動寫檔，終端會顯示回答。錯誤不記provider body，截斷／空／失敗回覆不標成功，部分文字不能當有效導航資訊。此工具不代表雲端供應商沒有資料保留，正式使用前另核政策。
+
+回報請求至首段文字與完整回覆耗時及供應商回傳token用量；未接App TTS，因此不是影像捕捉至首句粵語播報的端到端指標。提示詞要求繁中、可見物件／顏色／圖案／位置及不確定性，不猜米數／樓層／碰撞或通行。已有10項離線測試通過（含新端點及訂閱Key拒用），代理試驗記錄為0次真實模型呼叫，未評估真實描述品質／費用／香港網絡延遲。CLI本身不接App；本輪另有上述單次代理／App來源整合，未部署。
 
 N0、P0及P1是獨立付費包，各已耗用兩張票據。P1經使用者明確選擇US$0.10／兩次／20分鐘後派發；DSH頁面／測試均經主控修正，原稿不直接當已驗收。下一包P2相機狀態UI，範圍及費用另定；不接帳戶、不開公網服務或自動部署／裝機。使用者指定先功能、後系統優化，主控先接相機／錄路／障礙語音，沒有額外訓練／模型授權。
 
@@ -407,10 +438,10 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | 階段 | 本階段後端工作 | 目前進度 | 完成標準 | 下一步／依賴 |
 |---|---|---|---|---|
 | S0 工程基線與版本保存 | 固定契約、權限、設定、模型發佈及回退 | 1.8.0+15來源／簽署建置／簽章／模型及App程式雜湊已核；不可變tag／prerelease及遠端分支核對後，iPhone更新安裝／正常啟動成功。516項Flutter、54項原生及兩軸覆核通過；真人／場地驗收待回報。舊版及原權重品質限制保留 | 可由tag＋相符模型重建；配置／密鑰不進Git | 覆核共用版本並以遠端commit／asset核實 |
-| S1 現有App核心功能 | Google身分／聯絡與Android路線代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
+| S1 現有App核心功能 | Google身分／聯絡、Android路線代理及單次描述代理 | 帳號已有程式與使用者回報；Routes有程式但未接通／驗證 | 本人權限、重新驗證刪除與平台導航服務驗收 | 保留iPhone MapKit獨立；補部署及真機證據 |
 | S2 照片收集與管理員覆核 | 私人上傳、同意、配額、清理與管理員標註 | 上傳／清理已有；問題／覆核API及本機工作台已有；Emulator與合成瀏覽器流程通過；預設關閉，正式部署／真人案例未接通 | 同意→同幀照片→核准標註可追溯；越權／撤回被拒絕 | 先測試專案部署與權限，再接覆核工具 |
 | S3 私人訓練與模型更新 | 快照、排隊、worker、評估、registry、下載 | 未接通；私人效益未驗證，付費GPU預算未定；[已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)已確認，未部署 | 私人／共用對照支持額外效益；mock工作及效果退化回退通過，真實工作受配額控制 | 先問題修正案例與對照，再mock；資料／權限／預算具備才開真實服務  L1僅儲存API已有工程檢查，UI／真實訓練未接（#20）。 |
-| S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；P3-A媒體schema／加密儲存候選已有454項Flutter／49原生及analyze證據、真機儲存probe亦過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生通過；雲端看圖未完成／部署  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D基本操作／旁白已獲使用者無問題回報；P3-C新流程真人實測待完成。；1.8.0+15自動草稿／樓層來源及必要確認已裝機，516項Flutter／54原生已過，真人待驗 | 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
+| S4 室內近距離感知與引導 | 私人本機路線／觀察版本契約，選填雲端邊界 | 既有測距及12-node樣例已有，N0／P0離線mock及P1樣例儲存已有；P3-A媒體schema／加密儲存候選已有454項Flutter／49原生及analyze證據、真機儲存probe亦過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生通過；單次看圖已有來源／離線整合，未部署／手機驗收  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D基本操作／旁白已獲使用者無問題回報；P3-C新流程真人實測待完成。；1.8.0+15自動草稿／樓層來源及必要確認已裝機，516項Flutter／54原生已過，真人待驗 | 基本錄路／重行不需登入／雲端；觀察、模型特徵版本及用途隔離可驗 | 先P2真相機／P3錄路；同步及真實雲端另定授權與配額，不上傳即時深度 |
 | S5 圖示／文字與設施理解 | 保存共用B版本／評估及相容性 | 只有本地／Drive實驗產物；正式run中斷，未核准發佈 | B合格後有獨立namespace、映射與手機相容發佈包 | Dataset完成來源／格式／逐類評估；不把失敗當ready |
 | S6 HKDI整合驗收與試用發佈 | 日誌、預算、排程、權限／刪除與版本回退 | 完整學習閉環未部署／驗收 | 各種失敗可定位／重試，費用受控、遠端備份先於安裝 | 結合Frontend真機、Dataset品質及角色驗收 |
 | S7 多場地、複雜樓層網絡與平台擴充 | 場地圖／地標版本、選填同步、provider連結 | 本機typed graph／觀察原型已有；雲端及真實場地服務未實作 | 依場地／UID授權與版本相容性分階段驗收 | 先S6限定場景，未核准場地不開精確室內路由 |
@@ -437,6 +468,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
 | B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生及analyze通過，手機實測未完成 ；#18樓層證據／必要確認已有516項Flutter工程候選，1.8.0+15已交付，真人複測待完成| 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接；選填路標訓練另立用途／快照／model-index交付，見持續改善契約；未接通 | F17；P3-C已接真相機／本機閉環，下一步真人實測及P4障礙／語音，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
+| B17 單次Qwen場景描述／S1 | 來源及離線測試已有，預設關閉未部署 | Auth／App Check→active帳戶transaction限流→有界JPEG→Qwen完整回答→安全metrics，Key留Secret Manager，原圖／回答不保存 | 圖片／具體付費額度／區域及資料政策先確認；帳戶配置及真實部署另批，手機／描述品質另驗 |
 
 管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
 
@@ -618,6 +650,14 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 
 ### 維護紀錄
 
+2026-11-07 單次Qwen代理及App來源整合：沿用callable／Auth／App Check／Secret Manager，有界圖片、完整回答驗證、拒付費重試、transaction限流及安全usage量測；預設關閉未部署。既有CLI三檔原未追蹤，今輪同步；使用者曾收到length文字但無usage／延遲，代理無真實付費呼叫。未完成轉向感測／手機驗收，詳見本節及單次描述證據。
+
+2026-11-07 Qwen範例核對：支援官方QwenCloud區域端點（毋須Workspace ID），保留舊workspace格式，拒用Token Plan Key；關閉thinking及開啟usage串流。10項測試通過，仍無真實模型請求、影像上傳或App接線。
+
+2026-11-07 Qwen雲端先行：使用者選雲端API作場景描述試驗，本機模型／備份暫不推進；新增單張CLI及8項離線測試，設定檢查為無Key／URL，未上傳照片、計費、部署或接App。開通、Key／區域、實際試用額度及品質／延遲仍待完成；其他服務及導航狀態不變。
+
+
+
 2026-11-07 L1來源檢查點（#20，仍進行中）：新增獨立route_learning_v1加密候選儲存API及裝置專用金鑰／iOS受保護且排除備份的scope；候選保留route/version、trip、session/sequence、原結果、JPEG／特徵SHA及profile。支援pending／verified／needsInformation／rejected的版本化覆核紀錄、CAS衝突、同趟相片SHA去重、每趟12／全庫48及64MiB磁碟上限、七日到期讀取阻擋及明確cleanup。覆核只為本機操作者聲明，不是後端角色驗證／獨立真值。刪路線API先寫tombstone，取消在catalog切換前作廢寫入；候選失敗不碰穩定路線庫。 本片未接錄路控制器、選填收集／覆核UI、實際刪路線流程或自動到期排程，尚未產生真實候選；亦未接記憶補強、雲端、快照／訓練／更新。不得將API存在當成用戶可用／已學會；#19及#20保持未完成。 檢查：完整523項Flutter通過（新增第8項密文竄改反例前），最終8項候選儲存測試通過、analyze無問題、Swift檔語法解析通過；未做新增原生runtime／iOS保護真機驗收、未發版／裝機。
 
 2026-11-06 /to-spec：使用者接受本聊天全部建議，已發布[已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)及ready-for-agent標籤，連到整體規格。同步本文件負責的持續改善範圍、與記憶補強的區別、行程後核實、另行用途、批次真實訓練／獨立重行比較及完整版本回退。此為規格及文件檢查，沒有改App／服務、採集／上傳、訓練、部署或裝機；既有工程／真人驗收狀態保持。
@@ -722,3 +762,5 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 #18覆核修正：手動補記留空樓層會沿用有效本段上下文；明確未知／不同樓層或非步行記錄撤回連續性，之後自動點仍可保存草稿。更改已知出口樓層會撤回其進入設備連接確認，需再明確確認；兩個反例先紅後綠。中英兩倍字體測試亦從實際表單補記並核對沿用來源。「結束錄路並命名保存」固定在底部操作區，避免錄到多個點後難以找到。
 
 2026-11-06 #18交付：516項Flutter、54項原生、analyze及兩軸覆核通過；1.8.0+15最終簽署建置／簽章／模型與App程式雜湊已核，GitHub不可變tag／prerelease及分支核對後安裝、正常啟動成功。首次transport reset後重連成功；本機資料保留，新版真人實測待完成，不把工程通過當實地導航驗收。
+
+2026-11-07 場景描述分工及試驗狀態：使用者確認Qwen按需描述、本機持續物件提示、導航負責路線；收到使用者貼出的單張回覆（length截斷）。當時正式代理與App未接通；現況見單次描述節。US$5只作按量費用估算，非消費授權；估算以實際usage及帳戶費率校準，不包含後端等費用。

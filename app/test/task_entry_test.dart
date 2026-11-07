@@ -4,6 +4,26 @@ import 'package:pathguide/main.dart';
 import 'package:pathguide/settings/app_settings.dart';
 
 void main() {
+  testWidgets(
+    'home opens manual description with explicit cloud and turn limitations',
+    (t) async {
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await t.pumpWidget(PathGuideApp(settings: AppSettings.memory()));
+      await t.pumpAndSettle();
+      final entry = find.text('描述前方');
+      await t.ensureVisible(entry);
+      await t.tap(entry);
+      await t.pumpAndSettle();
+      expect(find.textContaining('傳到 Qwen 作雲端分析'), findsOneWidget);
+      expect(find.textContaining('尚未接通明顯轉向偵測'), findsOneWidget);
+      expect(find.text('取消描述及播音'), findsOneWidget);
+      expect(find.text('正在分析，可隨時取消。'), findsNothing);
+      await t.tap(find.text('返回'));
+      await t.pumpAndSettle();
+      expect(find.byKey(const ValueKey('task-home')), findsOneWidget);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets('home explains daily tasks and keeps testing behind settings', (
     t,
   ) async {

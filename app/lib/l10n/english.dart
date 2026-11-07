@@ -112,6 +112,11 @@ const english = <String, String>{
       "No scene description model is available for download yet.",
   "私隱": "Privacy",
   "私隱保障": "Privacy protection",
+  "描述前方": "Describe ahead",
+  "取一張相作雲端分析，聽取廣東話描述。":
+      "Send one photo for cloud analysis and hear a Cantonese description.",
+  "私隱保障，基本辨識在裝置處理；描述前方會上傳一張相作雲端分析；登入與聯絡資料由 Firebase 保存": "Basic recognition runs on device. Describe ahead uploads one photo for cloud analysis. Firebase stores sign-in and contact data.",
+  "基本辨識不儲存或上傳畫面。「描述前方」會在明確操作後上傳一張相作雲端分析。個人模型照片須另行配置及同意；聯絡資料不加入訓練。": "Basic recognition does not save or upload images. Describe ahead uploads one photo for cloud analysis after an explicit action. Personal model photos require separate setup and consent. Contact data is excluded from training.",
   "辨識在裝置處理": "Recognition runs on device",
   "私隱保障，相機畫面在裝置處理；登入與聯絡資料由 Firebase 保存": "Camera recognition runs on device. Firebase stores sign-in and contact data.",
   "基本辨識不儲存或上傳畫面。個人模型照片須另行配置及同意；聯絡資料不加入訓練。": "Basic recognition does not save or upload images. Personal model photos require separate setup and consent. Contact data is excluded from training.",
