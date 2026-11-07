@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-08手機功能驗收通過：使用者完成原手機1.8.2+17一次取相，並確認「已有描述，而且廣東話讀出正常」。後端lastStatus=complete，模型1799ms，usage輸入267／輸出51／總318 tokens，第二次估算135 microUSD（US$0.000135）。舊未知用量2458 microUSD仍保留，合計保守估算2593 microUSD；不是實際帳單。count=2、inFlight=false、halted=true、recovery=consumed，單次恢復已按預期重新停止。這次驗證涵蓋手機取相→Qwen→完整回覆驗證→顯示→廣東話播音；未另行評分場景準確度、不同環境品質或取相至播音總延遲。原有試驗總額未重設，後續推理仍需另行受控放行。詳見[單次恢復與手機驗收證據](../verification/scene-one-shot-recovery-20261108.json)。
+
 2026-11-08一次性恢復已部署：describeScene ACTIVE，Secret v2／新加坡端點／原指定帳戶／最多20次／10000 microUSD均核對，匿名callable仍401。真實Firestore合成並發檢查通過，無Qwen推理，測試文件已清理。以updateTime前置條件只新增recovery許可，逐欄核對舊帳本完全保留：count=1、spentMicroUsd=2458、halted=true、inFlight=false、lastStatus=usage-unknown。許可狀態ready，香港時間2026-11-08 16:46到期，限一次；第一次未知用量未改寫為零。手機實際環境描述／廣東話結果等待使用者，不能視為已驗收。
 
 2026-11-08一次性手機恢復：新加坡Secret v2的GET /models已回200並列出qwen3-vl-plus；供應商帳單頁顯示月費$0.00但精度不足以核定首次用量，仍按usage-unknown保留2458 microUSD。使用者要求持續處理至手機驗收；新增管理員寫入的單次、有期限、綁定原count／spent／lastStatus的recovery許可，僅在原halted帳本原子消耗一次，保留原request IDs／未知用量估算／總額及帳戶限制，不更改fingerprint或重設帳本。成功或失敗結算後均停止；即使首次仍未知，第二次最壞估算合計4916 microUSD，仍在原10000 microUSD估算額內（不是帳單硬上限）。28項離線測試通過，包括並發只贏一次、過期／重用／餘額不足拒絕、成功後停止及失敗保守累計。原始碼核對通過；部署、實際grant與真人場景／廣東話結果另記，不以離線測試宣稱驗收。
