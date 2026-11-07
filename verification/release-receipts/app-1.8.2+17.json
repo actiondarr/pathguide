@@ -25,8 +25,23 @@
     "app/assets/models/detector.json": "172db9ff4f637fd4d6188a736d436533577a9ca015775961cdb0bb637f2ed327",
     "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
   },
-  "installation": "pending remote immutable tag/prerelease verification",
+  "installation": {
+    "status": "updated in place and launched",
+    "independent_device_inventory": {
+      "version": "1.8.2",
+      "build": "17"
+    },
+    "data_clear_or_uninstall": false,
+    "connection_reset": "initial attempt; device details handshake then retry succeeded"
+  },
   "phone_acceptance": "pending user manual room scene and Cantonese speech",
   "agent_paid_qwen_requests": 0,
-  "navigation_turn_signal": "not connected"
+  "navigation_turn_signal": "not connected",
+  "source_commit": "50d022553008b0fe0cb855623aad11ed2a058cb3",
+  "release": {
+    "tag": "v1.8.2+17",
+    "remote_verified_before_install": true,
+    "prerelease": true,
+    "public_binary_assets": false
+  }
 }
