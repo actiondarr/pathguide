@@ -27,7 +27,8 @@
       "syntheticFixtureCleanup": "completed"
     },
     "isolated_backend_all_tests": 33,
-    "standalone_production_install": "pnpm 11.25.0 install --prod --frozen-lockfile passed with explicit three-package lifecycle approval"
+    "standalone_production_install": "pnpm 11.25.0 install --prod --frozen-lockfile passed with explicit three-package lifecycle approval",
+    "standalone_functions_framework": "5.0.5 clean-install HTTP startup and anonymous 401 probe passed; no provider key or Qwen request"
   },
   "trial": {
     "persistent_count": true,
@@ -46,8 +47,8 @@
     "SCENE_DESCRIPTION_TRIAL=true"
   ],
   "paid_qwen_requests_by_agent": 0,
-  "deployment": "first cloud build failed dependency lifecycle approval; corrected, redeployment pending",
-  "phone_install": "1.8.1+16 update installation succeeded after USB reconnect; launch and human acceptance pending",
+  "deployment": "dependency lifecycle policy and direct Functions Framework requirement corrected; redeployment pending",
+  "phone_install": "1.8.1+16 installed, version/build independently read from device, normal launch succeeded; human room/VoiceOver acceptance pending",
   "phone_acceptance": "pending",
   "app_hashes": {
     "Runner": "8ec006cc4d66abd833bbc4fdab1b52076dabea7afbb92807e172c2a766587fa8",
