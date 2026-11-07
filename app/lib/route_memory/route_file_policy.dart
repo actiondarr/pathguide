@@ -10,8 +10,16 @@ class RouteFilePolicy {
   final String scope;
   final Directory directory;
 
-  static Future<RouteFilePolicy> open({bool probe = false}) async {
-    final scope = probe ? 'probe' : 'library';
+  static Future<RouteFilePolicy> open({
+    bool probe = false,
+    bool learning = false,
+  }) async {
+    if (probe && learning) throw ArgumentError('Conflicting storage scope');
+    final scope = learning
+        ? 'learning'
+        : probe
+        ? 'probe'
+        : 'library';
     final path = await channel.invokeMethod<String>('prepare', {
       'scope': scope,
     });

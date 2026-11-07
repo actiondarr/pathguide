@@ -23,6 +23,7 @@ class DeviceRouteKeyVault implements RouteKeyVault {
   static const _probeKey = 'pathguide.route_memory.probe.aes.v1';
   DeviceRouteKeyVault() : _key = keyName;
   DeviceRouteKeyVault.probe() : _key = _probeKey;
+  DeviceRouteKeyVault.learning() : _key = 'pathguide.route_learning.aes.v1';
   final String _key;
   Future<void> deleteProbeKey() async {
     if (_key != _probeKey) throw StateError('Not a probe vault');

@@ -1,8 +1,8 @@
 # Dataset Review：PathGuide 類別、資料與品質驗收
 
-更新：2026年11月6日。類別字典維持在前；產品及導航行為見[Frontend整體規格](FRONTEND-DESIGN.zh-HK.md)，服務與交付見[Backend](BACKEND-DESIGN.zh-HK.md)。
+更新：2026年11月7日。類別字典維持在前；產品及導航行為見[Frontend整體規格](FRONTEND-DESIGN.zh-HK.md)，服務與交付見[Backend](BACKEND-DESIGN.zh-HK.md)。
 **2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，45項原生Simulator測試、435項Flutter測試及analyze通過。P2-D Flutter入口已接入，1.5.0+9簽署建置通過；已推送不可變tag／prerelease並核對遠端，iPhone安裝及啟動成功；人工／VoiceOver驗收仍待完成。**
-**2026-11-06新增規格：** [已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)已確認及發布；路標改善候選、真正權重訓練及更新閉環仍未實作／驗收。原有A／B、雲端與手機交付狀態不因此升格。
+**2026-11-06新增規格：** [已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)已確認及發布；路標候選加密儲存API已有L1來源檢查點，收集／覆核UI、真正權重訓練及更新閉環仍未接通／驗收。原有A／B、雲端與手機交付狀態不因此升格。
 
 
 **目前結論：A十類試驗模型的品質gate仍為false，修正候選拒用；B11未完成發佈／App整合。Dataset採集／標註／新訓練仍暫停。** 本機路線記憶及雲端看圖不等於訓練資料或人工真值。
@@ -370,6 +370,12 @@ Backend已有submitPhotoIssue／getPhotoIssue／getPhotoReviewItem／submitPhoto
 <a id="route-landmark-learning"></a>
 ### 已錄路標真實訓練與獨立重行比較（2026-11-06，規格已確認／未執行）
 
+2026-11-07 L1來源檢查點（#20，仍進行中）：新增獨立route_learning_v1加密候選儲存API及裝置專用金鑰／iOS受保護且排除備份的scope；候選保留route/version、trip、session/sequence、原結果、JPEG／特徵SHA及profile。支援pending／verified／needsInformation／rejected的版本化覆核紀錄、CAS衝突、同趟相片SHA去重、每趟12／全庫48及64MiB磁碟上限、七日到期讀取阻擋及明確cleanup。覆核只為本機操作者聲明，不是後端角色驗證／獨立真值。刪路線API先寫tombstone，取消在catalog切換前作廢寫入；候選失敗不碰穩定路線庫。
+
+本片未接錄路控制器、選填收集／覆核UI、實際刪路線流程或自動到期排程，尚未產生真實候選；亦未接記憶補強、雲端、快照／訓練／更新。不得將API存在當成用戶可用／已學會；#19及#20保持未完成。
+
+檢查：完整523項Flutter通過（新增第8項密文竄改反例前），最終8項候選儲存測試通過、analyze無問題、Swift檔語法解析通過；未做新增原生runtime／iOS保護真機驗收、未發版／裝機。
+
 [已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)確認以本人已錄常用路線、一個場地起步，行程後真人核實，再按另行用途同意作批次訓練。此目標擴充以往僅補強記憶的定義，但本輪沒有採集、標註、重訓、變更split／權重或啟動B11；A／B類別與品質gate保持。路標身份重認另立namespace，物件mAP不作位置改善證據。
 
 真值包含固定node、實際樓層、錄製方向、connector／exit與來源／覆核revision；不確定資料不核准。新增角度／光線、未知／錯誤及代表性正常例子有取樣原因、trip及群組；AI猜測／自評或次序推進不能自批位置。候選保留及記憶更新與訓練快照分開授權。
@@ -543,7 +549,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | S0 工程基線與版本保存 | 固定taxonomy、HKDI保留集、現用模型／映射與逐類基準 | 1.4.3+8前處理／42自然輸入PT↔TFLite對照通過；來源SHA與12346筆records／coverage已取回；A10逐圖strict基準已建立（1,082圖；person277、door39、fence0正例）；十類權重品質未通過；候選拒用 | 可在同一獨立資料重現新舊逐類比較，產物與SHA可還原 | 補門／person／fence獨立正負例及HKDI場景，先不開訓練 |
 | S1 現有App核心功能 | 校準A、菜單OCR與播報門檻，提供真機測試樣本 | 有A來源評估／parity與工程回歸；缺完整手機實景評估 | 不把PyTorch／mAP當手機任務成功率；按場景公布誤報／漏報 | 補TFLite與HKDI／菜單真值，與Frontend實測對照 |
 | S2 照片收集與管理員覆核 | 定義全圖答案、覆核清單、coverage、去重與場景 | 本地工具、Backend問題／覆核API及本機工作台已有；合成驗證通過、預設關閉，真人／App完整閉環未接 | 每張核准圖有來源／定義／答案／分組與審核版本，partial不冒充完整 | 先既有失敗場景試覆核，再接Backend角色與照片 |
-| S3 私人訓練與模型更新 | UID快照、基礎回放、固定評估／門檻與匯出 | 未形成服務；私人相對效益未驗證，付費worker待預算與資料；[已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)之路標分支已確認，未執行 | 對照共用改善後仍有額外效益，樣本／任務驗收足夠才可下載 | 先修正案例及小型對照，再mock；證據不足保持待評估 |
+| S3 私人訓練與模型更新 | UID快照、基礎回放、固定評估／門檻與匯出 | 未形成服務；私人相對效益未驗證，付費worker待預算與資料；[已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)之路標分支已確認，未執行 | 對照共用改善後仍有額外效益，樣本／任務驗收足夠才可下載 | 先修正案例及小型對照，再mock；證據不足保持待評估  L1僅儲存API已有工程檢查，UI／真實訓練未接（#20）。 |
 | S4 室內近距離感知與引導 | 保留路標位置／方向及任務真值規格；資料工作暫停 | N0／P0離線mock及P1樣例儲存、12-node合成樣例及表面測距工程試驗已有；真實錄路／重定位未驗收  P2-A/B協調及P2-C原生取幀已過本機工程測試；P2-D入口亦已過工程測試，手機人工驗收待完成。| 人工分報錯定位／拒答／轉彎／完成／資源，不以樣本數或物件class代位置真值 | 前後端先P2–P5；任何真實採集／測試影像與留集須另定用途，不重跑舊來源或訓練 |
 | S5 圖示／文字與設施理解 | B11訓練／泛化、牌面OCR、圖示箭嘴配對 | B曾到epoch22後中斷；17:10交接Drive連接失敗，未resume／未部署 | 正式run／holdout／手機格式驗證完整，exit稀少如實標限制 | 先恢復同帳戶Drive、驗last.pt與optimizer，再正確resume；不Run all |
 | S6 HKDI整合驗收與試用發佈 | 新舊模型與整體任務比較、資料／產物封存 | 完整室內＋學習閉環未驗收 | HKDI陪同測試、手機格式、舊類退化及回退皆有報告 | 提供Frontend／Backend相同模型及snapshot識別 |
@@ -688,6 +694,8 @@ A10本機control／repair及免費T4候選全部拒用，既有來源核對不�
 </details>
 
 ### 維護紀錄
+
+2026-11-07 L1來源檢查點（#20，仍進行中）：新增獨立route_learning_v1加密候選儲存API及裝置專用金鑰／iOS受保護且排除備份的scope；候選保留route/version、trip、session/sequence、原結果、JPEG／特徵SHA及profile。支援pending／verified／needsInformation／rejected的版本化覆核紀錄、CAS衝突、同趟相片SHA去重、每趟12／全庫48及64MiB磁碟上限、七日到期讀取阻擋及明確cleanup。覆核只為本機操作者聲明，不是後端角色驗證／獨立真值。刪路線API先寫tombstone，取消在catalog切換前作廢寫入；候選失敗不碰穩定路線庫。 本片未接錄路控制器、選填收集／覆核UI、實際刪路線流程或自動到期排程，尚未產生真實候選；亦未接記憶補強、雲端、快照／訓練／更新。不得將API存在當成用戶可用／已學會；#19及#20保持未完成。 檢查：完整523項Flutter通過（新增第8項密文竄改反例前），最終8項候選儲存測試通過、analyze無問題、Swift檔語法解析通過；未做新增原生runtime／iOS保護真機驗收、未發版／裝機。
 
 2026-11-06 /to-spec：使用者接受本聊天全部建議，已發布[已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)及ready-for-agent標籤，連到整體規格。同步本文件負責的持續改善範圍、與記憶補強的區別、行程後核實、另行用途、批次真實訓練／獨立重行比較及完整版本回退。此為規格及文件檢查，沒有改App／服務、採集／上傳、訓練、部署或裝機；既有工程／真人驗收狀態保持。
 
