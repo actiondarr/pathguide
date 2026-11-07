@@ -84,24 +84,43 @@ class SceneMetrics {
   double? estimatedUsd;
 }
 
+/// Device verification can be slow; cancellation before it finishes must not
+/// start a new paid upload afterward.
+Future<void> awaitSceneAttestation(
+  Future<bool> activation,
+  bool Function()? isCurrent,
+) async {
+  final ready = await activation;
+  if (!(isCurrent?.call() ?? true)) throw const SceneFailure('cancelled');
+  if (!ready) throw const SceneFailure('app-check-unavailable');
+}
+
 abstract interface class SceneBackend {
-  Future<SceneReply> describe(Uint8List jpeg, String requestId);
+  Future<SceneReply> describe(
+    Uint8List jpeg,
+    String requestId, {
+    bool Function()? isCurrent,
+  });
 }
 
 class FirebaseSceneBackend implements SceneBackend {
   // Across page/controller replacement: cancellation never starts a second call.
   static bool _inFlight = false;
   @override
-  Future<SceneReply> describe(Uint8List jpeg, String requestId) async {
+  Future<SceneReply> describe(
+    Uint8List jpeg,
+    String requestId, {
+    bool Function()? isCurrent,
+  }) async {
     if (_inFlight) throw const SceneFailure('busy');
     _inFlight = true;
     try {
       if (!const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED') ||
           Firebase.apps.isEmpty ||
-          FirebaseAuth.instance.currentUser == null ||
-          !await activateAppAttestation()) {
+          FirebaseAuth.instance.currentUser == null) {
         throw const SceneFailure('not-configured');
       }
+      await awaitSceneAttestation(activateAppAttestation(), isCurrent);
       final uid = FirebaseAuth.instance.currentUser!.uid;
       final response = await FirebaseFunctions.instanceFor(region: 'asia-east2')
           .httpsCallable(

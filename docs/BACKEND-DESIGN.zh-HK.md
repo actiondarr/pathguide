@@ -80,6 +80,12 @@ Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成
 <a id="data-contracts"></a>
 ## 3. 資料流與實作契約
 
+### 2026-11-08 App Check 開發試驗修正
+
+手機1.8.1+16請求Auth有效但App Check無效，未呼叫Qwen。核對發現正式DeviceCheck缺Key ID／Team ID，且專案App Check API未啟用；API已啟用。使用者選擇官方debug工程方案，已註冊私人測試憑證並實測成功換token；帶有效App Check而無Auth的探測仍401，未使用圖片／Qwen。後端未放寬App Check、指定Google帳戶、20次／估算US$0.01及未知usage停止規則。正式裝置驗證仍未通過。
+
+1.8.2+17只以私人Profile包供本次房間試驗；測試憑證不寫入共享來源／公開資產，試驗完以App Check debug token管理撤銷；正式Release保留DeviceCheck。Qwen Key繼續只留Secret Manager。這次不是新增付費額度、放寬預算或正式上線。工程驗證收據見Frontend連結。
+
 ### 2026-11-08 房間單次描述試驗（香港代理已部署，手機實景待驗）
 
 2026-11-08交付核對：香港Qwen端點代理describeScene在Firebase asia-east2為ACTIVE，Node22、指定帳戶、最多20次／估算US$0.01設定核對相符；匿名HTTP401、不觸發Qwen。驗證當刻正式試驗帳本0次。1.8.1+16簽署建置／簽章／四模型雜湊及GitHub不可變tag／prerelease先核遠端，再iPhone更新安裝及正常啟動；裝機連線重設後USB重連成功，資料未清除。實際房間結果、廣東話／VoiceOver、usage／帳單／延遲及實地導航仍待使用者驗收，不宣稱轉向訊號已接通。見[交付收據](../verification/release-receipts/app-1.8.1+16.json)。

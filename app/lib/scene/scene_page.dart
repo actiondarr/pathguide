@@ -93,9 +93,11 @@ class _ScenePageState extends State<ScenePage> with WidgetsBindingObserver {
           SceneStatus.cancelled =>
             c.failure == 'expired' ? '畫面已過期，描述已作廢。' : '已取消，舊回答不會播出。',
           SceneStatus.failed => switch (c.failure) {
-            'not-configured' ||
-            'unauthenticated' ||
-            'failed-precondition' => '場景服務未啟用，或需要先登入已啟用的帳戶。',
+            'not-configured' => '手機場景功能未配置，或尚未登入。',
+            'app-check-unavailable' =>
+              '手機驗證未完成（App Check）；登入成功亦可能出現，請由開發者核對驗證設定。',
+            'unauthenticated' => '登入或手機驗證未通過，請由開發者核對；沒有自動重試。',
+            'failed-precondition' => '後端試驗設定未完成，請由開發者核對；不是要求你重新輸入Qwen Key。',
             'rejected' || 'invalid-answer' => '未收到完整而合適的描述。可自行重新取相。',
             'noFrame' || 'staleFrame' => '未取得新畫面，請稍候再按「描述前方」。',
             'resource-exhausted' || 'busy' => '上一個請求尚未結束，或暫時達到請求限制。請稍後再試。',
@@ -143,6 +145,9 @@ class _ScenePageState extends State<ScenePage> with WidgetsBindingObserver {
                     if (c.busy && c.status == SceneStatus.cancelled)
                       const Text('正在等候原請求結束；取消不代表雲端停止計費，亦不會補播舊回答。'),
                     const SizedBox(height: 12),
+                    if (!const bool.fromEnvironment('dart.vm.product') &&
+                        const bool.fromEnvironment('APP_CHECK_DEBUG'))
+                      const Text('開發測試驗證模式：只供指定手機與帳戶試驗，不代表正式DeviceCheck通過。'),
                     if (const bool.fromEnvironment('SCENE_DESCRIPTION_TRIAL'))
                       const Text(
                         '本次只測房間枱、椅、門；最多20次，Qwen估算額US\$0.01。不足下一次預留、或用量未能確認時會提早停止。',

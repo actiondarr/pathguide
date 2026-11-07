@@ -22,7 +22,11 @@ class Backend implements SceneBackend {
   Uint8List? bytes;
   Completer<SceneReply> pending = Completer<SceneReply>();
   @override
-  Future<SceneReply> describe(Uint8List jpeg, String requestId) {
+  Future<SceneReply> describe(
+    Uint8List jpeg,
+    String requestId, {
+    bool Function()? isCurrent,
+  }) {
     calls++;
     id = requestId;
     bytes = jpeg;
@@ -320,6 +324,40 @@ void main() {
       ]) {
         expect(() => validateSceneText(text), throwsA(isA<SceneFailure>()));
       }
+    },
+  );
+  testWidgets(
+    'attestation failure is distinguished from disabled service and never speaks',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      c.dispose();
+      backend = Backend();
+      c = SceneController(
+        source: WidgetSource(),
+        backend: backend,
+        voice: SpeechCoordinator(output),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ScenePage(
+            settings: AppSettings.memory(),
+            controller: c,
+            onBack: () {},
+          ),
+        ),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, '描述前方'));
+      await tester.pump();
+      await tester.pump();
+      expect(backend.calls, 1);
+      backend.pending.completeError(
+        const SceneFailure('app-check-unavailable'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('手機驗證未完成（App Check）'), findsOneWidget);
+      expect(find.textContaining('場景服務未啟用'), findsNothing);
+      expect(output.words, isEmpty);
+      await tester.pumpWidget(const SizedBox());
     },
   );
   testWidgets('large text retains fixed describe and cancel controls', (

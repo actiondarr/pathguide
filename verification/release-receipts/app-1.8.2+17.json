@@ -1,0 +1,32 @@
+{
+  "version": "1.8.2+17",
+  "build": "signed private Profile/AOT; no public binary",
+  "checks": {
+    "flutter_tests": 552,
+    "flutter_analyze": "pass",
+    "codesign_deep_strict": "pass",
+    "four_bundled_model_hashes": "unchanged, verified",
+    "review": "release guard, credential non-publication, cancellation before upload and error/TTS paths reviewed"
+  },
+  "appCheck": {
+    "debugExchangeAccepted": true,
+    "withoutAuthBackendStatus": 401,
+    "formalDeviceCheck": "missing Apple keyId/teamId; not passed",
+    "trialCredential": "private ignored setting; revoke after trial; never published"
+  },
+  "limits": {
+    "maxCalls": 20,
+    "qwenEstimatedUsd": 0.01,
+    "hardBillingCeiling": false
+  },
+  "models": {
+    "app/assets/models/detector-hk9.json": "020c57899aeb91c8fedc0421f76a73c39c7aa79e1a90de6e353d69f98c1367bf",
+    "app/assets/models/detector-hk9.tflite": "8bbfa43b1fe2b440e608652e75fa86d15e571031c45b7b21f30689852468e3c9",
+    "app/assets/models/detector.json": "172db9ff4f637fd4d6188a736d436533577a9ca015775961cdb0bb637f2ed327",
+    "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
+  },
+  "installation": "pending remote immutable tag/prerelease verification",
+  "phone_acceptance": "pending user manual room scene and Cantonese speech",
+  "agent_paid_qwen_requests": 0,
+  "navigation_turn_signal": "not connected"
+}

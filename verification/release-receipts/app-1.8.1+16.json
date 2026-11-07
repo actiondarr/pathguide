@@ -85,5 +85,13 @@
     "qwen_budget_usd": 0.01,
     "firebase_fees": "separate",
     "selected_google_account": "bound by ignored deployment UID setting; identity not in this public receipt"
+  },
+  "phone_acceptance_followup": {
+    "result": "user reported service unavailable",
+    "auth": "VALID",
+    "appCheck": "INVALID",
+    "qwenRequests": 0,
+    "formalDeviceCheck": "missing Apple keyId/teamId; not accepted",
+    "next": "user authorized official debug engineering trial 1.8.2+17"
   }
 }

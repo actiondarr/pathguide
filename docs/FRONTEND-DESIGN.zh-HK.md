@@ -449,6 +449,12 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
+### 2026-11-08 私人工程版 1.8.2+17：App Check 測試驗證
+
+使用者在1.8.1+16登入成功後收到「場景服務未啟用」；後端紀錄為Auth有效、App Check無效，未進入Qwen及試驗帳本。正式DeviceCheck缺Apple Key ID／Team ID；使用者明確選擇Firebase官方開發測試方案。1.8.2+17採私人Profile/AOT，明示開發驗證模式；Release仍強制正式裝置provider，不能用debug旗標繞過。測試憑證只在ignored私人設定與私人工程包，不上Git或GitHub資產，試驗後須撤銷。
+
+啟動驗證會真正取得token（12秒逾時），分開顯示手機驗證、登入、後端設定錯誤；等候驗證期間取消／退出後不會再開始付費上傳。552項Flutter及analyze通過，包含取消與驗證失敗不播音；正式DeviceCheck、真人房間描述／廣東話與VoiceOver仍未驗收。安裝結果另見[1.8.2+17收據](../verification/release-receipts/app-1.8.2+17.json)。導航轉向訊號仍未接通，不作實地導航安全驗收。
+
 ### 2026-11-08 房間單次描述 1.8.1+16（已安裝／啟動，實景驗收待完成）
 
 2026-11-08交付核對：香港Qwen端點代理describeScene在Firebase asia-east2為ACTIVE，Node22、指定帳戶、最多20次／估算US$0.01設定核對相符；匿名HTTP401、不觸發Qwen。驗證當刻正式試驗帳本0次。1.8.1+16簽署建置／簽章／四模型雜湊及GitHub不可變tag／prerelease先核遠端，再iPhone更新安裝及正常啟動；裝機連線重設後USB重連成功，資料未清除。實際房間結果、廣東話／VoiceOver、usage／帳單／延遲及實地導航仍待使用者驗收，不宣稱轉向訊號已接通。見[交付收據](../verification/release-receipts/app-1.8.1+16.json)。

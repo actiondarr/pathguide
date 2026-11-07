@@ -106,7 +106,11 @@ class SceneController extends ChangeNotifier {
       final network = Stopwatch()..start();
       late final SceneReply reply;
       try {
-        reply = await backend.describe(frame.keyframe!.bytes, sceneRequestId());
+        reply = await backend.describe(
+          frame.keyframe!.bytes,
+          sceneRequestId(),
+          isCurrent: () => _valid(generation),
+        );
       } finally {
         if (!_disposed) uploadModelMs = network.elapsedMilliseconds;
       }
