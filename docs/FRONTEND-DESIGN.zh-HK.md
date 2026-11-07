@@ -449,6 +449,8 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
+2026-11-08真人首次取相失敗：1.8.2+17的Auth及App Check均有效，但第一個callable約1.635秒返回503，沒有成功描述／讀音；之後429為用量未知後試驗停止，並非一直in-flight，也不是等45秒便可解除。帳本1次、halted=true、inFlight=false，保守預留US$0.002458並非實際帳單。沒有重設帳本或自動付費重試；須先核對供應商用量及錯誤。
+
 ### 2026-11-08 私人工程版 1.8.2+17：App Check 測試驗證
 
 使用者在1.8.1+16登入成功後收到「場景服務未啟用」；後端紀錄為Auth有效、App Check無效，未進入Qwen及試驗帳本。正式DeviceCheck缺Apple Key ID／Team ID；使用者明確選擇Firebase官方開發測試方案。1.8.2+17採私人Profile/AOT，明示開發驗證模式；Release仍強制正式裝置provider，不能用debug旗標繞過。測試憑證只在ignored私人設定與私人工程包，不上Git或GitHub資產，試驗後須撤銷。
