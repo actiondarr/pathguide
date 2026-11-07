@@ -449,6 +449,13 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
+### 2026-11-08 房間單次描述手機測試候選 1.8.1+16
+
+使用者確認只拍房間枱、椅、門，最多20次，Qwen估算額US$0.01；可能因下一次預留不足而提早停止，Firebase費用另計。Release建置開啟SCENE_DESCRIPTION_ENABLED及SCENE_DESCRIPTION_TRIAL，顯示試驗範圍與限制；後端只接受選定Google帳戶，其他帳戶不得呼叫。取相新加最多1.5秒首幀等待，只重取本機no_frame，不重試雲端、背景或取消後不再取幀。香港代理縮圖512px再分析；模型／thinking／整段驗證／導航優先規則保留。
+
+545項Flutter、analyze及53個原生Simulator案例通過；試驗flag另有16項場景widget／controller通過。簽署建置、遠端不可變tag／prerelease及安裝按AGENTS.md先後處理；未有收據前不當手機交付，真實房間描述／VoiceOver／轉向仍未驗收，不能當行走避障。首次測試需登入指定帳戶、站定對準枱椅門再手動按「描述前方」；取消或背景不得補播舊回答。詳見[本輪證據](../verification/scene-trial-20261108.json)。
+
+
 ### 單次「描述前方」（2026-11-07，來源／離線流程已接；未部署或手機驗收）
 
 2026-11-07香港區更新：使用者已表示有香港Key，要求將單次描述後端改用香港端點。現時固定並預設cn-hongkong；若部署環境仍有新加坡QWEN_VL_BASE_URL，必須改成香港，否則拒絕請求。DASHSCOPE_API_KEY名稱不變，須由使用者設定同區Key及重新部署才生效。未讀取Key、部署或付費測試，未有香港實際延遲／費用／品質數據；不保證香港端點等於只在香港推理，須另核workspace部署範圍。歷史CLI／新加坡試驗證據保留，見[香港區離線核對](../verification/scene-description-hong-kong-20261107.json)。
@@ -1057,6 +1064,8 @@ P2-C/D的觀察header最少含request/session/generation/sequence、route/versio
 </details>
 
 ### 維護紀錄
+
+2026-11-08 加入使用者已授權的房間20次／Qwen估算US$0.01試驗、單一帳戶／跨日帳本及失敗停止規則，工程證據及交付狀態另列。未新增訓練或模型品質結論。
 
 2026-11-07 單次描述後端改香港固定端點，保留封閉網址驗證；同區Key及部署環境須配套更新。僅來源／離線檢查，未部署、付費或手機驗收。
 

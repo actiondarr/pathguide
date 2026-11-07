@@ -367,6 +367,11 @@ Backend已有submitPhotoIssue／getPhotoIssue／getPhotoReviewItem／submitPhoto
 <a id="quality-acceptance"></a>
 ## 4. 驗收與模型改善決策
 
+### 2026-11-08 房間場景試驗界線
+
+使用者允許只拍房間枱、椅、門，最多20次（最新次數），Qwen估算額US$0.01，Firebase另計；不足下一次預留或usage缺失可提早停。這不是訓練／資料集採集授權，原圖與回答不自動保存或加入留集。後端512px縮圖及token預留可能影響細節理解，工程／budget測試不能代替房間描述品質、聲學延遲或實地導航。尚未有實際Qwen usage／費用／描述評分；模型、taxonomy、split、B11均不動。部署／手機狀態見[本輪證據](../verification/scene-trial-20261108.json)。
+
+
 <a id="route-landmark-learning"></a>
 ### 已錄路標真實訓練與獨立重行比較（2026-11-06，規格已確認／未執行）
 
@@ -701,6 +706,8 @@ A10本機control／repair及免費T4候選全部拒用，既有來源核對不�
 </details>
 
 ### 維護紀錄
+
+2026-11-08 加入使用者已授權的房間20次／Qwen估算US$0.01試驗、單一帳戶／跨日帳本及失敗停止規則，工程證據及交付狀態另列。未新增訓練或模型品質結論。
 
 2026-11-07 單次描述後端改香港固定端點，保留封閉網址驗證；同區Key及部署環境須配套更新。僅來源／離線檢查，未部署、付費或手機驗收。
 

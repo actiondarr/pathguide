@@ -77,7 +77,18 @@ class SceneController extends ChangeNotifier {
       if (started != RouteCaptureStatus.running) {
         throw SceneFailure(started.name);
       }
-      final frame = await source.capture();
+      var frame = await source.capture();
+      // Starting a session does not mean its first camera frame has arrived.
+      // Wait only for that first local frame; never retry a cloud request.
+      for (
+        var attempt = 0;
+        frame.status == RouteCaptureStatus.noFrame && attempt < 15;
+        attempt++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        if (!_valid(generation)) return;
+        frame = await source.capture();
+      }
       captureMs = _elapsed!.elapsedMilliseconds;
       if (!_valid(generation)) return;
       if (frame.status != RouteCaptureStatus.captured ||

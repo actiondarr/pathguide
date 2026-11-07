@@ -80,6 +80,15 @@ Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成
 <a id="data-contracts"></a>
 ## 3. 資料流與實作契約
 
+### 2026-11-08 房間單次描述試驗（部署候選）
+
+使用者指定房間枱、椅、門，最多20次（取代最初3次），Qwen估算額仍US$0.01；只放行使用者選定的Google UID，UID只在忽略的部署設定，Key仍只讀Secret Manager。新增scene_trial.js及scene_description_trials/{trialId}跨日不重置帳本，與active／deletion及每日限流在同一Firestore transaction預留。一次在途、總次數上限20、已估算花費加下一次預留不能超過10000 micro-USD；失敗／取消亦計一次可能付費嘗試。程序崩潰保持in-flight鎖；無usage／usage超出profile／網絡不確定時halt，不自動重試或重設。帳本只含次數、隨機requestId、設定fingerprint及安全數值，不含原圖／描述／UID。
+
+後端將有效JPEG縮至長邊512，再固定max_pixels=262144、vl_high_resolution_images=false、max_tokens=512及不thinking。按[官方Qwen3-VL像素說明](https://docs.qwencloud.com/developer-guides/multimodal/vision)及[香港價格](https://www.alibabacloud.com/help/en/model-studio/model-pricing)，使用8192 input-token保守工程預留及512 output，0.2／1.6 USD每百萬token，每次預留2458 micro-USD；收到有效usage以整數向上取整結算並釋放差額。這是程式的估算停止策略，不能保證供應商帳單硬上限；費率／供應商額外token或延遲記帳異常須停測核對。預算可能令測試不足20次；Firebase費用另計，不宣稱包含在US$0.01。
+
+新增SCENE_TRIAL_ID／SCENE_TRIAL_UID／SCENE_TRIAL_MAX_REQUESTS=20／SCENE_TRIAL_BUDGET_MICRO_USD=10000；啟用代理但缺少試驗設定會拒絕，不退回無限制模式。既有歷史CLI不受此手機試驗帳本保護，不用它另發付費請求。Firebase Secret已由使用者設定；Cloud Functions API初查未啟用，部署時按既有流程處理，僅部署describeScene，不發布其他未提交服務。工程／部署及手機狀態見[本輪證據](../verification/scene-trial-20261108.json)。
+
+
 ### 路線錄製／跨樓層步行導航的本機契約與選填雲端（P0／P1本機已驗；真實整合待實作）
 
 2026-11-05 P2-C已提供本機原生相機來源：request／session／generation、route／version、sequence及原生clock epoch／對映綁觀察。只在明確取幀時回長邊1280／512KiB有上限的正向JPEG及SHA；最新觀察僅含header，沒有逐幀JPEG、檔案或上傳。native工程幀齡1000ms且walkingValidated=false。這不是持久RoutePackage媒體schema、雲端endpoint或訓練用途同意；Flutter入口留P2-D，加密媒體及配額留P3。接口見Frontend P2-C節與[機器證據](../verification/codex-p2c-route-camera-20261105.json)。
@@ -651,6 +660,8 @@ DS Harness、OpenCode、Codex選一個執行同一包；不用三套工具重做
 </details>
 
 ### 維護紀錄
+
+2026-11-08 加入使用者已授權的房間20次／Qwen估算US$0.01試驗、單一帳戶／跨日帳本及失敗停止規則，工程證據及交付狀態另列。未新增訓練或模型品質結論。
 
 2026-11-07 單次描述後端改香港固定端點，保留封閉網址驗證；同區Key及部署環境須配套更新。僅來源／離線檢查，未部署、付費或手機驗收。
 

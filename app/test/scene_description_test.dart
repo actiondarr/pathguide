@@ -134,6 +134,23 @@ void main() {
     expect(c.speechStartMs, isNotNull);
     expect(c.metrics!.totalTokens, 120);
   });
+  test(
+    'camera start waits locally for first frame before one cloud call',
+    () async {
+      var captures = 0;
+      camera.changeCapture = (value) =>
+          ++captures < 3 ? {'status': 'no_frame'} : value;
+      final work = c.describe();
+      for (var i = 0; i < 50 && backend.calls == 0; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(captures, 3);
+      expect(backend.calls, 1);
+      backend.finish();
+      await work;
+      expect(c.status, SceneStatus.complete);
+    },
+  );
   test('cancel holds in-flight lock, drops late answer and never queues a second call', () async {
     final work = c.describe();
     await untilAnalysis();

@@ -143,6 +143,10 @@ class _ScenePageState extends State<ScenePage> with WidgetsBindingObserver {
                     if (c.busy && c.status == SceneStatus.cancelled)
                       const Text('正在等候原請求結束；取消不代表雲端停止計費，亦不會補播舊回答。'),
                     const SizedBox(height: 12),
+                    if (const bool.fromEnvironment('SCENE_DESCRIPTION_TRIAL'))
+                      const Text(
+                        '本次只測房間枱、椅、門；最多20次，Qwen估算額US\$0.01。不足下一次預留、或用量未能確認時會提早停止。',
+                      ),
                     const Text(
                       '每次按下會取一張相，傳到 Qwen 作雲端分析，可能產生費用。App 不會自動保存原圖或完整回答；供應商的資料政策另行適用。',
                     ),

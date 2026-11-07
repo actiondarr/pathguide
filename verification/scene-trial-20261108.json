@@ -1,0 +1,54 @@
+{
+  "date_hong_kong": "2026-11-08",
+  "app_version": "1.8.1+16",
+  "authorization": {
+    "scene": "room table, chairs and door only",
+    "max_attempts": 20,
+    "qwen_budget_usd": 0.01,
+    "firebase_fees": "separate",
+    "selected_google_account": "bound by ignored deployment UID setting; identity not in this public receipt"
+  },
+  "checks": {
+    "flutter": 545,
+    "trial_flag_scene_tests": 16,
+    "flutter_analyze": "pass",
+    "native_simulator_passed_cases": 53,
+    "native_xcodebuild": "TEST SUCCEEDED",
+    "backend_scoped_tests": 21,
+    "backend_all_local_tests": 38,
+    "signed_ios_build": "pass",
+    "codesign_deep_strict": "pass",
+    "live_firestore_check": "initial check reached 20 persisted attempts but final rejection check hit local ECONNRESET; rerun in progress, not a complete pass claimed"
+  },
+  "trial": {
+    "persistent_count": true,
+    "no_midnight_reset": true,
+    "input_token_reservation_bound": 8192,
+    "max_output_tokens": 512,
+    "reserve_micro_usd": 2458,
+    "image_long_edge": 512,
+    "max_pixels": 262144,
+    "thinking": false,
+    "unknown_usage_or_paid_error": "halt remaining attempts",
+    "estimate_not_billing_cap": true
+  },
+  "runtime_flags": [
+    "SCENE_DESCRIPTION_ENABLED=true",
+    "SCENE_DESCRIPTION_TRIAL=true"
+  ],
+  "paid_qwen_requests_by_agent": 0,
+  "deployment": "pending",
+  "phone_install": "pending",
+  "phone_acceptance": "pending",
+  "app_hashes": {
+    "Runner": "8ec006cc4d66abd833bbc4fdab1b52076dabea7afbb92807e172c2a766587fa8",
+    "Frameworks/App.framework/App": "976d367bb6d80e08473eddc0d91e17d9b2fb4cae9e4ef79a0d3d30cad1140868"
+  },
+  "model_hashes": {
+    "app/assets/models/detector-hk9.json": "020c57899aeb91c8fedc0421f76a73c39c7aa79e1a90de6e353d69f98c1367bf",
+    "app/assets/models/detector-hk9.tflite": "8bbfa43b1fe2b440e608652e75fa86d15e571031c45b7b21f30689852468e3c9",
+    "app/assets/models/detector.json": "172db9ff4f637fd4d6188a736d436533577a9ca015775961cdb0bb637f2ed327",
+    "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
+  },
+  "review": "Implementing-agent review of scope, fixed endpoint, identity guard, transactional trial reservation, conservative cost accounting, fail-closed errors, cancellation and no-frame startup; not independent review."
+}

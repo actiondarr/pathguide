@@ -29,6 +29,7 @@ test('one bounded, non-thinking, non-streaming POST; metadata-only measurement',
     const body=JSON.parse(opts.body);
     assert.equal(body.model,'qwen3-vl-plus'); assert.equal(body.enable_thinking,false);
     assert.equal(body.stream,false); assert.equal(body.max_tokens,512);
+    assert.equal(body.vl_high_resolution_images,false); assert.equal(body.messages[1].content[0].max_pixels,262144);
     assert.match(body.messages[1].content[0].image_url.url,/^data:image\/jpeg;base64,/);
     return response(payload());
   }});
@@ -61,6 +62,11 @@ test('JPEG only, byte/pixel/base64 limits; strip image metadata',async()=>{
   const oriented=await sharp(Buffer.from(data.jpegBase64,'base64')).withMetadata({orientation:6}).jpeg().toBuffer();
   const cleaned=await cleanImage({...data,jpegBase64:oriented.toString('base64')});
   const info=await sharp(cleaned).metadata(); assert.equal(info.orientation,undefined); assert.equal(info.exif,undefined);
+});
+test('server reduces a full-size accepted JPEG to a bounded 512px cloud image',async()=>{
+  const jpeg=await sharp({create:{width:1280,height:960,channels:3,background:'white'}}).jpeg().toBuffer();
+  const clean=await cleanImage({...await request(),jpegBase64:jpeg.toString('base64')});
+  const info=await sharp(clean).metadata();assert.equal(info.width,512);assert.equal(info.height,384);
 });
 test('transport errors/429/malformed or overlong upstream body are sanitized, never retried',async()=>{
   for(const [fetcher,code] of [
