@@ -1,5 +1,7 @@
 # Frontend：PathGuide 整體流程、規格與裝置端
 
+2026-11-08 Singapore deployment receipt: describeScene ACTIVE in Firebase asia-east2, Qwen Singapore URL and Secret version 2 verified. Anonymous callable remains 401; selected account, maximum20 and USD0.01 estimated allowance retained. Preflight disabled, ledger still one attempt and halted; no paid inference performed. Phone 1.8.2+17 unchanged; manual scene/speech acceptance remains pending. This supersedes the pending Secret/deployment status in the source checkpoint below.
+
 2026-11-08 Singapore return (source checkpoint; not deployed): user selected the Singapore PAYG key and matching https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1 endpoint. Backend BASE and GET-models probe now share this fixed endpoint; the new source rejects the Hong Kong URL. qwen3-vl-plus, non-thinking, account/App Check guards and all trial limits remain. 25 offline tests passed. Operator must interactively update DASHSCOPE_API_KEY, then deploy only describeScene with matching QWEN_VL_BASE_URL; no key is read or committed. Existing halted ledger, one attempt and USD0.002458 reservation remain; no automatic paid retry or reset. Secret update, deployment and phone scene/Cantonese acceptance remain pending. Phone 1.8.2+17 does not need reinstall for this backend region change. Singapore scope is International, not Singapore-only inference. Button integration remains conditional on successful manual scene/speech acceptance.
 
 更新：2026年11月7日。此文件是整體規格入口；產品介紹、Backend及Dataset各自維護所屬內容。
