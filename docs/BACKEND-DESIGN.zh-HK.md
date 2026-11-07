@@ -86,6 +86,8 @@ Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成
 
 2026-11-08診斷部署實測：後端使用現有Secret GET香港/models回200，匿名callable仍401，帳本仍1次／halted且無inFlight。這只證明模型清單端點認證，不能證明圖片推理成功或帳戶無計費限制。補上後續失敗的安全分類：只記HTTP狀態數字或allowlist網絡碼，仍不保留上游body／Key／圖片／回答；25項離線測試通過。
 
+2026-11-08供應商根因核對：已登入QwenCloud香港PAYG Usage／Logs；唯一qwen3-vl-plus請求在香港時間04:04:02回HTTP400，Request Details明示Model.Unsupported，latency 0.02秒，usage為「—」，成功0／請求1。這是模型服務拒絕，不是手機斷網；後端原將非429上游錯誤歸unavailable→503，令UI誤導。官方仍列香港支援此model，不能直接斷言Key錯誤或帳戶欠費；具體alias／workspace／provider配置需供應商確認。不把usage「—」或控制台四捨五入US$0.00當零費證明，帳本不解鎖、不新增推理。
+
 ### 2026-11-08 App Check 開發試驗修正
 
 手機1.8.1+16請求Auth有效但App Check無效，未呼叫Qwen。核對發現正式DeviceCheck缺Key ID／Team ID，且專案App Check API未啟用；API已啟用。使用者選擇官方debug工程方案，已註冊私人測試憑證並實測成功換token；帶有效App Check而無Auth的探測仍401，未使用圖片／Qwen。後端未放寬App Check、指定Google帳戶、20次／估算US$0.01及未知usage停止規則。正式裝置驗證仍未通過。
