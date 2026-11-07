@@ -1,5 +1,7 @@
 # Frontend：PathGuide 整體流程、規格與裝置端
 
+2026-11-08手機測試已準備：一次性後端恢復已部署並核對，原帳本保留1次及2458 microUSD保守估算；原Google帳戶可在既有1.8.2+17按一次「描述前方」，無需重裝。許可香港時間2026-11-08 16:46到期，使用後再次停止。已請使用者回報文字是否相符、廣東話完整讀出及錯誤；真機驗收仍等待結果。
+
 2026-11-08持續手機驗收：使用者要求繼續至場景分析真機驗證完成。後端準備單次recovery許可，保留第一次未知用量與停止帳本，不清次數或費用；只限原帳戶並沿用原總額，使用一次後重新停止。手機維持1.8.2+17，無需重裝；待後端部署及許可核對後，只按一次拍攝房間桌／椅／門，確認完整環境描述、廣東話單次讀出及延遲，錯誤時不連按。真人驗收仍未完成；即時辨識／導航內「描述前方」入口仍待此驗收通過才整合。
 
 2026-11-08 Singapore deployment receipt: describeScene ACTIVE in Firebase asia-east2, Qwen Singapore URL and Secret version 2 verified. Anonymous callable remains 401; selected account, maximum20 and USD0.01 estimated allowance retained. Preflight disabled, ledger still one attempt and halted; no paid inference performed. Phone 1.8.2+17 unchanged; manual scene/speech acceptance remains pending. This supersedes the pending Secret/deployment status in the source checkpoint below.
