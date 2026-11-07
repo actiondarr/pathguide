@@ -26,7 +26,8 @@
       "providerRequests": 0,
       "syntheticFixtureCleanup": "completed"
     },
-    "isolated_backend_all_tests": 33
+    "isolated_backend_all_tests": 33,
+    "standalone_production_install": "pnpm 11.25.0 install --prod --frozen-lockfile passed with explicit three-package lifecycle approval"
   },
   "trial": {
     "persistent_count": true,
@@ -45,8 +46,8 @@
     "SCENE_DESCRIPTION_TRIAL=true"
   ],
   "paid_qwen_requests_by_agent": 0,
-  "deployment": "pending",
-  "phone_install": "pending",
+  "deployment": "first cloud build failed dependency lifecycle approval; corrected, redeployment pending",
+  "phone_install": "1.8.1+16 update installation succeeded after USB reconnect; launch and human acceptance pending",
   "phone_acceptance": "pending",
   "app_hashes": {
     "Runner": "8ec006cc4d66abd833bbc4fdab1b52076dabea7afbb92807e172c2a766587fa8",
@@ -59,5 +60,11 @@
     "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
   },
   "review": "Implementing-agent review of scope, fixed endpoint, identity guard, transactional trial reservation, conservative cost accounting, fail-closed errors, cancellation and no-frame startup; not independent review.",
-  "deployment_entry": "SCENE_DESCRIPTION_DEPLOY_ONLY=true selects only describeScene and its Qwen secret; normal backend entry preserved"
+  "deployment_entry": "SCENE_DESCRIPTION_DEPLOY_ONLY=true selects only describeScene and its Qwen secret; normal backend entry preserved",
+  "release": {
+    "tag": "v1.8.1+16",
+    "commit": "5f4c672167559b350fffafbe3e6f5614f1fc68cc",
+    "remote_tag_and_prerelease": "verified before update installation",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.8.1%2B16"
+  }
 }
