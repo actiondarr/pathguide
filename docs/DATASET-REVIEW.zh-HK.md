@@ -367,7 +367,9 @@ Backend已有submitPhotoIssue／getPhotoIssue／getPhotoReviewItem／submitPhoto
 <a id="quality-acceptance"></a>
 ## 4. 驗收與模型改善決策
 
-### 2026-11-08 房間場景試驗界線
+### 2026-11-08 房間場景試驗界線（服務及手機已就緒，實景品質待驗）
+
+2026-11-08交付核對：香港Qwen端點代理describeScene在Firebase asia-east2為ACTIVE，Node22、指定帳戶、最多20次／估算US$0.01設定核對相符；匿名HTTP401、不觸發Qwen。驗證當刻正式試驗帳本0次。1.8.1+16簽署建置／簽章／四模型雜湊及GitHub不可變tag／prerelease先核遠端，再iPhone更新安裝及正常啟動；裝機連線重設後USB重連成功，資料未清除。實際房間結果、廣東話／VoiceOver、usage／帳單／延遲及實地導航仍待使用者驗收，不宣稱轉向訊號已接通。見[交付收據](../verification/release-receipts/app-1.8.1+16.json)。
 
 使用者允許只拍房間枱、椅、門，最多20次（最新次數），Qwen估算額US$0.01，Firebase另計；不足下一次預留或usage缺失可提早停。這不是訓練／資料集採集授權，原圖與回答不自動保存或加入留集。後端512px縮圖及token預留可能影響細節理解，工程／budget測試不能代替房間描述品質、聲學延遲或實地導航。尚未有實際Qwen usage／費用／描述評分；模型、taxonomy、split、B11均不動。部署／手機狀態見[本輪證據](../verification/scene-trial-20261108.json)。
 

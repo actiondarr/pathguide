@@ -28,7 +28,8 @@
     },
     "isolated_backend_all_tests": 33,
     "standalone_production_install": "pnpm 11.25.0 install --prod --frozen-lockfile passed with explicit three-package lifecycle approval",
-    "standalone_functions_framework": "5.0.5 clean-install HTTP startup and anonymous 401 probe passed; no provider key or Qwen request"
+    "standalone_functions_framework": "5.0.5 clean-install HTTP startup and anonymous 401 probe passed; no provider key or Qwen request",
+    "live_firestore_rules": "Inspected deployed rules: default-deny covers trial ledger and private counter; older photo-rule differences preserved, no rules deployment"
   },
   "trial": {
     "persistent_count": true,
@@ -47,9 +48,31 @@
     "SCENE_DESCRIPTION_TRIAL=true"
   ],
   "paid_qwen_requests_by_agent": 0,
-  "deployment": "dependency lifecycle policy and direct Functions Framework requirement corrected; redeployment pending",
-  "phone_install": "1.8.1+16 installed, version/build independently read from device, normal launch succeeded; human room/VoiceOver acceptance pending",
-  "phone_acceptance": "pending",
+  "deployment": {
+    "state": "ACTIVE",
+    "region": "asia-east2",
+    "providerRegion": "Hong Kong",
+    "model": "qwen3-vl-plus",
+    "runtime": "nodejs22",
+    "entryPoint": "describeScene",
+    "maxInstances": 2,
+    "timeout": 40,
+    "selectedAccountMatches": true,
+    "trialMaxRequests": 20,
+    "qwenEstimatedBudgetUsd": 0.01,
+    "providerSecretVersion": "1",
+    "anonymousProbe": {
+      "httpStatus": 401,
+      "status": "UNAUTHENTICATED"
+    },
+    "operationalTrialAttempts": 0,
+    "paidProviderCallsByAgent": 0,
+    "updateTime": "2026-11-07T19:12:06.173926917Z",
+    "build": "projects/56961018114/locations/asia-east2/builds/6005efb8-0481-4d77-a457-4aec6bb72009",
+    "verifiedAtUtc": "2026-11-07T19:43:55.630162+00:00"
+  },
+  "phone_install": "1.8.1+16 update installed, device inventory version 1.8.1/build 16 independently verified, normal launch succeeded; no uninstall or data clear",
+  "phone_acceptance": "room description, actual Qwen usage/cost/latency and VoiceOver feedback pending user",
   "app_hashes": {
     "Runner": "8ec006cc4d66abd833bbc4fdab1b52076dabea7afbb92807e172c2a766587fa8",
     "Frameworks/App.framework/App": "976d367bb6d80e08473eddc0d91e17d9b2fb4cae9e4ef79a0d3d30cad1140868"
@@ -67,5 +90,17 @@
     "commit": "5f4c672167559b350fffafbe3e6f5614f1fc68cc",
     "remote_tag_and_prerelease": "verified before update installation",
     "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.8.1%2B16"
+  },
+  "artifact_cleanup": "asia-east2 gcf-artifacts images older than seven days; CLI policy setup succeeded",
+  "backend_source_commit": "ae4e798442b7ec799aeb0631041d58969338ee6f",
+  "backend_source_sha256": {
+    "function_entry.js": "73830c21c00871bf1896215960ac52938042eadc30a44b6b31305283f15866b7",
+    "scene_entry.js": "e16a40d71fbf629826a705ae10672df41faff24f47a0dbf739a9ab5baf9f8f10",
+    "scene_function.js": "8b7872d2109b97e0ff136e96ceaf11f4127b1cfd10ca819a20206929b5ac5668",
+    "scene_description.js": "74aac9a9a199b864de45137812f135595a374524aa24bc7da23e68f942779082",
+    "scene_trial.js": "e22267b97779275c7c097ffce5592995c8a93175244d60c279f2ffe753d5255c",
+    "package.json": "9c0f1473121fcb99b89a69b330f70c33ffb6149e215b6209dae1792f5c24e2ec",
+    "pnpm-lock.yaml": "903dbe7f9b2f46d257c0b686a6507449021c573b5cdb01fcf42e1fd8253e16c3",
+    "pnpm-workspace.yaml": "55e969a6bb6a4e23229d1e955688073804ade6394c88047d381ea5f94c8ff238"
   }
 }

@@ -80,7 +80,9 @@ Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成
 <a id="data-contracts"></a>
 ## 3. 資料流與實作契約
 
-### 2026-11-08 房間單次描述試驗（部署候選）
+### 2026-11-08 房間單次描述試驗（香港代理已部署，手機實景待驗）
+
+2026-11-08交付核對：香港Qwen端點代理describeScene在Firebase asia-east2為ACTIVE，Node22、指定帳戶、最多20次／估算US$0.01設定核對相符；匿名HTTP401、不觸發Qwen。驗證當刻正式試驗帳本0次。1.8.1+16簽署建置／簽章／四模型雜湊及GitHub不可變tag／prerelease先核遠端，再iPhone更新安裝及正常啟動；裝機連線重設後USB重連成功，資料未清除。實際房間結果、廣東話／VoiceOver、usage／帳單／延遲及實地導航仍待使用者驗收，不宣稱轉向訊號已接通。見[交付收據](../verification/release-receipts/app-1.8.1+16.json)。
 
 使用者指定房間枱、椅、門，最多20次（取代最初3次），Qwen估算額仍US$0.01；只放行使用者選定的Google UID，UID只在忽略的部署設定，Key仍只讀Secret Manager。新增scene_trial.js及scene_description_trials/{trialId}跨日不重置帳本，與active／deletion及每日限流在同一Firestore transaction預留。一次在途、總次數上限20、已估算花費加下一次預留不能超過10000 micro-USD；失敗／取消亦計一次可能付費嘗試。程序崩潰保持in-flight鎖；無usage／usage超出profile／網絡不確定時halt，不自動重試或重設。帳本只含次數、隨機requestId、設定fingerprint及安全數值，不含原圖／描述／UID。
 

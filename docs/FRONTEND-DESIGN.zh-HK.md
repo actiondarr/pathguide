@@ -449,11 +449,13 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
-### 2026-11-08 房間單次描述手機測試候選 1.8.1+16
+### 2026-11-08 房間單次描述 1.8.1+16（已安裝／啟動，實景驗收待完成）
+
+2026-11-08交付核對：香港Qwen端點代理describeScene在Firebase asia-east2為ACTIVE，Node22、指定帳戶、最多20次／估算US$0.01設定核對相符；匿名HTTP401、不觸發Qwen。驗證當刻正式試驗帳本0次。1.8.1+16簽署建置／簽章／四模型雜湊及GitHub不可變tag／prerelease先核遠端，再iPhone更新安裝及正常啟動；裝機連線重設後USB重連成功，資料未清除。實際房間結果、廣東話／VoiceOver、usage／帳單／延遲及實地導航仍待使用者驗收，不宣稱轉向訊號已接通。見[交付收據](../verification/release-receipts/app-1.8.1+16.json)。
 
 使用者確認只拍房間枱、椅、門，最多20次，Qwen估算額US$0.01；可能因下一次預留不足而提早停止，Firebase費用另計。Release建置開啟SCENE_DESCRIPTION_ENABLED及SCENE_DESCRIPTION_TRIAL，顯示試驗範圍與限制；後端只接受選定Google帳戶，其他帳戶不得呼叫。取相新加最多1.5秒首幀等待，只重取本機no_frame，不重試雲端、背景或取消後不再取幀。香港代理縮圖512px再分析；模型／thinking／整段驗證／導航優先規則保留。
 
-545項Flutter、analyze及53個原生Simulator案例通過；試驗flag另有16項場景widget／controller通過。簽署建置、遠端不可變tag／prerelease及安裝按AGENTS.md先後處理；未有收據前不當手機交付，真實房間描述／VoiceOver／轉向仍未驗收，不能當行走避障。首次測試需登入指定帳戶、站定對準枱椅門再手動按「描述前方」；取消或背景不得補播舊回答。詳見[本輪證據](../verification/scene-trial-20261108.json)。
+545項Flutter、analyze及53個原生Simulator案例通過；試驗flag另有16項場景widget／controller通過。簽署建置、遠端不可變tag／prerelease及其後更新安裝／正常啟動已依AGENTS.md完成，收據見上方，真實房間描述／VoiceOver／轉向仍未驗收，不能當行走避障。首次測試需登入指定帳戶、站定對準枱椅門再手動按「描述前方」；取消或背景不得補播舊回答。詳見[本輪證據](../verification/scene-trial-20261108.json)。
 
 
 ### 單次「描述前方」（2026-11-07，來源／離線流程已接；未部署或手機驗收）
@@ -488,7 +490,9 @@ SceneController同時最多一個操作，不排隊。取消、退出、背景�
 
 **2026-11-07硬件分級已確認、待實作驗收：** 同一App自動辨識硬件能力，不另建LiDAR／非LiDAR兩個產品。普通相機基本能力為路線導航、錄路／路標重認、本機已知物件名稱／畫面方位及需網絡的Qwen描述；各功能仍依其實際交付／品質狀態，不因分級而宣稱已完成。LiDAR增強能力先獨立驗證有效深度測距與未知障礙候選；有硬件不代表當下資料有效，深度失效撤回舊距離，降級為名稱／方位，不把未知當零距離或無障礙。普通相機未知障礙方案另評估，不宣稱與LiDAR同等；兩種裝置分開驗收。
 
-目前手機試驗版：**[1.8.0+15 自動錄路／樓層確認工程版](https://github.com/actiondarr/pathguide/releases/tag/v1.8.0%2B15)**。開始後自動選候選，不逐張填表；可明確選目前樓層建立確認點，之後只沿用本段上下文。未知／轉層／OCR矛盾／暫停／背景撤回目前上下文，繼續保留未確認草稿；轉層分入口／出口，站定後可核實同層一段，不能自動確認未知段或設備。結束命名保存固定在底部。516項Flutter、54項原生、analyze及兩軸覆核通過，簽署／簽章／四模型與App程式雜湊已核；分支及不可變tag／prerelease遠端核對後，重連iPhone更新安裝／正常啟動成功，未卸載或清空資料，見[交付收據](../verification/release-receipts/app-1.8.0+15.json)。schema3保留樓層來源，舊App拒讀新來源格式；schema1／2及原有版本保留。真人錄路／樓層／VoiceOver及場地品質仍待回報，#16整體與P4語音／障礙、模型比較／VLM及非LiDAR裝置未完成。
+目前手機試驗版：**[1.8.1+16 單次房間描述試驗](https://github.com/actiondarr/pathguide/releases/tag/v1.8.1%2B16)**已更新安裝及啟動，香港代理已部署；實景及VoiceOver結果待回報，規格及限制見本節。
+
+上一版手機試驗版：**[1.8.0+15 自動錄路／樓層確認工程版](https://github.com/actiondarr/pathguide/releases/tag/v1.8.0%2B15)**。開始後自動選候選，不逐張填表；可明確選目前樓層建立確認點，之後只沿用本段上下文。未知／轉層／OCR矛盾／暫停／背景撤回目前上下文，繼續保留未確認草稿；轉層分入口／出口，站定後可核實同層一段，不能自動確認未知段或設備。結束命名保存固定在底部。516項Flutter、54項原生、analyze及兩軸覆核通過，簽署／簽章／四模型與App程式雜湊已核；分支及不可變tag／prerelease遠端核對後，重連iPhone更新安裝／正常啟動成功，未卸載或清空資料，見[交付收據](../verification/release-receipts/app-1.8.0+15.json)。schema3保留樓層來源，舊App拒讀新來源格式；schema1／2及原有版本保留。真人錄路／樓層／VoiceOver及場地品質仍待回報，#16整體與P4語音／障礙、模型比較／VLM及非LiDAR裝置未完成。
 
 <a id="1-目標目前-app-與原計劃差距"></a>
 
