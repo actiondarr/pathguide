@@ -5,7 +5,7 @@ test('preflight never invokes inference, reads body, exposes credential or retri
  for(const status of [200,401,403,404,429,500]) {
   let calls=0,cancelled=false;
   const result=await probeProvider('private-key',async(url,opts)=>{
-   calls++;assert.equal(url,'https://cn-hongkong.maas.qwencloudapi.com/compatible-mode/v1/models');
+   calls++;assert.equal(url,'https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1/models');
    assert.equal(opts.method,'GET');assert.equal(opts.body,undefined);assert.equal(opts.redirect,'error');
    return {status,body:{cancel:async()=>{cancelled=true;}},json:()=>assert.fail('no body access')};
   });assert.equal(calls,1);assert.equal(cancelled,true);assert.equal(result.httpStatus,status);

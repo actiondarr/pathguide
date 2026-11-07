@@ -24,7 +24,7 @@ function fakeDb() {
 test('one bounded, non-thinking, non-streaming POST; metadata-only measurement',async()=>{
   let calls=0;
   const result=await describe(await request(),{key:'fake-test-key',base:BASE,rates:{input:1,output:2},fetcher:async(url,opts)=>{
-    calls++; assert.equal(url,'https://cn-hongkong.maas.qwencloudapi.com/compatible-mode/v1/chat/completions');
+    calls++; assert.equal(url,'https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1/chat/completions');
     assert.equal(opts.redirect,'error'); assert.ok(opts.signal);
     const body=JSON.parse(opts.body);
     assert.equal(body.model,'qwen3-vl-plus'); assert.equal(body.enable_thinking,false);
@@ -92,7 +92,7 @@ test('abort and deadline terminate the entire response read; no content leaks or
     new Promise((_,reject)=>opts.signal.addEventListener('abort',()=>reject(opts.signal.reason),{once:true}))}),{code:'deadline-exceeded'});
 });
 test('unapproved base/key never sends a request',async()=>{
-  for(const config of [{key:''},{key:'sk-sp-token'},{key:'fake',base:'https://evil.invalid'},{key:'fake',base:'https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1'}]) {
+  for(const config of [{key:''},{key:'sk-sp-token'},{key:'fake',base:'https://evil.invalid'},{key:'fake',base:'https://cn-hongkong.maas.qwencloudapi.com/compatible-mode/v1'}]) {
     await assert.rejects(describe(await request(),{...config,fetcher:()=>assert.fail('network')}),{code:'failed-precondition'});
   }
 });

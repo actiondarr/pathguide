@@ -1,5 +1,7 @@
 # Dataset Review：PathGuide 類別、資料與品質驗收
 
+2026-11-08 Singapore return (source checkpoint; not deployed): user selected the Singapore PAYG key and matching https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1 endpoint. Backend BASE and GET-models probe now share this fixed endpoint; the new source rejects the Hong Kong URL. qwen3-vl-plus, non-thinking, account/App Check guards and all trial limits remain. 25 offline tests passed. Operator must interactively update DASHSCOPE_API_KEY, then deploy only describeScene with matching QWEN_VL_BASE_URL; no key is read or committed. Existing halted ledger, one attempt and USD0.002458 reservation remain; no automatic paid retry or reset. Secret update, deployment and phone scene/Cantonese acceptance remain pending. Phone 1.8.2+17 does not need reinstall for this backend region change. Singapore scope is International, not Singapore-only inference. Button integration remains conditional on successful manual scene/speech acceptance.
+
 更新：2026年11月7日。類別字典維持在前；產品及導航行為見[Frontend整體規格](FRONTEND-DESIGN.zh-HK.md)，服務與交付見[Backend](BACKEND-DESIGN.zh-HK.md)。
 **2026-11-05執行責任更新：使用者已改由Codex直接開發及驗收，取代下方較早的DSH全實作限制。DSH三輪失敗證據保留，不再派模型。Codex相機協調器及lease／一次回覆助手已通過30項獨立工程情境；Vision／Depth／Menu及P2-C原生錄路來源已接入，45項原生Simulator測試、435項Flutter測試及analyze通過。P2-D Flutter入口已接入，1.5.0+9簽署建置通過；已推送不可變tag／prerelease並核對遠端，iPhone安裝及啟動成功；人工／VoiceOver驗收仍待完成。**
 **2026-11-06新增規格：** [已錄路標持續改善規格](https://github.com/actiondarr/pathguide/issues/19)已確認及發布；路標候選加密儲存API已有L1來源檢查點，收集／覆核UI、真正權重訓練及更新閉環仍未接通／驗收。原有A／B、雲端與手機交付狀態不因此升格。
