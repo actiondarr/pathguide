@@ -109,7 +109,7 @@ async function reserve(db, uid, id, now=Date.now(), trial=null) {
     const old = counter.data() || {};
     const trialRef=trial?db.doc(`scene_description_trials/${trial.id}`):null;
     const trialState=trialRef?(await tx.get(trialRef)).data():null;
-    const allocation=trial?trialPolicy.allocate(trialState,id,trial):null;
+    const allocation=trial?trialPolicy.allocate(trialState,id,trial,now):null;
     const day = new Date(now).toISOString().slice(0,10);
     const count = old.day === day ? old.count : 0;
     const ids = old.day === day ? old.ids || [] : [];

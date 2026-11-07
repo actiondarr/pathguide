@@ -17,13 +17,23 @@ function configure(env) {
   const config={id,uid,maxRequests,budgetMicroUsd,reserveMicroUsd:Math.ceil((INPUT_BOUND*2+OUTPUT_BOUND*16)/10)};
   return {...config,fingerprint:createHash('sha256').update(JSON.stringify(config)).digest('hex')};
 }
-function allocate(old, requestId, config) {
+function allocate(old, requestId, config, now=Date.now()) {
   if (old && old.fingerprint!==config.fingerprint) fail('failed-precondition');
   const state=old||{fingerprint:config.fingerprint,count:0,spentMicroUsd:0,ids:[],inFlight:null,halted:false};
   if (!Number.isInteger(state.count) || state.count<0 || !Number.isInteger(state.spentMicroUsd) || state.spentMicroUsd<0 || !Array.isArray(state.ids) || state.ids.length!==state.count || new Set(state.ids).size!==state.ids.length) fail('failed-precondition');
-  if (state.halted || state.inFlight || state.count>=config.maxRequests || state.ids.includes(requestId) ||
+  const recovery=state.recovery;
+  // An administrator may grant one expiring attempt against this exact stopped
+  // balance. Keep the unknown charge and halt; consume the grant atomically.
+  const recover=state.halted===true && recovery?.status==='ready' &&
+    /^[a-z0-9-]{1,80}$/.test(recovery.id||'') &&
+    recovery.baselineCount===state.count && recovery.baselineSpentMicroUsd===state.spentMicroUsd &&
+    recovery.baselineLastStatus===state.lastStatus &&
+    Number.isSafeInteger(recovery.expiresAtMs) && recovery.expiresAtMs>now &&
+    recovery.expiresAtMs<=now+86400000;
+  if ((state.halted && !recover) || state.inFlight || state.count>=config.maxRequests || state.ids.includes(requestId) ||
       state.spentMicroUsd+config.reserveMicroUsd>config.budgetMicroUsd) fail('resource-exhausted');
-  return {...state,count:state.count+1,ids:[...state.ids,requestId],inFlight:requestId,
+  return {...state,...(recover?{recovery:{...recovery,status:'consumed',requestId,consumedAtMs:now}}:{}),
+    count:state.count+1,ids:[...state.ids,requestId],inFlight:requestId,
     reservedMicroUsd:config.reserveMicroUsd,maxRequests:config.maxRequests,budgetMicroUsd:config.budgetMicroUsd};
 }
 async function settle(db, config, requestId, result) {
@@ -37,7 +47,8 @@ async function settle(db, config, requestId, result) {
       usage.prompt_tokens<=INPUT_BOUND && usage.completion_tokens<=OUTPUT_BOUND;
     const charged=known?Math.ceil((usage.prompt_tokens*2+usage.completion_tokens*16)/10):config.reserveMicroUsd;
     tx.set(ref,{...old,inFlight:null,reservedMicroUsd:0,
-      spentMicroUsd:old.spentMicroUsd+charged,halted:!known || charged>config.reserveMicroUsd,
+      spentMicroUsd:old.spentMicroUsd+charged,
+      halted:old.recovery?.status==='consumed' || !known || charged>config.reserveMicroUsd,
       lastStatus:known?result.status:'usage-unknown',notBillingCap:true});
   });
 }

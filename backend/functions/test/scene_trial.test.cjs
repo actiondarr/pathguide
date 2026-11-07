@@ -65,3 +65,42 @@ test('scene-only discovery exports no unrelated service and needs only the Qwen 
  assert.equal(result.status,0,result.stderr);
  const value=JSON.parse(result.stdout.trim());assert.deepEqual(value.names,['describeScene']);assert.deepEqual(value.secrets,['DASHSCOPE_API_KEY']);
 });
+
+function stoppedWithRecovery(now=1000) {
+ const c=cfg();
+ return {...trial.allocate(null,id(1),c,0),inFlight:null,reservedMicroUsd:0,
+  spentMicroUsd:2458,halted:true,lastStatus:'usage-unknown',
+  recovery:{id:'singapore-phone-1',status:'ready',baselineCount:1,
+   baselineSpentMicroUsd:2458,baselineLastStatus:'usage-unknown',expiresAtMs:now+60000}};
+}
+test('one recovery preserves unknown cost/history, wins once under concurrency and stops after known success',async()=>{
+ const db=database(),c=cfg(),now=1000,original=stoppedWithRecovery(now);
+ db.docs.set('scene_description_trials/'+c.id,original);
+ const attempts=await Promise.allSettled([scene.reserve(db,'uid',id(2),now,c),scene.reserve(db,'uid',id(3),now,c)]);
+ assert.equal(attempts.filter(r=>r.status==='fulfilled').length,1);
+ const state=ledger(db);assert.equal(state.count,2);assert.equal(state.spentMicroUsd,2458);
+ assert.equal(state.halted,true);assert.equal(state.recovery.status,'consumed');
+ assert.equal(state.recovery.baselineLastStatus,'usage-unknown');assert.equal(state.ids[0],id(1));
+ await trial.settle(db,c,state.inFlight,result());
+ assert.equal(ledger(db).spentMicroUsd,2510);assert.equal(ledger(db).halted,true);
+ await assert.rejects(scene.reserve(db,'uid',id(4),now+86400000,c),{code:'resource-exhausted'});
+});
+test('expired, reused, malformed or stale recovery grants cannot bypass stop or the remaining budget',()=>{
+ const c=cfg(),now=1000,old=stoppedWithRecovery(now);
+ for(const change of [{status:'consumed'},{id:'../invalid'},{expiresAtMs:now},
+  {expiresAtMs:now+86400001},{baselineCount:0},{baselineSpentMicroUsd:0},
+  {baselineLastStatus:'complete'}]) {
+  assert.throws(()=>trial.allocate({...old,recovery:{...old.recovery,...change}},id(2),c,now),{code:'resource-exhausted'});
+ }
+ for(const changed of [{inFlight:id(1)},{spentMicroUsd:9000,recovery:{...old.recovery,baselineSpentMicroUsd:9000}}])
+  assert.throws(()=>trial.allocate({...old,...changed},id(2),c,now),{code:'resource-exhausted'});
+ assert.throws(()=>trial.allocate(old,id(1),c,now),{code:'resource-exhausted'});
+});
+test('failed recovered inference retains both conservative charges and cannot retry',async()=>{
+ const db=database(),c=cfg(),now=1000;
+ db.docs.set('scene_description_trials/'+c.id,stoppedWithRecovery(now));
+ await scene.reserve(db,'uid',id(2),now,c);await trial.settle(db,c,id(2),null);
+ assert.equal(ledger(db).spentMicroUsd,4916);assert.equal(ledger(db).count,2);
+ assert.equal(ledger(db).lastStatus,'usage-unknown');assert.equal(ledger(db).halted,true);
+ await assert.rejects(scene.reserve(db,'uid',id(3),now+46000,c),{code:'resource-exhausted'});
+});
