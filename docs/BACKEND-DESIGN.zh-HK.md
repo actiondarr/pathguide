@@ -86,7 +86,7 @@ Colab在本次明確授權後掛載Drive，固定run `20261030T162638Z`已完成
 
 後端將有效JPEG縮至長邊512，再固定max_pixels=262144、vl_high_resolution_images=false、max_tokens=512及不thinking。按[官方Qwen3-VL像素說明](https://docs.qwencloud.com/developer-guides/multimodal/vision)及[香港價格](https://www.alibabacloud.com/help/en/model-studio/model-pricing)，使用8192 input-token保守工程預留及512 output，0.2／1.6 USD每百萬token，每次預留2458 micro-USD；收到有效usage以整數向上取整結算並釋放差額。這是程式的估算停止策略，不能保證供應商帳單硬上限；費率／供應商額外token或延遲記帳異常須停測核對。預算可能令測試不足20次；Firebase費用另計，不宣稱包含在US$0.01。
 
-新增SCENE_TRIAL_ID／SCENE_TRIAL_UID／SCENE_TRIAL_MAX_REQUESTS=20／SCENE_TRIAL_BUDGET_MICRO_USD=10000；啟用代理但缺少試驗設定會拒絕，不退回無限制模式。既有歷史CLI不受此手機試驗帳本保護，不用它另發付費請求。Firebase Secret已由使用者設定；Cloud Functions API初查未啟用，部署時按既有流程處理，僅部署describeScene，不發布其他未提交服務。工程／部署及手機狀態見[本輪證據](../verification/scene-trial-20261108.json)。
+新增SCENE_TRIAL_ID／SCENE_TRIAL_UID／SCENE_TRIAL_MAX_REQUESTS=20／SCENE_TRIAL_BUDGET_MICRO_USD=10000；啟用代理但缺少試驗設定會拒絕，不退回無限制模式。既有歷史CLI不受此手機試驗帳本保護，不用它另發付費請求。Firebase Secret已由使用者設定；Cloud Functions API初查未啟用，部署時按既有流程處理，僅部署describeScene，不發布其他未提交服務。Firebase CLI首次發現會要求非目標Routes Secret，故package.main改用function_entry.js，以SCENE_DESCRIPTION_DEPLOY_ONLY=true選取scene_entry.js；正常入口仍沿用index.js，兩入口共用scene_function.js同一實作。隔離入口只發現describeScene及DASHSCOPE_API_KEY，已用子程序測試核對，不新增Google Routes Key或另一個服務。工程／部署及手機狀態見[本輪證據](../verification/scene-trial-20261108.json)。
 
 
 ### 路線錄製／跨樓層步行導航的本機契約與選填雲端（P0／P1本機已驗；真實整合待實作）

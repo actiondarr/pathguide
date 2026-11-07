@@ -14,11 +14,19 @@
     "flutter_analyze": "pass",
     "native_simulator_passed_cases": 53,
     "native_xcodebuild": "TEST SUCCEEDED",
-    "backend_scoped_tests": 21,
+    "backend_scoped_tests": 22,
     "backend_all_local_tests": 38,
     "signed_ios_build": "pass",
     "codesign_deep_strict": "pass",
-    "live_firestore_check": "initial check reached 20 persisted attempts but final rejection check hit local ECONNRESET; rerun in progress, not a complete pass claimed"
+    "live_firestore_check": {
+      "status": "passed rerun",
+      "concurrentWinners": 1,
+      "persistedAttempts": 20,
+      "twentyFirst": "blocked",
+      "providerRequests": 0,
+      "syntheticFixtureCleanup": "completed"
+    },
+    "isolated_backend_all_tests": 33
   },
   "trial": {
     "persistent_count": true,
@@ -50,5 +58,6 @@
     "app/assets/models/detector.json": "172db9ff4f637fd4d6188a736d436533577a9ca015775961cdb0bb637f2ed327",
     "app/assets/models/detector.tflite": "a6366b71e3bd8c2cc1adff8e8777dac03b08f1dbbefd67422bddcfed42a2a4a0"
   },
-  "review": "Implementing-agent review of scope, fixed endpoint, identity guard, transactional trial reservation, conservative cost accounting, fail-closed errors, cancellation and no-frame startup; not independent review."
+  "review": "Implementing-agent review of scope, fixed endpoint, identity guard, transactional trial reservation, conservative cost accounting, fail-closed errors, cancellation and no-frame startup; not independent review.",
+  "deployment_entry": "SCENE_DESCRIPTION_DEPLOY_ONLY=true selects only describeScene and its Qwen secret; normal backend entry preserved"
 }

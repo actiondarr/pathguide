@@ -59,3 +59,9 @@ test('trial handler counts rejected/failed attempts and halts on indeterminate p
  let calls=0;await assert.rejects(scene.handle(request,{db,enabled:true,trial:c,key:()=> 'mock',rates:{input:0.2,output:1.6},fetcher:async()=>{calls++;throw Error('network error');}}),{code:'unavailable'});
  assert.equal(calls,1);assert.equal(ledger(db).count,1);assert.equal(ledger(db).halted,true);
 });
+test('scene-only discovery exports no unrelated service and needs only the Qwen secret',()=>{
+ const {spawnSync}=require('node:child_process');
+ const result=spawnSync(process.execPath,['-e',"const f=require('./'); const e=f.describeScene.__endpoint; console.log(JSON.stringify({names:Object.keys(f),secrets:e.secretEnvironmentVariables?.map(v=>v.key)}));"],{cwd:require('node:path').join(__dirname,'..'),env:{...process.env,SCENE_DESCRIPTION_DEPLOY_ONLY:'true',FIREBASE_CONFIG:JSON.stringify({projectId:'demo-pathguide-scene',storageBucket:'demo-pathguide-scene.appspot.com'})},encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);
+ const value=JSON.parse(result.stdout.trim());assert.deepEqual(value.names,['describeScene']);assert.deepEqual(value.secrets,['DASHSCOPE_API_KEY']);
+});
