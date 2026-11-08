@@ -11,6 +11,33 @@ import UIKit
 import XCTest
 
 class RunnerTests: XCTestCase {
+  func testLiveScenePreparationAcknowledgementMatchesOwnedCameraAndRelease() {
+    let plugin = VisionPlugin(messenger: NavigationTestMessenger(), cameraAuthorizationStatus: { .authorized },
+      cameraCoordinator: CameraCoordinator(), captureStart: { true }, captureStop: {})
+    let started = expectation(description: "vision owns camera")
+    plugin.handle(FlutterMethodCall(methodName: "startPreview", arguments: nil)) { value in
+      XCTAssertEqual((value as? [String: Any])?["started"] as? Bool, true); started.fulfill()
+    }
+    wait(for: [started], timeout: 5)
+    let enabled = expectation(description: "scene enabled and acknowledged")
+    plugin.handle(FlutterMethodCall(methodName: "setSceneObservation", arguments: ["enabled": true])) { value in
+      XCTAssertNil(value)
+      plugin.handle(FlutterMethodCall(methodName: "status", arguments: nil)) { state in
+        XCTAssertEqual((state as? [String: Any])?["sceneObservationEnabled"] as? Bool, true)
+        enabled.fulfill()
+      }
+    }
+    wait(for: [enabled], timeout: 5)
+    let released = expectation(description: "release clears scene state")
+    plugin.release { _ in
+      plugin.handle(FlutterMethodCall(methodName: "status", arguments: nil)) { state in
+        XCTAssertEqual((state as? [String: Any])?["sceneObservationEnabled"] as? Bool, false)
+        released.fulfill()
+      }
+    }
+    wait(for: [released], timeout: 5)
+  }
+
   func testLiveSceneCannotEnableMotionWithoutOwningTheCamera() {
     let plugin = VisionPlugin(messenger: NavigationTestMessenger(), cameraCoordinator: CameraCoordinator())
     var replies = 0

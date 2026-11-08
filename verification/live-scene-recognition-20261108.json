@@ -36,7 +36,7 @@
   },
   "provider": "existing Singapore fixed URL / Secret 2; no backend source or deployment change",
   "ledger": "count 2, spentMicroUsd 2593 incl original unknown reservation 2458, halted; no reset",
-  "phoneAcceptance": "waiting for user: automatic stable-scene capture, Cantonese and continued local detection in integrated page",
+  "phoneAcceptance": "FAILED on 1.9.0+18: user reports no trigger/disabled controls; screenshot confirms active vision preview, both scene controls disabled, generic paused status; paid attempts remain 2. Preparation recovery candidate tracked separately.",
   "paidInferenceRequestsByAgent": 0,
   "review": "Implementing-agent review; no independent review. Checked camera borrowing, encoder epoch/deadline, stale motion/frame rejection, cancellation, speech priority, bounded attempts and unchanged server ledger. Parameters uncalibrated on handset.",
   "release": {
@@ -74,5 +74,6 @@
     "recoveryStatus": "ready",
     "recoveryExpiresAtUtc": "2026-11-08T20:51:10.082Z",
     "paidInferenceRequestsByAgent": 0
-  }
+  },
+  "followupEvidence": "live-scene-preparation-20261108.json"
 }

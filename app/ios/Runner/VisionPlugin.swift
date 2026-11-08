@@ -651,6 +651,10 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private func statusSnapshot() -> [String: Any] {
     [
       "ready": interpreter != nil,
+      "sceneObservationEnabled": sceneObservation,
+      "sceneMotionAvailable": sceneMotion.isDeviceMotionAvailable,
+      "sceneMotionActive": sceneMotion.isDeviceMotionActive,
+      "sceneSignalSequence": sceneSequence,
       "modelPath": modelPath ?? NSNull(),
       "inputSize": inputSize,
       "classes": modelClassCount,

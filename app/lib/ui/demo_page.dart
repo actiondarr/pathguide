@@ -12,7 +12,13 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsService;
 import 'package:flutter/services.dart'
-    show Clipboard, ClipboardData, rootBundle, MethodChannel;
+    show
+        Clipboard,
+        ClipboardData,
+        rootBundle,
+        MethodChannel,
+        PlatformException,
+        MissingPluginException;
 
 import '../overlay/box_painter.dart';
 import '../settings/app_settings.dart';
@@ -99,6 +105,44 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   void _sceneChanged() {
     if (mounted) setState(() {});
+  }
+
+  bool _preparingScene = false;
+  Future<void> _prepareScene() async {
+    if (_preparingScene ||
+        !_sceneFeature ||
+        !_active ||
+        !_requestedRunning ||
+        !_sourceReady ||
+        _controlsOpen) {
+      return;
+    }
+    final source = _source, generation = _sourceGeneration;
+    if (source is! PlatformVision) return;
+    _preparingScene = true;
+    try {
+      await source.setSceneObservation(true);
+      if (_isCurrent(generation) && identical(source, _source)) {
+        _scene.setAvailable(true);
+      }
+    } catch (error) {
+      if (!_isCurrent(generation) || !identical(source, _source)) return;
+      final code = error is PlatformException
+          ? error.code
+          : error is MissingPluginException
+          ? 'missing_plugin'
+          : error is TimeoutException
+          ? 'timeout'
+          : error is TypeError
+          ? 'type_error'
+          : error is StateError
+          ? 'state_error'
+          : 'unexpected';
+      _scene.preparationFailed(code);
+    } finally {
+      _preparingScene = false;
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _startScene({required bool automatic}) async {
@@ -559,13 +603,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       if (_sceneFeature &&
           mode == SourceMode.camera &&
           source is PlatformVision) {
-        try {
-          await source.setSceneObservation(true);
-          if (!_isCurrent(generation)) return;
-          _scene.setAvailable(true);
-        } catch (_) {
-          _scene.setAvailable(false);
-        }
+        await _prepareScene();
       }
       await _announcePendingStatus();
       if (!_isCurrent(generation)) return;
@@ -977,10 +1015,26 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                                 }
                               : null,
                         ),
+                        if (!_scene.available &&
+                            _sourceReady &&
+                            _requestedRunning &&
+                            _mode == SourceMode.camera)
+                          OutlinedButton(
+                            key: const ValueKey('live-scene-prepare'),
+                            onPressed: _preparingScene ? null : _prepareScene,
+                            child: Text(
+                              _preparingScene ? '正在準備場景分析…' : '重試場景準備',
+                            ),
+                          ),
                         Text(
                           _scene.status,
                           key: const ValueKey('live-scene-status'),
                         ),
+                        if (_scene.preparationCode != null)
+                          ExpansionTile(
+                            title: const Text('場景準備資料'),
+                            children: [Text('初始化狀態：${_scene.preparationCode}')],
+                          ),
                         if (_scene.text != null)
                           Text(
                             _scene.text!,

@@ -412,10 +412,17 @@ class PlatformVision implements VisionSource {
 
   /// Borrow the active iOS camera; never acquires another camera lease.
   Future<void> setSceneObservation(bool enabled) async {
-    if (!_disposed && _ready) {
-      await _method.invokeMethod<void>(VisionMethods.setSceneObservation, {
-        'enabled': enabled,
-      });
+    if (_disposed || !_ready) throw PlatformException(code: 'not_ready');
+    await _method
+        .invokeMethod<Object?>(VisionMethods.setSceneObservation, {
+          'enabled': enabled,
+        })
+        .timeout(const Duration(seconds: 3));
+    final state = await _method
+        .invokeMapMethod<String, dynamic>(VisionMethods.status)
+        .timeout(const Duration(seconds: 3));
+    if (state?['sceneObservationEnabled'] != enabled) {
+      throw PlatformException(code: 'scene_not_connected');
     }
   }
 

@@ -23,6 +23,8 @@ void main() {
   final speechCalls = <MethodCall>[];
   var failSpeechSetup = false;
   var denyCamera = false;
+  var scenePreparationFailures = 0;
+  var sceneObservationEnabled = false;
   Completer<Object?>? pendingCamera;
   var speechLanguages = <String>['zh-HK', 'yue-HK'];
   Completer<Object?>? speechSetup;
@@ -35,6 +37,8 @@ void main() {
     speechCalls.clear();
     failSpeechSetup = false;
     denyCamera = false;
+    scenePreparationFailures = 0;
+    sceneObservationEnabled = false;
     pendingCamera = null;
     rootBundle.evict('assets/models/detector.json');
     rootBundle.evict('assets/models/detector.tflite');
@@ -76,6 +80,13 @@ void main() {
         if (call.method == 'loadModel') {
           loadedModels.add(Map<Object?, Object?>.from(call.arguments as Map));
         }
+        if (call.method == 'setSceneObservation') {
+          if (scenePreparationFailures > 0) {
+            scenePreparationFailures--;
+            throw PlatformException(code: 'not_running');
+          }
+          sceneObservationEnabled = (call.arguments as Map)['enabled'] == true;
+        }
         if (call.method == 'startPreview') {
           if (denyCamera) throw PlatformException(code: 'camera_denied');
           if (pendingCamera != null) return pendingCamera!.future;
@@ -94,7 +105,10 @@ void main() {
                 : 10,
             'inputSize': 640,
           },
-          'status' => <String, Object>{'ready': true},
+          'status' => <String, Object>{
+            'ready': true,
+            'sceneObservationEnabled': sceneObservationEnabled,
+          },
           'captureSceneFrame' => Uint8List.fromList([1]),
           _ => null,
         };
@@ -266,6 +280,44 @@ void main() {
       expect(visionCalls, isNot(contains('startPreview')));
       await close(tester);
     },
+  );
+
+  testWidgets(
+    'scene preparation failure is actionable; retry connects existing camera without photo or paid request',
+    (tester) async {
+      scenePreparationFailures = 1;
+      await start(tester, initialSection: AppSection.explore);
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .onChanged,
+        isNull,
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('live-scene-prepare')),
+      );
+      await tester.tap(find.byKey(const ValueKey('live-scene-prepare')));
+      await tester.pumpAndSettle();
+      expect(
+        visionCalls.where((v) => v == 'setSceneObservation'),
+        hasLength(2),
+      );
+      expect(visionCalls.where((v) => v == 'startPreview'), hasLength(1));
+      expect(visionCalls.where((v) => v == 'captureSceneFrame'), isEmpty);
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .onChanged,
+        isNotNull,
+      );
+      expect(find.byKey(const ValueKey('live-scene-prepare')), findsNothing);
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
   );
 
   testWidgets(

@@ -31,6 +31,7 @@ class LiveSceneController extends ChangeNotifier {
       _disposed = false;
   int attempts = 0, _generation = 0;
   String status = '場景分析未啟用', failure = '';
+  String? preparationCode;
   String? text;
   SceneMetrics? metrics;
   double estimatedUsd = 0;
@@ -65,6 +66,7 @@ class LiveSceneController extends ChangeNotifier {
   void setAvailable(bool value) {
     if (_disposed) return;
     available = value;
+    if (value) preparationCode = null;
     if (!value) {
       automatic = false;
       _latest = _stable = _baseline = null;
@@ -76,6 +78,18 @@ class LiveSceneController extends ChangeNotifier {
     } else {
       status = '保持手機穩定，準備場景分析。';
     }
+    _notify();
+  }
+
+  void preparationFailed(String code) {
+    setAvailable(false);
+    preparationCode = code;
+    status = switch (code) {
+      'not_running' || 'not_ready' => '場景取相尚未接上辨識相機，請按「重試場景準備」。',
+      'missing_plugin' => '場景相機介面尚未接通，請按「重試場景準備」。',
+      'timeout' => '場景準備逾時，請按「重試場景準備」。',
+      _ => '場景準備未完成，請按「重試場景準備」。',
+    };
     _notify();
   }
 
