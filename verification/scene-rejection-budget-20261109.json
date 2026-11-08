@@ -67,7 +67,7 @@
     "Keep latest three numerical/categorical server results across subsequent reservations and app restarts; never text/photo/observations",
     "Allowlisted rejection detail: JSON/sentences/observation shape, category, position, detail, duplicates, content or truncation",
     "Server-owned overview/update JSON examples and at most three requested observations; validation still caps six and rejects whole unsafe/malformed output",
-    "Owner explicitly changed total estimated allowance to USD0.50, max50 unchanged; ledger amendment remains pending installation"
+    "Owner-approved USD0.50 total / cumulative max50; updateTime CAS amended fingerprint and budget, appended audit history, and preserved all usage/unknown history and original window"
   ],
   "checks": {
     "flutterDefault": {
@@ -123,8 +123,33 @@
     "noUsageReset": true,
     "expiryUnchanged": true
   },
-  "ledgerAmendment": "Pending audited CAS after verified phone installation; old ledger budget10000 and fingerprint preserved, new config fails closed until amendment",
-  "phoneInstall": "Pending source/tag/prerelease checkpoint",
+  "ledgerAmendment": {
+    "checkedAtUtc": "2026-11-08T16:42:28.052Z",
+    "version": "1.10.1+25",
+    "oldBudgetMicroUsd": 10000,
+    "newBudgetMicroUsd": 500000,
+    "additionalAllowanceMicroUsd": 490000,
+    "maxRequests": 50,
+    "trialCount": 16,
+    "spentMicroUsd": 7861,
+    "nominalRemaining": 34,
+    "windowExpiresAtUtc": "2026-11-09T04:06:25.443Z",
+    "windowUnchanged": true,
+    "originalCountCostIdsUnknownHistoryUnchanged": true,
+    "paidInferenceRequestsByAgent": 0,
+    "applied": true,
+    "allowanceHistoryAppended": true
+  },
+  "phoneInstall": {
+    "bundleIdentifier": "hk.pathguide.pathguide",
+    "version": "1.10.1",
+    "bundleVersion": "25",
+    "independentInventoryVerified": true,
+    "installedInPlace": true,
+    "dataCleared": false,
+    "normalLaunchSucceeded": true,
+    "humanAcceptance": "New diagnostics/format reproduction pending"
+  },
   "paidInferenceRequestsByAgent": 0,
   "limitations": [
     "Exact older format rejection cannot be reconstructed",
@@ -133,5 +158,62 @@
     "Room trial and content/latency/missed/repeated/stale speech/VoiceOver still need human testing",
     "Private debug App Check package; no binary uploaded",
     "Estimated stop policy is not provider invoice cap; Firebase costs separate"
-  ]
+  ],
+  "release": {
+    "tag": "v1.10.1+25",
+    "sourceCommit": "7525a486d442d30673f15f50c591072fbf9d28d5",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.10.1%2B25",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  },
+  "finalAllowanceState": {
+    "state": "ACTIVE",
+    "entryPoint": "describeScene",
+    "timeoutSeconds": 40,
+    "maxInstances": 2,
+    "checkedAtUtc": "2026-11-08T16:43:11.162Z",
+    "deploymentUpdateTime": "2026-11-08T16:35:15.382413860Z",
+    "region": "asia-east2",
+    "secretVersion": "2",
+    "providerRegion": "Singapore",
+    "selectedAccountVerified": true,
+    "maxRequests": 50,
+    "budgetMicroUsd": 500000,
+    "paidInferenceRequestsByAgent": 0,
+    "trialCount": 16,
+    "spentMicroUsd": 7861,
+    "halted": true,
+    "inFlight": false,
+    "lastStatus": "complete",
+    "recoveryStatus": "consumed",
+    "windowStatus": "ready",
+    "windowExpiresAtMs": 1794197185443,
+    "windowExpired": false,
+    "windowMaxCount": 50,
+    "nominalRemaining": 34,
+    "nextRequestReserveMicroUsd": 2458,
+    "nextRequestFitsBudget": true,
+    "configuredFingerprintMatches": true,
+    "stopReason": null,
+    "lastResult": {
+      "metrics": {
+        "usage": {
+          "completion_tokens": 263,
+          "prompt_tokens": 410,
+          "total_tokens": 673
+        },
+        "estimate": {
+          "usd": 0.0005028,
+          "notBillingCap": true,
+          "inputUsdPerMillion": 0.2,
+          "outputUsdPerMillion": 1.6
+        },
+        "modelMs": 9106
+      },
+      "requestId": "3ccf8f1f5bf1a29704b80c2b7a916e9a",
+      "status": "complete"
+    },
+    "rateGuardRemainingMs": 0,
+    "dailyCount": 14
+  }
 }

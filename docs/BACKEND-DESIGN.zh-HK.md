@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-09場景診斷／US$0.50已交付：1.10.1+25來源7525a48，不可變tag／GitHub prerelease先核遠端，再原位更新、獨立清單核1.10.1／build25及正常啟動，未卸載或清資料。依使用者「總預算$0.5」（前文美元並已回覆確認）以updateTime CAS只改fingerprint、budgetMicroUsd及追加allowanceHistory；逐欄核對原16次／7861 microUSD、IDs、未知歷史、consumed recovery、halted、無inFlight與原window完全保留。總額10000→500000 microUSD、累計仍50；讀回fingerprint相符、下一次2458預留足夠、無停止原因，窗口ready，名義餘34次，香港時間2026-11-09 12:06:25到期不變。代理沒有付費推理。停止原因／重入安全歷史可在新版複驗；較早格式拒絕已無原紀錄，例子／精簡觀察未獲真人證明根治，3–5秒／內容／VoiceOver仍待驗收。見[交付及額度證據](../verification/scene-rejection-budget-20261109.json)及[版本收據](../verification/release-receipts/app-1.10.1+25.json)。
+
 2026-11-09格式拒絕與預算停止修補候選1.10.1+25：使用者回報1.10.0+24頭幾個轉換場景成功播音，但間歇格式受限；刷新後舊本機紀錄已失，後端只餘最後一次complete，不能還原較早格式細項。實讀帳本16次／7861 microUSD，無inFlight、窗口未到期、次數未到50；7861＋下一次保守預留2458＞原10000，重入停止確定為預算預留不足，不是重新入App令許可消失。最後一個模型9106ms，不能當3–5秒達標。新版分開預算、次數、到期、在途等停止原因；進頁只讀安全狀態、不取相／扣試驗／呼叫模型，轉動／過期／重接不蓋過預算提示。後端保留最近三個安全結果並跨下一次reserve保留，回傳固定格式細項，不留照片／描述／觀察原文；prompt加首次／更新JSON例子並要求最多三項重點，原最多六項、句數與內容驗證保留，拒絕率改善尚未證明。使用者明確改總額為US$0.50，累計仍50、到期不變；後端500000 microUSD設定及來源SHA已核，舊16次／7861及10000帳本先保留，待版本核對及裝機後審計CAS。591項Flutter／7項flag-off略過、flag-on相關98、後端44、analyze、私人Profile／deep strict簽章與四模型SHA通過，Swift未改；真人品質、格式複現及VoiceOver待驗。見[本輪證據](../verification/scene-rejection-budget-20261109.json)。
 
 2026-11-09場景模式已交付真機試驗：1.10.0+24來源624b0e4，不可變v1.10.0+24 tag及GitHub prerelease先核遠端；iOS首次因鎖屏拒絕，使用者解鎖後原位更新，獨立裝置清單確認1.10.0／build24及正常啟動，未卸載或清資料。以updateTime CAS只改fingerprint、maxRequests、追加allowanceHistory及window；逐欄核對原7次／3483 microUSD、request IDs、未知歷史、consumed recovery、halted與無inFlight保留。累計上限由20增至50，名義餘43次，估算US$0.01不加額，下一次預留2458 microUSD；12小時連續許可ready，香港時間2026-11-09 12:06:25到期，費用可令次數提早停止，任何新未知用量再次受限。代理無付費推理。先在房間開「環境變化時自動描述」測首次兩至三句及走動／轉向後一句更新；3–5秒、至少十重要變化九次五秒內、內容及VoiceOver均待真人驗收，不以裝機代替。見[模式工程及許可證據](../verification/scene-mode-implementation-20261109.json)及[交付收據](../verification/release-receipts/app-1.10.0+24.json)。
@@ -83,7 +85,7 @@
 <a id="service-state"></a>
 ## 2. 現況與已確認限制
 
-目前場景描述狀態（2026-11-09）：1.10.0+24已獲使用者確認初次幾個場景有語音，但間歇格式拒絕仍待複現，不能宣稱整體走動品質或3–5秒通過。1.10.1+25已完成停止原因、進頁只讀狀態、最近三次伺服器安全歷史及格式細項修補，後端已部署核SHA，私人建置／檢查通過，發佈核對及裝機待完成。16次／7861 microUSD舊帳本與未知歷史保留；使用者已同意總額US$0.50、累計50及原到期不變，部署設定已500000，但帳本仍10000，待裝機後CAS修訂前維持拒絕新分析。格式拒絕原因舊紀錄已失，prompt例子及精簡觀察效果須真人複驗；正式單開關、Android及導航內入口未新增。詳見[本輪證據](../verification/scene-rejection-budget-20261109.json)。
+目前場景描述狀態（2026-11-09）：1.10.1+25已在來源7525a48／不可變tag及prerelease核對後原位裝機，獨立讀回1.10.1／25並正常啟動，後端核SHA。進頁只讀限制與最近三次安全結果，不取相／呼叫模型／扣試驗；預算預留不足、次數、到期等原因分開，轉動或來源失效不蓋過已知預算提示。使用者批准總額US$0.50；CAS已保留16次／7861 microUSD、IDs及未知歷史，帳本與設定fingerprint一致，累計50、名義餘34，香港時間2026-11-09 12:06:25到期，下一次預留足夠。1.10.0+24曾幾景真人有聲，但間歇格式拒絕原因舊紀錄已失，1.10.1的例子／精簡觀察效果、房間內容、3–5秒及VoiceOver待真人複驗；正式單開關、Android及導航內入口未新增。詳見[本輪證據](../verification/scene-rejection-budget-20261109.json)。
 
 <a id="1-已有程式與缺口"></a>
 
@@ -555,7 +557,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
 | B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生及analyze通過，手機實測未完成 ；#18樓層證據／必要確認已有516項Flutter工程候選，1.8.0+15已交付，真人複測待完成| 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接；選填路標訓練另立用途／快照／model-index交付，見持續改善契約；未接通 | F17；P3-C已接真相機／本機閉環，下一步真人實測及P4障礙／語音，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
-| B17 Qwen場景描述／S1 | v2診斷修補及US$0.50設定已部署核SHA；16次／7861 microUSD舊帳本仍10000，裝機後CAS待完成；格式舊紀錄已失 | Auth／App Check／active帳戶→只讀limits及最近3安全結果；推理另經跨日預留→當前有界JPEG→完整驗證→數值／固定原因，reserve保留歷史，不儲存照片／描述／觀察 | CAS只修fingerprint／budgetMicroUsd／追加allowanceHistory；count／cost／IDs／未知歷史及窗口不變；累計50、一在途、新未知用量停；模型9.1秒非3–5秒達標，真人格式及品質仍待驗 |
+| B17 Qwen場景描述／S1 | v2診斷／US$0.50已部署核SHA；1.10.1+25已裝機；CAS保留16次／7861 microUSD、IDs及未知歷史，fingerprint相符、下一次預留足夠，原窗口ready | Auth／App Check／active帳戶→只讀limits及最近3安全結果；推理另經跨日預留→當前有界JPEG→完整驗證→數值／固定原因，reserve保留歷史，不儲存照片／描述／觀察 | CAS只修fingerprint／budgetMicroUsd／追加allowanceHistory；累計50及到期不變、一在途、新未知用量停；舊格式拒絕無法還原，模型9.1秒非3–5秒達標，品質待真人複驗 |
 
 管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
 
