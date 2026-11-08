@@ -53,14 +53,19 @@ class PlatformVision implements VisionSource {
   PlatformVision({
     MethodChannel? method,
     EventChannel? events,
+    EventChannel? sceneEvents,
     this.rotationDegrees = 90,
     this.modelAssetKey = defaultModelAssetKey,
     this.modelManifestKey = defaultModelManifestKey,
   }) : _method = method ?? const MethodChannel(kVisionChannel),
-       _events = events ?? const EventChannel(kFrameChannel);
+       _events = events ?? const EventChannel(kFrameChannel),
+       _sceneEvents = sceneEvents ?? const EventChannel(kSceneChannel);
 
   final MethodChannel _method;
   final EventChannel _events;
+  final EventChannel _sceneEvents;
+  int? _sceneEpoch;
+  Stream<LiveSceneUpdate>? _sceneUpdates;
   final String modelAssetKey;
   final String modelManifestKey;
 
@@ -399,6 +404,7 @@ class PlatformVision implements VisionSource {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    _sceneEpoch = null;
     _ready = false;
     try {
       await _method.invokeMethod<void>(VisionMethods.release);
@@ -413,18 +419,27 @@ class PlatformVision implements VisionSource {
   /// Borrow the active iOS camera; never acquires another camera lease.
   Future<void> setSceneObservation(bool enabled) async {
     if (_disposed || !_ready) throw PlatformException(code: 'not_ready');
-    await _method
-        .invokeMethod<Object?>(VisionMethods.setSceneObservation, {
+    final state = await _method
+        .invokeMapMethod<String, dynamic>(VisionMethods.setSceneObservation, {
           'enabled': enabled,
         })
         .timeout(const Duration(seconds: 3));
-    final state = await _method
-        .invokeMapMethod<String, dynamic>(VisionMethods.status)
-        .timeout(const Duration(seconds: 3));
-    if (state?['sceneObservationEnabled'] != enabled) {
+    if (_disposed || state?['enabled'] != enabled || state?['epoch'] is! int) {
       throw PlatformException(code: 'scene_not_connected');
     }
+    _sceneEpoch = enabled ? state!['epoch'] as int : null;
   }
+
+  Stream<LiveSceneUpdate> get sceneUpdates => _sceneUpdates ??= _sceneEvents
+      .receiveBroadcastStream()
+      .where(
+        (event) =>
+            !_disposed &&
+            _sceneEpoch != null &&
+            event is Map &&
+            event['epoch'] == _sceneEpoch,
+      )
+      .map((event) => LiveSceneUpdate.parse(event as Map));
 
   Future<Uint8List?> captureSceneFrame() async {
     if (_disposed || !_ready) return null;

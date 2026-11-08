@@ -11,6 +11,35 @@ import UIKit
 import XCTest
 
 class RunnerTests: XCTestCase {
+  func testSceneControlAndJpegStayResponsiveWhileRecognitionIsBlocked() throws {
+    let entered = expectation(description: "recognition blocked"), unblock = DispatchSemaphore(value: 0)
+    let plugin = VisionPlugin(messenger: NavigationTestMessenger(), cameraAuthorizationStatus: { .authorized },
+      cameraCoordinator: CameraCoordinator(), captureStart: { true }, captureStop: {}, motionAvailability: { false },
+      recognitionWork: { _ in entered.fulfill(); _ = unblock.wait(timeout: .now() + 10) })
+    defer { unblock.signal() }
+    let started = expectation(description: "camera owned")
+    plugin.handle(FlutterMethodCall(methodName: "startPreview", arguments: nil)) { _ in started.fulfill() }
+    wait(for: [started], timeout: 3)
+    let pixels = try routePixels()
+    plugin.enqueueCameraFrame(pixels)
+    wait(for: [entered], timeout: 3)
+    let enabled = expectation(description: "control ack bypasses blocked model")
+    plugin.handle(FlutterMethodCall(methodName: "setSceneObservation", arguments: ["enabled": true])) { value in
+      XCTAssertEqual((value as? [String: Any])?["enabled"] as? Bool, true); enabled.fulfill()
+    }
+    wait(for: [enabled], timeout: 1)
+    let jpeg = expectation(description: "photo bypasses blocked model")
+    plugin.handle(FlutterMethodCall(methodName: "captureSceneFrame", arguments: nil)) { value in
+      XCTAssertNotNil(value as? FlutterStandardTypedData); jpeg.fulfill()
+    }
+    plugin.enqueueCameraFrame(pixels)
+    wait(for: [jpeg], timeout: 2)
+    unblock.signal()
+    let released = expectation(description: "stop drains both queues")
+    plugin.release { _ in released.fulfill() }
+    wait(for: [released], timeout: 3)
+  }
+
   func testLiveScenePreparationAcknowledgementMatchesOwnedCameraAndRelease() {
     let plugin = VisionPlugin(messenger: NavigationTestMessenger(), cameraAuthorizationStatus: { .authorized },
       cameraCoordinator: CameraCoordinator(), captureStart: { true }, captureStop: {})
@@ -21,7 +50,8 @@ class RunnerTests: XCTestCase {
     wait(for: [started], timeout: 5)
     let enabled = expectation(description: "scene enabled and acknowledged")
     plugin.handle(FlutterMethodCall(methodName: "setSceneObservation", arguments: ["enabled": true])) { value in
-      XCTAssertNil(value)
+      XCTAssertEqual((value as? [String: Any])?["enabled"] as? Bool, true)
+      XCTAssertNotNil((value as? [String: Any])?["epoch"] as? Int)
       plugin.handle(FlutterMethodCall(methodName: "status", arguments: nil)) { state in
         XCTAssertEqual((state as? [String: Any])?["sceneObservationEnabled"] as? Bool, true)
         enabled.fulfill()

@@ -25,7 +25,7 @@
   },
   "safety": "Engineering thresholds pending handheld calibration; cancellation/background/expiry, one in flight, server ledger/budget and no automatic paid retry unchanged.",
   "paidInferenceRequestsByAgent": 0,
-  "phoneAcceptance": "pending user handheld rerun",
+  "phoneAcceptance": "NOT ACCEPTED: user reports consent then no text/audio; re-entry preparation timeout. A backend complete request on old version did not establish client delivery.",
   "review": "Implementing-agent review; no independent review; test movement, encoding race, stale/turn cancellation, no-capture timeout and existing UI/standalone/speech regression.",
   "release": {
     "tag": "v1.9.2+20",
@@ -34,5 +34,66 @@
     "remoteTagAndPrereleaseVerifiedBeforeInstall": true,
     "privateBinaryUploaded": false
   },
-  "phoneInstall": "1.9.2+20 installed; independent inventory version/build and normal launch verified; no uninstall/data clear"
+  "phoneInstall": "1.9.2+20 installed; independent inventory version/build and normal launch verified; no uninstall/data clear",
+  "backendAfterUserAttempt": {
+    "trialCount": 3,
+    "spentMicroUsd": 2764,
+    "halted": true,
+    "inFlight": false,
+    "lastStatus": "complete",
+    "recoveryStatus": "consumed",
+    "lastResult": {
+      "mapValue": {
+        "fields": {
+          "status": {
+            "stringValue": "complete"
+          },
+          "metrics": {
+            "mapValue": {
+              "fields": {
+                "usage": {
+                  "mapValue": {
+                    "fields": {
+                      "prompt_tokens": {
+                        "integerValue": "267"
+                      },
+                      "completion_tokens": {
+                        "integerValue": "73"
+                      },
+                      "total_tokens": {
+                        "integerValue": "340"
+                      }
+                    }
+                  }
+                },
+                "modelMs": {
+                  "integerValue": "1517"
+                },
+                "estimate": {
+                  "mapValue": {
+                    "fields": {
+                      "usd": {
+                        "doubleValue": 0.00017020000000000002
+                      },
+                      "outputUsdPerMillion": {
+                        "doubleValue": 1.6
+                      },
+                      "notBillingCap": {
+                        "booleanValue": true
+                      },
+                      "inputUsdPerMillion": {
+                        "doubleValue": 0.2
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "checkedAtUtc": "2026-11-08T09:50:40.160Z"
+  },
+  "followupEvidence": "live-scene-independent-stream-20261108.json"
 }

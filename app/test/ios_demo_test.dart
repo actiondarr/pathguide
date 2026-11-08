@@ -86,6 +86,11 @@ void main() {
             throw PlatformException(code: 'not_running');
           }
           sceneObservationEnabled = (call.arguments as Map)['enabled'] == true;
+          return {
+            'enabled': sceneObservationEnabled,
+            'epoch': 1,
+            'motionAvailable': true,
+          };
         }
         if (call.method == 'startPreview') {
           if (denyCamera) throw PlatformException(code: 'camera_denied');
@@ -118,6 +123,10 @@ void main() {
       const MethodChannel('hk.pathguide/vision/frame'),
       (_) async => null,
     );
+    messenger.setMockMethodCallHandler(
+      const MethodChannel('hk.pathguide/vision/scene'),
+      (_) async => null,
+    );
   });
 
   tearDown(() {
@@ -129,6 +138,7 @@ void main() {
       'flutter_tts',
       'hk.pathguide/vision',
       'hk.pathguide/vision/frame',
+      'hk.pathguide/vision/scene',
     ]) {
       messenger.setMockMethodCallHandler(MethodChannel(name), null);
     }
@@ -299,6 +309,7 @@ void main() {
         find.byKey(const ValueKey('live-scene-prepare')),
       );
       await tester.tap(find.byKey(const ValueKey('live-scene-prepare')));
+      await flushAsync(tester);
       await tester.pumpAndSettle();
       expect(
         visionCalls.where((v) => v == 'setSceneObservation'),
@@ -315,6 +326,59 @@ void main() {
         isNotNull,
       );
       expect(find.byKey(const ValueKey('live-scene-prepare')), findsNothing);
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+
+  testWidgets(
+    'independent scene stream survives stale detector and triggers without any model frame',
+    (tester) async {
+      await start(tester, initialSection: AppSection.explore);
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('同意並開始'));
+      await tester.pumpAndSettle();
+      var sequence = 0;
+      Future<void> scene(double rate) async {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 200)),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+        await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              'hk.pathguide/vision/scene',
+              const StandardMethodCodec().encodeSuccessEnvelope({
+                'epoch': 1,
+                'sequence': ++sequence,
+                'luma': List.filled(64, 40),
+                'attitude': [0.0, 0.0, 0.0, 1.0],
+                'rotationRate': rate,
+                'motionFresh': true,
+                'issue': 'none',
+              }),
+              (_) {},
+            );
+        await tester.pump();
+      }
+
+      for (var i = 0; i < 18; i++) {
+        await scene(1.0);
+      }
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .value,
+        isTrue,
+      );
+      expect(visionCalls.where((v) => v == 'captureSceneFrame'), isEmpty);
+      for (var i = 0; i < 6; i++) {
+        await scene(0.0);
+      }
+      expect(visionCalls.where((v) => v == 'captureSceneFrame'), hasLength(1));
+      expect(visionCalls.where((v) => v == 'startPreview'), hasLength(1));
       await close(tester);
     },
     skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
@@ -346,6 +410,20 @@ void main() {
                   'rotationRate': 0.0,
                   'motionFresh': true,
                 },
+              }),
+              (_) {},
+            );
+        await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              'hk.pathguide/vision/scene',
+              const StandardMethodCodec().encodeSuccessEnvelope({
+                'epoch': 1,
+                'sequence': sequence,
+                'luma': List.filled(64, 40),
+                'attitude': [0.0, 0.0, 0.0, 1.0],
+                'rotationRate': 0.0,
+                'motionFresh': true,
+                'issue': 'none',
               }),
               (_) {},
             );

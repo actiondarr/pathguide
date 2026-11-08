@@ -14,11 +14,30 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private enum Channel {
     static let method = "hk.pathguide/vision"
     static let frames = "hk.pathguide/vision/frame"
+    static let scene = "hk.pathguide/vision/scene"
     static let preview = "hk.pathguide/vision/preview"
   }
 
   private let methodChannel: FlutterMethodChannel
   private let frameChannel: FlutterEventChannel
+  private let sceneChannel: FlutterEventChannel
+  private var sceneRelay: VisionSceneRelay?
+  private var sceneSink: FlutterEventSink?
+  private let captureQueue = DispatchQueue(label: "hk.pathguide.vision.capture")
+  private let motionQueue: OperationQueue = {
+    let queue = OperationQueue(); queue.maxConcurrentOperationCount = 1
+    queue.name = "hk.pathguide.vision.motion"; return queue
+  }()
+  private let motionAvailability: (() -> Bool)?
+  private let recognitionWork: ((CVPixelBuffer) -> Void)?
+  // Capture-queue state. At most one recognition job and one scene encoder.
+  private var capturing = false, recognitionPending = false, sceneEncoding = false
+  private var activeCaptureGeneration = 0
+  private var motionTicket: UUID?
+  private var latestSceneMotion: (attitude: [Double], rate: Double, time: Double)?
+  private var lastSceneSample = -Double.infinity
+  private var sceneMotionAvailable = false, sceneMotionResolved = false
+
   private let captureSession = AVCaptureSession()
   private let sessionQueue = DispatchQueue(label: "hk.pathguide.vision.session")
   private let inferenceQueue = DispatchQueue(label: "hk.pathguide.vision.inference")
@@ -48,9 +67,9 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private let photoContext = CIContext(options: [.cacheIntermediates: false])
   private var pendingPhoto: (id: UUID, result: FlutterResult, trigger: String, deadline: CFAbsoluteTime)?
   private let sceneMotion = CMMotionManager()
-  private var sceneObservation = false // inferenceQueue
-  private var pendingScene: (id: UUID, result: FlutterResult)? // inferenceQueue
-  private var sceneEpoch = 0 // inferenceQueue; fences encoders after stop
+  private var sceneObservation = false // captureQueue
+  private var pendingScene: (id: UUID, result: FlutterResult)? // captureQueue
+  private var sceneEpoch = 0 // captureQueue; fences encoders after stop
   private var sceneSequence: Int64 = 0
   private var lowCandidate: IOSDetection?
   private var lowSince: CFAbsoluteTime?
@@ -80,7 +99,11 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
        requestCameraAccess: @escaping (@escaping (Bool) -> Void) -> Void = { AVCaptureDevice.requestAccess(for: .video, completionHandler: $0) },
        cameraCoordinator: CameraCoordinator = .shared,
        captureStart: (() throws -> Bool)? = nil,
-       captureStop: (() -> Void)? = nil) {
+       captureStop: (() -> Void)? = nil,
+       motionAvailability: (() -> Bool)? = nil,
+       recognitionWork: ((CVPixelBuffer) -> Void)? = nil) {
+    self.motionAvailability = motionAvailability
+    self.recognitionWork = recognitionWork
     self.captureStart = captureStart
     self.captureStop = captureStop
     self.cameraCoordinator = cameraCoordinator
@@ -88,6 +111,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     self.requestCameraAccess = requestCameraAccess
     methodChannel = FlutterMethodChannel(name: Channel.method, binaryMessenger: messenger)
     frameChannel = FlutterEventChannel(name: Channel.frames, binaryMessenger: messenger)
+    sceneChannel = FlutterEventChannel(name: Channel.scene, binaryMessenger: messenger)
     super.init()
     Self.active = self
     NotificationCenter.default.addObserver(self, selector: #selector(enteredBackground),
@@ -96,6 +120,8 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
       self?.handle(call, result: result)
     }
     frameChannel.setStreamHandler(self)
+    let relay = VisionSceneRelay { [weak self] sink in self?.sceneSink = sink }
+    sceneRelay = relay; sceneChannel.setStreamHandler(relay)
   }
 
   deinit { sceneMotion.stopDeviceMotionUpdates(); NotificationCenter.default.removeObserver(self) }
@@ -119,30 +145,55 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
       guard !enabled || cameraAccess?.isCurrent == true else {
         result(FlutterError(code: "not_running", message: "請先開始即時辨識", details: nil)); return
       }
-      if enabled && sceneMotion.isDeviceMotionAvailable {
-        sceneMotion.deviceMotionUpdateInterval = 0.1
-        sceneMotion.startDeviceMotionUpdates(using: .xArbitraryZVertical)
-      } else { sceneMotion.stopDeviceMotionUpdates() }
-      inferenceQueue.async { [weak self] in
-        self?.sceneObservation = enabled
-        self?.sceneEpoch += 1
-        if let pending = self?.pendingScene {
-          self?.pendingScene = nil
+      let ticket = UUID()
+      captureQueue.async { [weak self] in
+        guard let self else { DispatchQueue.main.async { result(nil) }; return }
+        self.sceneObservation = enabled
+        self.sceneMotionAvailable = false; self.sceneMotionResolved = false
+        self.motionTicket = ticket
+        self.latestSceneMotion = nil
+        self.sceneEpoch += 1
+        self.lastSceneSample = -Double.infinity
+        if let pending = self.pendingScene {
+          self.pendingScene = nil
           DispatchQueue.main.async { pending.result(nil) }
         }
-        DispatchQueue.main.async { result(nil) }
+        let acknowledgement: [String: Any] = ["enabled": enabled, "epoch": self.sceneEpoch]
+        // Preparation never queues behind model inference or diagnostics.
+        DispatchQueue.main.async { result(acknowledgement) }
+      }
+      motionQueue.addOperation { [weak self] in
+        guard let self else { return }
+        let available = enabled && (self.motionAvailability?() ?? self.sceneMotion.isDeviceMotionAvailable)
+        self.captureQueue.async {
+          guard self.motionTicket == ticket else { return }
+          self.sceneMotionAvailable = available; self.sceneMotionResolved = true
+        }
+        if available {
+          self.sceneMotion.stopDeviceMotionUpdates()
+          self.sceneMotion.deviceMotionUpdateInterval = 0.1
+          self.sceneMotion.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: self.motionQueue) { [weak self] motion, _ in
+            guard let self, let motion else { return }
+            let q = motion.attitude.quaternion, rate = motion.rotationRate
+            let sample = ([q.x, q.y, q.z, q.w], sqrt(rate.x*rate.x + rate.y*rate.y + rate.z*rate.z), motion.timestamp)
+            self.captureQueue.async {
+              guard self.sceneObservation, self.motionTicket == ticket else { return }
+              self.latestSceneMotion = sample
+            }
+          }
+        } else { self.sceneMotion.stopDeviceMotionUpdates() }
       }
     case "captureSceneFrame":
       let id = UUID(), reply = CameraOnceReply<Any?>(result)
       // The deadline includes time waiting for the shared photo encoder.
       DispatchQueue.main.asyncAfter(deadline: .now() + 2) { reply.finish(nil) }
-      inferenceQueue.async { [weak self] in
-        guard let self, self.sceneObservation, self.captureSession.isRunning,
+      captureQueue.async { [weak self] in
+        guard let self, self.sceneObservation, self.capturing, !self.sceneEncoding,
           self.pendingScene == nil else {
           DispatchQueue.main.async { reply.finish(nil) }; return
         }
         self.pendingScene = (id, { reply.finish($0) })
-        self.inferenceQueue.asyncAfter(deadline: .now() + 2) { [weak self] in
+        self.captureQueue.asyncAfter(deadline: .now() + 2) { [weak self] in
           guard let self, let pending = self.pendingScene, pending.id == id else { return }
           self.pendingScene = nil
           DispatchQueue.main.async { pending.result(nil) }
@@ -211,8 +262,15 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
       result((attributes?[.size] as? NSNumber)?.int64Value ?? -1)
     case "status":
       inferenceQueue.async { [weak self] in
-        let snapshot = self?.statusSnapshot() ?? [:]
-        DispatchQueue.main.async { result(snapshot) }
+        guard let self else { DispatchQueue.main.async { result([:]) }; return }
+        let model = self.statusSnapshot()
+        self.captureQueue.async {
+          var snapshot = model
+          snapshot["sceneObservationEnabled"] = self.sceneObservation
+          snapshot["sceneMotionAvailable"] = self.sceneMotionAvailable
+          snapshot["sceneSignalSequence"] = self.sceneSequence
+          DispatchQueue.main.async { result(snapshot) }
+        }
       }
     case "release":
       release(result)
@@ -306,7 +364,12 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
           if !self.captureSession.isRunning { self.captureSession.startRunning() }
           started = self.captureSession.isRunning
         }
-        DispatchQueue.main.async { result(["started": started && access?.isCurrent == true]) }
+        DispatchQueue.main.async {
+          let valid = started && access?.isCurrent == true
+          let generation = self.cameraGeneration
+          self.captureQueue.async { self.capturing = valid; self.activeCaptureGeneration = generation }
+          result(["started": valid])
+        }
       } catch {
         DispatchQueue.main.async {
           result(["started": false, "error": error.localizedDescription])
@@ -333,7 +396,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
       kCVPixelBufferPixelFormatTypeKey as String:
         Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
     ]
-    output.setSampleBufferDelegate(self, queue: inferenceQueue)
+    output.setSampleBufferDelegate(self, queue: captureQueue)
     guard captureSession.canAddOutput(output) else { throw VisionError.cameraOutputRejected }
     captureSession.addOutput(output)
 
@@ -358,7 +421,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   }
 
   private func stopCaptureHardware(_ completion: @escaping () -> Void) {
-    sceneMotion.stopDeviceMotionUpdates()
+    motionQueue.addOperation { [weak self] in self?.sceneMotion.stopDeviceMotionUpdates() }
     let group = DispatchGroup()
     group.enter()
     sessionQueue.async { [weak self] in
@@ -372,18 +435,24 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
         self?.pendingPhoto = nil
         DispatchQueue.main.async { pending.result(nil) }
       }
-      self?.sceneObservation = false
-      self?.sceneEpoch += 1
-      if let pending = self?.pendingScene {
-        self?.pendingScene = nil
-        DispatchQueue.main.async { pending.result(nil) }
-      }
       self?.interpreter = nil
       self?.modelPath = nil
       self?.busy = false
       self?.analyzedFrames = 0
       self?.analyzeErrors = 0
       self?.skippedReason = "相機已停止"
+      group.leave()
+    }
+    group.enter()
+    captureQueue.async { [weak self] in
+      self?.capturing = false
+      self?.sceneObservation = false
+      self?.sceneEpoch += 1
+      self?.motionTicket = nil; self?.latestSceneMotion = nil
+      if let pending = self?.pendingScene {
+        self?.pendingScene = nil
+        DispatchQueue.main.async { pending.result(nil) }
+      }
       group.leave()
     }
     group.notify(queue: .main, execute: completion)
@@ -489,13 +558,62 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     didOutput sampleBuffer: CMSampleBuffer,
     from _: AVCaptureConnection
   ) {
+    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+    enqueueCameraFrame(pixelBuffer)
+  }
+
+  func enqueueCameraFrame(_ pixels: CVPixelBuffer) {
+    captureQueue.async { [weak self] in self?.processCameraFrame(pixels) }
+  }
+
+  /// Called on captureQueue. Scene sampling does not wait for an interpreter,
+  /// detection, or an earlier model invocation to complete.
+  func processCameraFrame(_ pixelBuffer: CVPixelBuffer) {
+    guard capturing else { return }
+    if sceneObservation {
+      let now = ProcessInfo.processInfo.systemUptime
+      if now - lastSceneSample >= 0.15 {
+        lastSceneSample = now; sceneSequence += 1
+        var event: [String: Any] = ["epoch": sceneEpoch, "sequence": sceneSequence]
+        if let luma = IOSSceneSignal.luminance(pixelBuffer), let motion = latestSceneMotion {
+          let age = now - motion.time
+          event.merge(["luma": luma, "attitude": motion.attitude, "rotationRate": motion.rate,
+            "motionFresh": age >= 0 && age <= 0.5,
+            "issue": age >= 0 && age <= 0.5 ? "none" : "motion-stale"]) { _, new in new }
+        } else { event["issue"] = sceneMotionResolved && !sceneMotionAvailable ? "motion-unavailable" : "waiting-motion" }
+        let sample = event
+        DispatchQueue.main.async { [weak self] in self?.sceneSink?(sample) }
+      }
+      if let pending = pendingScene, !sceneEncoding {
+        pendingScene = nil; sceneEncoding = true
+        let epoch = sceneEpoch
+        photoQueue.async { [weak self] in
+          guard let self else { DispatchQueue.main.async { pending.result(nil) }; return }
+          let jpeg = IOSSceneSignal.jpeg(pixelBuffer, context: self.photoContext)
+          self.captureQueue.async {
+            self.sceneEncoding = false
+            let valid = self.capturing && self.sceneObservation && self.sceneEpoch == epoch
+            DispatchQueue.main.async { pending.result(valid ? jpeg.map { FlutterStandardTypedData(bytes: $0) } : nil) }
+          }
+        }
+      }
+    }
+    guard !recognitionPending else { return }
+    recognitionPending = true
+    let generation = activeCaptureGeneration
+    inferenceQueue.async { [weak self] in
+      guard let self else { return }
+      defer { self.captureQueue.async { self.recognitionPending = false } }
+      guard DispatchQueue.main.sync(execute: { self.cameraGeneration == generation }) else { return }
+      if let work = self.recognitionWork { work(pixelBuffer) }
+      else { self.processRecognition(pixelBuffer, generation: generation) }
+    }
+  }
+
+  private func processRecognition(_ pixelBuffer: CVPixelBuffer, generation: Int) {
     analyzedFrames += 1
     guard !busy else { skippedReason = "上一幀仍在推理"; return }
     guard let interpreter else { skippedReason = "模型未就緒"; return }
-    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-      skippedReason = "相機幀沒有 PixelBuffer"
-      return
-    }
     busy = true
     defer { busy = false }
 
@@ -604,7 +722,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
       analyzeError = ""
       skippedReason = ""
 
-      var payload: [String: Any] = [
+      let payload: [String: Any] = [
         "detections": detections.map(\.dictionary),
         "inferenceMs": inferenceMs,
         "frameWidth": prepared.rawWidth,
@@ -615,32 +733,11 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
         "frameMaxScore": Double(frameMaxScore),
         "frameFormat": frameFormat,
       ]
-      if sceneObservation {
-        sceneSequence += 1
-        if let luma = IOSSceneSignal.luminance(pixelBuffer), let motion = sceneMotion.deviceMotion {
-          let age = ProcessInfo.processInfo.systemUptime - motion.timestamp
-          let q = motion.attitude.quaternion, rate = motion.rotationRate
-          payload["sceneSignal"] = ["sequence": sceneSequence, "luma": luma,
-            "attitude": [q.x, q.y, q.z, q.w],
-            "rotationRate": sqrt(rate.x*rate.x + rate.y*rate.y + rate.z*rate.z),
-            "motionFresh": age >= 0 && age <= 0.5]
-        }
-        if let pending = pendingScene {
-          pendingScene = nil
-          let epoch = sceneEpoch
-          photoQueue.async { [weak self] in
-            guard let self else { DispatchQueue.main.async { pending.result(nil) }; return }
-            let jpeg = IOSSceneSignal.jpeg(pixelBuffer, context: self.photoContext)
-            self.inferenceQueue.async {
-              let valid = self.sceneObservation && self.sceneEpoch == epoch
-              let bytes = valid && (jpeg?.count ?? Int.max) <= 524288 ? jpeg : nil
-              DispatchQueue.main.async { pending.result(bytes.map { FlutterStandardTypedData(bytes: $0) }) }
-            }
-          }
-        }
-      }
       let event = payload
-      DispatchQueue.main.async { [weak self] in self?.eventSink?(event) }
+      DispatchQueue.main.async { [weak self] in
+        guard let self, self.cameraGeneration == generation else { return }
+        self.eventSink?(event)
+      }
     } catch {
       analyzeErrors += 1
       analyzeError = "\(type(of: error)): \(error.localizedDescription)"
@@ -651,10 +748,6 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private func statusSnapshot() -> [String: Any] {
     [
       "ready": interpreter != nil,
-      "sceneObservationEnabled": sceneObservation,
-      "sceneMotionAvailable": sceneMotion.isDeviceMotionAvailable,
-      "sceneMotionActive": sceneMotion.isDeviceMotionActive,
-      "sceneSignalSequence": sceneSequence,
       "modelPath": modelPath ?? NSNull(),
       "inputSize": inputSize,
       "classes": modelClassCount,
@@ -1250,4 +1343,12 @@ enum IOSSceneSignal {
       return sum / 4
     }
   }
+}
+
+
+private final class VisionSceneRelay: NSObject, FlutterStreamHandler {
+  let sink: (FlutterEventSink?) -> Void
+  init(_ sink: @escaping (FlutterEventSink?) -> Void) { self.sink = sink }
+  func onListen(withArguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? { sink(events); return nil }
+  func onCancel(withArguments: Any?) -> FlutterError? { sink(nil); return nil }
 }

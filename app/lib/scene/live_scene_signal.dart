@@ -60,3 +60,22 @@ class LiveSceneSignal {
     return 2 * math.acos(dot.abs().clamp(0.0, 1.0)) * 180 / math.pi;
   }
 }
+
+class LiveSceneUpdate {
+  LiveSceneUpdate(this.signal, this.issue);
+  final LiveSceneSignal? signal;
+  final String? issue;
+  static LiveSceneUpdate parse(Map value) {
+    final issue = value['issue'];
+    return LiveSceneUpdate(
+      LiveSceneSignal.parse(value),
+      const [
+            'waiting-motion',
+            'motion-stale',
+            'motion-unavailable',
+          ].contains(issue)
+          ? issue as String
+          : null,
+    );
+  }
+}

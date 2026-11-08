@@ -384,6 +384,21 @@ void main() {
     },
   );
   testWidgets(
+    'detector expiry withdraws only detector speech and preserves scene output',
+    (tester) async {
+      final output = Voice()..hold = true;
+      final voice = SpeechCoordinator(output);
+      final scene = voice.channel(SpeechChannel.scene).speak(full);
+      await tester.pump();
+      final stops = output.stops;
+      await voice.stopOwned(SpeechChannel.environment);
+      expect(output.stops, stops);
+      expect(output.wait!.isCompleted, isFalse);
+      await voice.stop();
+      await scene;
+    },
+  );
+  testWidgets(
     'scene cannot preempt local alerts or navigation and is never queued',
     (tester) async {
       final output = Voice()..hold = true;

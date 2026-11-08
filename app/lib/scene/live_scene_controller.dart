@@ -125,14 +125,19 @@ class LiveSceneController extends ChangeNotifier {
     _notify();
   }
 
-  void observe(LiveSceneSignal? signal) {
+  void observe(LiveSceneSignal? signal, {String? sourceIssue}) {
     if (_disposed || !available) return;
     if (signal == null ||
         (_latest != null && signal.sequence <= _latest!.sequence)) {
       _stable = null;
       _stableSince = null;
       invalidate();
-      status = '未取得可靠的新畫面或轉向資訊，場景分析暫停。';
+      status = switch (sourceIssue) {
+        'waiting-motion' => '正在等候手機轉向感測資料，未有取相或雲端請求。',
+        'motion-stale' => '手機轉向資料已過期，等候新資料後再分析。',
+        'motion-unavailable' => '手機暫未提供轉向感測，未有取相或雲端請求。',
+        _ => '未取得可靠的新畫面或轉向資訊，場景分析暫停。',
+      };
       _notify();
       return;
     }

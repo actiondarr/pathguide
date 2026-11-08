@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import '../scene/live_scene_controller.dart';
+import '../scene/live_scene_signal.dart';
 import '../scene/scene_backend.dart';
 import '../tts/speech_coordinator.dart';
 
@@ -121,6 +122,19 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     if (source is! PlatformVision) return;
     _preparingScene = true;
     try {
+      await _sceneSub?.cancel();
+      _sceneSub = source.sceneUpdates.listen(
+        (event) {
+          if (_isCurrent(generation) &&
+              identical(source, _source) &&
+              !_controlsOpen) {
+            _scene.observe(event.signal, sourceIssue: event.issue);
+          }
+        },
+        onError: (Object _) {
+          if (_isCurrent(generation)) _scene.preparationFailed('scene_stream');
+        },
+      );
       await source.setSceneObservation(true);
       if (_isCurrent(generation) && identical(source, _source)) {
         _scene.setAvailable(true);
@@ -194,6 +208,8 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   }
 
   StreamSubscription<VisionFrame>? _sub;
+  StreamSubscription<LiveSceneUpdate>? _sceneSub;
+  bool _diagnosticsBusy = false;
 
   SourceMode _mode = SourceMode.camera;
 
@@ -526,6 +542,8 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   Future<void> _stopVision() async {
     _scene.setAvailable(false);
+    final sceneCancelled = _sceneSub?.cancel();
+    _sceneSub = null;
     _resultExpiry?.cancel();
     _diagTimer?.cancel();
     _diagTimer = null;
@@ -537,6 +555,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     final cancelled = sub?.cancel();
     final disposed = source?.dispose();
     await cancelled;
+    await sceneCancelled;
     await disposed;
   }
 
@@ -612,10 +631,16 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         _diagTimer = Timer.periodic(const Duration(milliseconds: 500), (
           _,
         ) async {
-          final d = await source.diagnostics();
-          if (!_isCurrent(generation)) return;
-          if (d != null) setState(() => _diagnostics = d);
-          _logHud();
+          if (_diagnosticsBusy) return;
+          _diagnosticsBusy = true;
+          try {
+            final d = await source.diagnostics();
+            if (!_isCurrent(generation)) return;
+            if (d != null) setState(() => _diagnostics = d);
+            _logHud();
+          } finally {
+            _diagnosticsBusy = false;
+          }
         });
       }
     } catch (e) {
@@ -771,7 +796,6 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   void _onFrame(VisionFrame frame) {
     if (!mounted || !_active || !_requestedRunning || !_sourceReady) return;
-    if (_sceneFeature) _scene.observe(frame.sceneSignal);
     final now = DateTime.now();
     final dt = now.difference(_lastFrameAt).inMicroseconds;
     _lastFrameAt = now;
@@ -829,7 +853,8 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     final generation = _sourceGeneration;
     _resultExpiry = Timer(const Duration(seconds: 3), () {
       if (!_isCurrent(generation)) return;
-      _stopSpeech();
+      _announcer.enabled = false;
+      unawaited(_voice.stopOwned(SpeechChannel.environment));
       setState(() {
         _detections = const [];
         _lastResultAt = null;

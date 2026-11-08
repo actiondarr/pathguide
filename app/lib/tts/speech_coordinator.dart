@@ -27,6 +27,11 @@ class SpeechCoordinator {
     if (value) await stop();
   }
 
+  /// Withdraw stale results from only their current producer. A detector
+  /// timeout must not cancel a fresh scene or navigation utterance.
+  Future<void> stopOwned(SpeechChannel channel) =>
+      _owner == channel ? stop(channel) : Future<void>.value();
+
   Future<void> stop([SpeechChannel? channel]) {
     if (channel != null && _owner != null && channel.index < _owner!.index) {
       return Future<void>.value();

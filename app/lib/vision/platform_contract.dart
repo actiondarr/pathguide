@@ -25,6 +25,9 @@ const String kVisionChannel = 'hk.pathguide/vision';
 /// 走 EventChannel 避免 Dart 每帧发一次请求（那会让帧率减半）。
 const String kFrameChannel = 'hk.pathguide/vision/frame';
 
+/// Local-only, independently paced scene evidence from the same iOS camera.
+const String kSceneChannel = 'hk.pathguide/vision/scene';
+
 /// 相机预览的平台视图类型名。必须与原生 `registerViewFactory` 的注册名一致——
 /// 不一致时表现为**一块空白**，两端都不报错。
 const String kVisionPreviewViewType = 'hk.pathguide/vision/preview';
