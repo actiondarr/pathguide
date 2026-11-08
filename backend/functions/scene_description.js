@@ -15,6 +15,20 @@ const rejectText = (reason, detail) => {
   if(detail) error.rejectionDetail=detail;
   throw error;
 };
+// Diagnostics run only after the unchanged guard rejects. First fixed class wins; no matched text or offsets.
+function contentDetail(text,nonNounText) {
+  if(/[0-9０-９]/iu.test(text)) return 'text-number';
+  if(/公尺|厘米|公里|met(?:er|re)|呎|尺|英寸|英吋/iu.test(text)) return 'text-distance';
+  if(/樓(?!梯)/iu.test(text)) return 'text-floor';
+  if(/目的地/iu.test(text)) return 'text-destination';
+  if(/安全|暢通|通行|可通過/iu.test(text)) return 'text-safety';
+  if(/避開|繞過|向左|向右|左轉|右轉|可以行|可以走|往前|前進|直行|行過去|走過去|左邊行|右邊行|靠左|靠右|向前|向後|往左|往右|前行|後退|退後|行去|行入|行出|走去|走入|走出|繼續行|繼續走|可行|可走/iu.test(text)) return 'text-navigation';
+  if(/請|建議|應該|必須|你可/iu.test(text)) return 'text-advice';
+  if(/马|车|门|栏|电|这|个|侧|见|间|楼|层/iu.test(text)) return 'text-simplified';
+  if(/米/u.test(nonNounText)) return 'text-distance';
+  if(/層/u.test(nonNounText)) return 'text-floor';
+  return 'text-content';
+}
 function validateText(text, {min=2,max=3}={}) {
   if (typeof text !== 'string') rejectText('answer-format','text-format');
   text = text.trim();
@@ -27,7 +41,7 @@ function validateText(text, {min=2,max=3}={}) {
   // restriction against the original text, including unsafe text beside a noun.
   const nonNounText=text.replace(/米缸|米桶|米袋|米飯|玉米|粟米|米白色|層架|層板/gu,'');
   if (/[米層]/u.test(nonNounText) ||
-      /[\r\n<>]|[0-9０-９]|公尺|厘米|公里|met(?:er|re)|樓(?!梯)|目的地|安全|暢通|通行|避開|繞過|向左|向右|左轉|右轉|可以行|可以走|往前|前進|直行|行過去|走過去|左邊行|右邊行|靠左|靠右|向前|向後|往左|往右|前行|後退|退後|行去|行入|行出|走去|走入|走出|繼續行|繼續走|可通過|可行|可走|請|建議|應該|必須|你可|呎|尺|英寸|英吋|马|车|门|栏|电|这|个|侧|见|间|楼|层/iu.test(text)) rejectText('disallowed-content','text-content');
+      /[\r\n<>]|[0-9０-９]|公尺|厘米|公里|met(?:er|re)|樓(?!梯)|目的地|安全|暢通|通行|避開|繞過|向左|向右|左轉|右轉|可以行|可以走|往前|前進|直行|行過去|走過去|左邊行|右邊行|靠左|靠右|向前|向後|往左|往右|前行|後退|退後|行去|行入|行出|走去|走入|走出|繼續行|繼續走|可通過|可行|可走|請|建議|應該|必須|你可|呎|尺|英寸|英吋|马|车|门|栏|电|这|个|侧|见|间|楼|层/iu.test(text)) rejectText('disallowed-content',contentDetail(text,nonNounText));
   return text;
 }
 // JSON mode guarantees syntax, not shape. Validate every complete field before
@@ -62,7 +76,7 @@ function validateObservations(value) {
     if(!positions.includes(o.position)) rejectText('answer-format','observation-position');
     if(typeof o.detail!=='string' || o.detail.length>40 || !o.detail.trim() || /[。！？]/u.test(o.detail)) rejectText('answer-format','observation-detail');
     try {validateText(o.detail+'。未能確認。');}
-    catch(error) {error.rejectionDetail=error.rejectionReason==='disallowed-content'?'observation-content':'observation-detail';throw error;}
+    catch(error) {error.rejectionDetail=error.rejectionReason==='disallowed-content'?error.rejectionDetail.replace(/^text-/u,'observation-'):'observation-detail';throw error;}
     const key=o.category+':'+o.position;
     if (seen.has(key)) rejectText('answer-format','observation-duplicate'); seen.add(key);
     return {category:o.category,position:o.position,detail:o.detail.trim()};
@@ -230,7 +244,7 @@ async function handle(request, {db,enabled,key,base,rates,fetcher,trial=null}) {
   return result;
 }
 const REJECTION_REASONS=['answer-format','answer-length','sentence-count','disallowed-content','provider-response','provider-refusal','incomplete-answer'];
-const REJECTION_DETAILS=['text-format','text-length','text-content','json-syntax','answer-fields','sentence-count','observations-array','observation-fields','observation-category','observation-position','observation-detail','observation-content','observation-duplicate','provider-truncated'];
+const REJECTION_DETAILS=['text-number', 'text-distance', 'text-floor', 'text-destination', 'text-safety', 'text-navigation', 'text-advice', 'text-simplified', 'observation-number', 'observation-distance', 'observation-floor', 'observation-destination', 'observation-safety', 'observation-navigation', 'observation-advice', 'observation-simplified'].concat(['text-format','text-length','text-content','json-syntax','answer-fields','sentence-count','observations-array','observation-fields','observation-category','observation-position','observation-detail','observation-content','observation-duplicate','provider-truncated']);
 function safeResult(value) {
   if(!value || !/^[a-f0-9]{32}$/.test(value.requestId||'') || !['complete','rejected'].includes(value.status)) return null;
   const usage=usageOf(value.metrics?.usage);

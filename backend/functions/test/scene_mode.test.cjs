@@ -179,7 +179,7 @@ test('format failures expose only allowlisted structural reason and examples rem
     [[{...observation,position:'front'}],'observation-position'],
     [[{...observation,detail:'木枱。'}],'observation-detail'],
     [[observation,observation],'observation-duplicate'],
-    [[{...observation,detail:'可以安全通行'}],'observation-content'],
+    [[{...observation,detail:'可以安全通行'}],'observation-safety'],
   ];
   for(const [observations,detail] of cases) {
     const result=await scene.describe(await data(),{key:'fake',fetcher:async(_,options)=>{
@@ -217,7 +217,7 @@ test('shared noun exceptions cannot hide distance, floor, safety or navigation r
 test('synthetic malformed observations retain precise rejection details and return no partial content',async()=>{
   for (const fixture of fixtures.rejectedObservations) {
     const result=await scene.describe(await data(),{key:'fake',fetcher:async()=>response(['右邊有洗衣機。'],fixture.items)});
-    assert.equal(result.status,'rejected');assert.equal(result.rejectionDetail,fixture.detail);
+    assert.equal(result.status,'rejected');assert.equal(result.rejectionDetail,fixture.detail==='observation-content'?(fixture.items[0].detail.includes('安全')?'observation-safety':'observation-distance'):fixture.detail);
     assert.ok(!('text' in result));assert.ok(!('observations' in result));assert.deepEqual(result.metrics.usage,usage);
   }
 });
@@ -246,7 +246,7 @@ test('full-map telemetry replacement clears optional rejection keys and stale me
     }
   }
   const history=db.docs.get(path).recentResults;
-  assert.equal(history.length,3);assert.equal(history[0].rejectionDetail,'text-content');
+  assert.equal(history.length,3);assert.equal(history[0].rejectionDetail,'text-navigation');
   assert.equal(history[1].rejectionReason,'provider-refusal');
   assert.ok(!JSON.stringify([...db.docs]).includes('洗手盆'));
 });
@@ -258,4 +258,12 @@ test('100 cumulative attempts and five-day window preserve spent history and sto
  assert.equal(trial.inspect(s,c,now+5*86400000).stopReason,'window-expired');
  assert.equal(trial.inspect({...s,lastStatus:'usage-unknown'},c,now).stopReason,'usage-unknown');
  assert.throws(()=>trial.allocate({...s,window:{...s.window,expiresAtMs:s.window.expiresAtMs+1}},id(99),c,now));
+});
+
+test('content diagnostics expose fixed classes for text and observations',()=>{
+ const cases={number:'有3個櫃',distance:'門距離三米',floor:'位於三樓',destination:'這裡是目的地',safety:'可以安全通行',navigation:'向左行',advice:'建議停低',simplified:'右邊有门'};
+ for(const [key,phrase] of Object.entries(cases)) {
+  assert.throws(()=>scene.validateText(phrase+'。未能確認。'),e=>e.rejectionReason==='disallowed-content'&&e.rejectionDetail==='text-'+key);
+  assert.throws(()=>scene.validateObservations([{category:'other',position:'left',detail:phrase}]),e=>e.rejectionDetail==='observation-'+key);
+ }
 });

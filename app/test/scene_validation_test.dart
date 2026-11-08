@@ -5,6 +5,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pathguide/scene/scene_backend.dart';
 
 void main() {
+  test('fixed content classes accepted; arbitrary content ignored', () {
+    for (final key in [
+      'text-number',
+      'text-distance',
+      'text-floor',
+      'text-destination',
+      'text-safety',
+      'text-navigation',
+      'text-advice',
+      'text-simplified',
+      'observation-number',
+      'observation-distance',
+      'observation-floor',
+      'observation-destination',
+      'observation-safety',
+      'observation-navigation',
+      'observation-advice',
+      'observation-simplified',
+    ]) {
+      expect(parseSceneRejectionDetail(key), key);
+    }
+    expect(parseSceneRejectionDetail('private model answer'), isNull);
+  });
   final fixtures = jsonDecode(
     File('test/fixtures/scene_validation.json').readAsStringSync(),
   ) as Map;

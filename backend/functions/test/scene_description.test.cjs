@@ -87,7 +87,7 @@ test('rejections expose only a fixed reason, retain usage, and never retry or re
     assert.equal(result.status,'rejected');
     assert.equal(result.rejectionReason,reason);
     assert.deepEqual(Object.keys(result).sort(),['metrics',...(result.rejectionDetail?['rejectionDetail']:[]),'rejectionReason','requestId','status']);
-    if(result.rejectionDetail) assert.ok(['text-content','text-length','sentence-count','provider-truncated'].includes(result.rejectionDetail));
+    if(result.rejectionDetail) assert.ok(['text-safety','text-simplified','text-content','text-length','sentence-count','provider-truncated'].includes(result.rejectionDetail));
     if (p.usage) assert.deepEqual(result.metrics.usage,usage);
     assert.ok(!JSON.stringify(result).includes('private content'));
   }
@@ -186,7 +186,7 @@ test('callable retains a rejection category with numerical usage, never the reje
   const privateAnswer='前方可以安全通行。請向左行。';
   const result=await handle(r,{db,enabled:true,key:()=> 'fake',fetcher:async()=>response(payload(privateAnswer))});
   assert.equal(result.rejectionReason,'disallowed-content');
-  const {receivedAtMs,...safe}=db.value.lastResult;assert.ok(Number.isSafeInteger(receivedAtMs));assert.deepEqual(safe,{requestId:id,status:'rejected',metrics:result.metrics,rejectionReason:'disallowed-content',rejectionDetail:'text-content'});
+  const {receivedAtMs,...safe}=db.value.lastResult;assert.ok(Number.isSafeInteger(receivedAtMs));assert.deepEqual(safe,{requestId:id,status:'rejected',metrics:result.metrics,rejectionReason:'disallowed-content',rejectionDetail:'text-safety'});
   assert.ok(!JSON.stringify(db.value).includes(privateAnswer));
   assert.ok(!JSON.stringify(db.value).includes('base64'));
 });
