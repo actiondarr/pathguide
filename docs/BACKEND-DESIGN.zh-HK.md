@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-08測試資料版已裝機：1.9.4+22來源af38b02，不可變tag／GitHub prerelease及遠端commit先核對後覆蓋安裝；獨立裝置清單核對1.9.4／build22，正常啟動，未移除App或清資料。原試驗5次／3125 microUSD、UID／帳戶／費率／request IDs均保留；CAS封存前次許可後，只放行一次診斷版手機複測，香港時間21:25到期，使用後再停止。代理沒有付費推理。測試操作保留，展開「場景測試資料」可複製數值／狀態／請求ID，不含照片或描述。正式單一場景模式開關按使用者要求暫緩UI；新手機文字、廣東話及走動模式仍待驗收。見[診斷版與受控許可證據](../verification/live-scene-test-data-20261108.json)。
+
 2026-11-08場景測試資料／1.9.4+22候選：使用者確認今次自動關閉、只按一次「描述前方」，最後見「場景已改變」；手動單次不會因新畫面自行再發請求。最新後端第5次rejected明確為sentence-count（句數或句末／完整拼接格式），模型2189ms、310輸入／72輸出／總382 tokens、估算177.2 microUSD／帳本向上取整178，累計5次／3125 microUSD；不保存原文，不能推定實際是多句、少句或句末標點。後端改用Qwen支援的JSON Object模式，以唯一sentences陣列兩至三個完整字串逐項驗證；只補缺少的句末標點，不刪句、不抽取局部、不重試，不放寬距離／指令／安全斷言等內容檢查。JSON模式不保證schema，型別／多餘欄位／句數／截斷／拒答仍由本機拒絕。既有手機文字契約不變。依據：[Qwen官方結構化輸出](https://docs.qwencloud.com/developer-guides/text-generation/structured-output)。
 
 使用者另明確要求正式介面只用一個「場景模式」開關：開啟先概述相機可見環境，走動中重要變化再描述，關閉停止；隨後指定現時測試模式先不改UI。因此1.9.4保留原測試操作與45秒／本次3次限制，只新增可展開及複製的安全測試資料。區分後端成功／拒絕／失敗與手機作廢，顯示隨機requestId、觸發事件、拒絕分類、相對取相畫面差／姿態／角速度、穩定資格／新鮮度、冷卻、取相／後端往返／模型耗時、token與估算；最多12項本機事件，不含照片、完整描述、UID或憑證。連接器已被呼叫不等於已確認上游收到；交予語音協調器也不宣稱耳朵已聽到。晚回覆即使已因轉向作廢仍保留數值／拒絕證據，且拒絕會停止自動；已結束的錯誤不再被移動／過期訊息蓋過。86項相關Flutter、32項後端、analyze及直向390×844複製／畫面檢查通過；Swift未變，沒有重跑原生基線。簽署／遠端／安裝及真人結果見[本輪證據](../verification/live-scene-test-data-20261108.json)，不能當功能已驗收。
@@ -57,7 +59,7 @@
 <a id="service-state"></a>
 ## 2. 現況與已確認限制
 
-目前場景描述狀態（2026-11-08）：獨立單次入口曾通過文字／廣東話；即時辨識1.9.3+21真人仍未通過，最新第5次為sentence-count拒絕，累計5次／3125 microUSD。JSON分句後端已部署並下載雲端來源核對SHA相同；1.9.4+22提供可複製診斷，保持原測試控制。正式單一「場景模式」開關已確認但按使用者要求暫緩UI改動；穩定／45秒冷卻／本次3次及後端停止帳本均保留。新手機複測與廣東話結果仍待驗收，不能靠重裝或等冷卻解除停止帳本。
+目前場景描述狀態（2026-11-08）：獨立單次入口曾通過文字／廣東話；即時辨識1.9.3+21真人仍未通過，最新第5次為sentence-count拒絕，累計5次／3125 microUSD。JSON分句後端已部署並下載雲端來源核對SHA相同；1.9.4+22已裝機，提供可複製診斷，保持原測試控制。正式單一「場景模式」開關已確認但按使用者要求暫緩UI改動；穩定／45秒冷卻／本次3次及後端停止帳本均保留。新手機複測與廣東話結果仍待驗收，不能靠重裝或等冷卻解除停止帳本。
 
 <a id="1-已有程式與缺口"></a>
 
@@ -529,7 +531,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
 | B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生及analyze通過，手機實測未完成 ；#18樓層證據／必要確認已有516項Flutter工程候選，1.8.0+15已交付，真人複測待完成| 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接；選填路標訓練另立用途／快照／model-index交付，見持續改善契約；未接通 | F17；P3-C已接真相機／本機閉環，下一步真人實測及P4障礙／語音，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
-| B17 Qwen場景描述／S1 | 新加坡代理／Secret v2及JSON分句已部署；獨立單次曾通過，整合真人未通過；5次／3125 microUSD，sentence-count拒絕後停止，1.9.4診斷候選 | Auth／App Check→active帳戶transaction與停止帳本→有界JPEG→Qwen完整回答→安全metrics；Key留Secret Manager，原圖／回答不保存 | 原次數／估算不重設；整合版手機、自動付費、描述品質另驗；導航內入口仍未接 |
+| B17 Qwen場景描述／S1 | 新加坡代理／Secret v2及JSON分句已部署；獨立單次曾通過，整合真人未通過；5次／3125 microUSD，sentence-count拒絕後停止，1.9.4診斷已裝機，真人待複驗 | Auth／App Check→active帳戶transaction與停止帳本→有界JPEG→Qwen完整回答→安全metrics；Key留Secret Manager，原圖／回答不保存 | 原次數／估算不重設；整合版手機、自動付費、描述品質另驗；導航內入口仍未接 |
 
 管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
 

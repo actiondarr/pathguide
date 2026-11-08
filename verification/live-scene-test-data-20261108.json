@@ -50,6 +50,35 @@
     "downloadedDeployedSourceMatchesLocal": true
   },
   "paidInferenceRequestsByAgent": 0,
-  "phoneAcceptance": "pending new diagnostic build and controlled phone rerun; mode not accepted",
-  "review": "Implementing-agent review, no independent agent: strict output parser, bounded diagnostics/no raw content, cancellation generation, late reply accounting, no fee/identity guard relaxation, scoped tests and signed build checks."
+  "phoneAcceptance": "pending 1.9.4+22 controlled phone test and copied diagnostic report; no functional success claim",
+  "review": "Implementing-agent review, no independent agent: strict output parser, bounded diagnostics/no raw content, cancellation generation, late reply accounting, no fee/identity guard relaxation, scoped tests and signed build checks.",
+  "release": {
+    "tag": "v1.9.4+22",
+    "sourceCommit": "af38b02d88bd3787ccd61f9be01cc444f928a0d7",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.9.4%2B22",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  },
+  "phoneInstall": "Updated in place; independent devicectl inventory verified 1.9.4 / build 22, normal launch succeeded; no uninstall/data clear. Phone functional acceptance pending.",
+  "recoveryGrant": {
+    "state": "ACTIVE",
+    "entryPoint": "describeScene",
+    "timeoutSeconds": 40,
+    "maxInstances": 2,
+    "checkedAtUtc": "2026-11-08T11:25:23.073Z",
+    "deploymentUpdateTime": "2026-11-08T10:27:52.373495352Z",
+    "secretVersion": "2",
+    "providerRegion": "Singapore",
+    "selectedAccountVerified": true,
+    "originalCountCostIdsUnchanged": true,
+    "priorRecoveryArchived": true,
+    "trialCount": 5,
+    "spentMicroUsd": 3125,
+    "halted": true,
+    "inFlight": false,
+    "lastStatus": "rejected",
+    "recoveryStatus": "ready",
+    "recoveryExpiresAtUtc": "2026-11-08T13:25:21.597Z",
+    "paidInferenceRequestsByAgent": 0
+  }
 }
