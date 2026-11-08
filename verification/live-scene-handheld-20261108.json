@@ -26,5 +26,13 @@
   "safety": "Engineering thresholds pending handheld calibration; cancellation/background/expiry, one in flight, server ledger/budget and no automatic paid retry unchanged.",
   "paidInferenceRequestsByAgent": 0,
   "phoneAcceptance": "pending user handheld rerun",
-  "review": "Implementing-agent review; no independent review; test movement, encoding race, stale/turn cancellation, no-capture timeout and existing UI/standalone/speech regression."
+  "review": "Implementing-agent review; no independent review; test movement, encoding race, stale/turn cancellation, no-capture timeout and existing UI/standalone/speech regression.",
+  "release": {
+    "tag": "v1.9.2+20",
+    "sourceCommit": "9b24b66c0cfa2c8d54dee9616c3e87a76e8cc745",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.9.2%2B20",
+    "remoteTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  },
+  "phoneInstall": "1.9.2+20 installed; independent inventory version/build and normal launch verified; no uninstall/data clear"
 }
