@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-09複雜場景修補候選1.10.2+26：離線先紅後綠重現Firestore遞迴merge令成功結果殘留拒絕鍵，以及「米缸／多層架」等正常名詞誤擋。後端以mergeFields整體替換lastResult及recentResults，保留其他counter；手機與後端只為指定物件／食物／顏色詞豁免米／層，其餘距離、樓層、安全及指令檢查仍用原文完整驗證。prompt明確廚廁物件用既有other，同位置合併，沒有擴enum或修復未知格式。共用五個合成場景、26個受限文字及八個錯誤觀察fixture；48項後端、594項Flutter／7項flag-off略過、flag-on相關101、analyze、私人Profile／deep strict簽章與四模型SHA通過，Swift未改未重跑原生。僅describeScene部署核SHA、匿名401；來源／不可變tag／prerelease及裝機待完成。只讀仍32／50、13331／500000 microUSD、原窗口至今日12:06:25，本輪沒有修改帳本、加額、延長或付費推理。兩張截圖實際觸發詞／欄位未知，廚廁品質、起音及VoiceOver仍待真人複驗。見[修補證據](../verification/scene-complex-fix-20261109.json)。
+
 2026-11-09複雜場景真人回報／交接：使用者確認房間能順利播音，但廚房／廁所截圖分別顯示answer-format（25／50，連續拒絕受限）及disallowed-content（26／50，等候新環境），沒有拒絕細項。最新只讀核對已32／50、13331／500000 microUSD，名義餘18，窗口至今日12:06:25、fingerprint相符、無inFlight、預留足夠、stopReason為null；非當前額度不足。最近三結果均complete，已覆蓋舊失敗；raw lastResult成功仍夾舊拒絕鍵，需優先核對Firestore巢狀merge殘留，不能據此歸因新成功或兩圖。category覆蓋及「米／層」禁字誤擋僅待驗候選。依使用者要求整理[下一工作視窗交接](../SCENE-MODE-HANDOFF.zh-HK.md)，私人截圖未上Git，本輪未修補、部署、裝機、改額或付費推理，未重跑測試。見[只讀證據](../verification/scene-complex-handoff-20261109.json)。
 
 2026-11-09場景診斷／US$0.50已交付：1.10.1+25來源7525a48，不可變tag／GitHub prerelease先核遠端，再原位更新、獨立清單核1.10.1／build25及正常啟動，未卸載或清資料。依使用者「總預算$0.5」（前文美元並已回覆確認）以updateTime CAS只改fingerprint、budgetMicroUsd及追加allowanceHistory；逐欄核對原16次／7861 microUSD、IDs、未知歷史、consumed recovery、halted、無inFlight與原window完全保留。總額10000→500000 microUSD、累計仍50；讀回fingerprint相符、下一次2458預留足夠、無停止原因，窗口ready，名義餘34次，香港時間2026-11-09 12:06:25到期不變。代理沒有付費推理。停止原因／重入安全歷史可在新版複驗；較早格式拒絕已無原紀錄，例子／精簡觀察未獲真人證明根治，3–5秒／內容／VoiceOver仍待驗收。見[交付及額度證據](../verification/scene-rejection-budget-20261109.json)及[版本收據](../verification/release-receipts/app-1.10.1+25.json)。
@@ -87,7 +89,7 @@
 <a id="service-state"></a>
 ## 2. 現況與已確認限制
 
-目前場景描述狀態（2026-11-09）：1.10.1+25房間已獲真人確認順利有聲；廚廁較複雜場景仍有answer-format及disallowed-content，未修好／未完成全場景驗收。最新只讀32／50、13331／500000 microUSD、名義餘18、無在途、預留足夠、窗口至今日12:06:25，非當前預算停止。舊拒絕已被最近三個成功結果覆蓋；raw lastResult有成功與舊拒絕鍵混存，需修資料一致性並重新取拒絕細項。使用者要求下一工作視窗接手，本輪只交接，未改程式／部署／許可或付費推理；詳見[交接](../SCENE-MODE-HANDOFF.zh-HK.md)及[最新證據](../verification/scene-complex-handoff-20261109.json)。
+目前場景描述狀態（2026-11-09）：手機仍1.10.1+25；房間已有真人語音成功，廚廁answer-format／disallowed-content未完成真人複驗。1.10.2+26已修並離線驗證lastResult巢狀合併殘留、正常米缸／多層架名詞誤擋，後端已部署核來源SHA；私人簽署建置通過，待版本檢查點及裝機。結構、句數、位置、同類同位置去重與整段內容驗證保留；沒有證據的格式不作正規化，原截圖拒絕根因仍未知。舊raw lastResult不作付費重播或遷移，安全讀回按status過濾，下次完整結果才替換。只讀帳本32／50、13331／500000 microUSD、無在途、fingerprint相符，窗口至今日12:06:25，沒有加額或延長；房間／廚房／廁所內容與相關起音、VoiceOver仍待驗收，詳見[修補證據](../verification/scene-complex-fix-20261109.json)。
 
 <a id="1-已有程式與缺口"></a>
 
@@ -202,6 +204,8 @@ N0仍為記憶體mock；P1另立本機加密樣例庫，可保存／重開／回
 離線重現：repo根目錄node --test backend/functions/test/scene_description.test.cjs；app目錄flutter test --no-pub test/scene_description_test.dart test/flutter_tts_speaker_test.dart test/speech_coordinator_test.dart。Windows在checkout用git rev-parse --show-toplevel定位，PowerShell用Join-Path切入app／backend，不需要Mac路徑。新測試均用合成JPEG／mock fetch，不讀真Key、不傳真圖。限流跨實例／刪除競態用transaction seam測試；真實Firebase部署、Secret／App Check及網絡仍待帳戶操作，不能當已驗。
 
 2026-11-08自動描述client已有即時辨識內工程候選：變化／明顯轉向後穩定才取相，首次全景、之後重要變化；不固定輪詢，5秒／10秒不是已採用週期。新增本機網格／CoreMotion保守訊號與去重、45秒冷卻、本次最多3次及已知費用／未知用量顯示；不是server額度或新付費授權。後端停止帳本仍生效，整合版實機／自動付費／語音驗收待補；獨立單次入口1.8.2+17已通過真人文字／廣東話。
+
+2026-11-09結果一致性與廚廁名詞修補：完成結果用Firestore set的mergeFields:[lastResult,recentResults]作頂層欄位遮罩，完整取代lastResult子map，避免遞迴merge殘留舊rejectionReason／rejectionDetail或metrics；當日count／ids／blockedUntil、跨日trial及刪除guard維持。假DB現模擬遞迴merge，驗rejected→complete、帶detail→無detail、usage缺失、最近三項、額度歷史及刪除晚回覆；另核實真SDK序列化遮罩而不發網絡。手機／後端只對米缸、米桶、米袋、米飯、玉米、粟米、米白色、層架、層板中的米／層作例外，其他禁限仍檢查完整原文及每項detail；不擴JSON契約或自動修復欄位。未重播私人照片或原回答，兩張截圖的拒絕根因仍未知；原raw殘留只在下次完整結果才覆寫，不用付費請求清理。
 
 ### Qwen-VL單張試驗（2026-11-07，離線可驗；使用者回報收到雲端文字）
 
@@ -559,7 +563,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
 | B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生及analyze通過，手機實測未完成 ；#18樓層證據／必要確認已有516項Flutter工程候選，1.8.0+15已交付，真人複測待完成| 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接；選填路標訓練另立用途／快照／model-index交付，見持續改善契約；未接通 | F17；P3-C已接真相機／本機閉環，下一步真人實測及P4障礙／語音，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
-| B17 Qwen場景描述／S1 | v2診斷／US$0.50已部署核SHA；1.10.1+25已裝機；CAS保留16次／7861 microUSD、IDs及未知歷史，fingerprint相符、下一次預留足夠，原窗口ready | Auth／App Check／active帳戶→只讀limits及最近3安全結果；推理另經跨日預留→當前有界JPEG→完整驗證→數值／固定原因，reserve保留歷史，不儲存照片／描述／觀察 | CAS只修fingerprint／budgetMicroUsd／追加allowanceHistory；累計50及到期不變、一在途、新未知用量停；舊格式拒絕無法還原，模型9.1秒非3–5秒達標，品質待真人複驗 |
+| B17 Qwen場景描述／S1 | 1.10.2+26後端名詞／結果一致性修補已部署核SHA，48項離線檢查通過；手機發佈裝機待完成 | Auth／App Check／active及刪除guard→預留→當前有界JPEG→完整驗證；以mergeFields完整替換lastResult及最近3數值／固定原因結果，保留其餘counter；與手機共用五場景／26禁限文字／八錯誤觀察fixture | 32／50、13331／500000 microUSD、原到期及未知歷史不變；不遷移舊raw殘留、不重播付費；截圖實際格式／詞未知，廚廁內容／起音／VoiceOver真人待複驗 |
 
 管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
 

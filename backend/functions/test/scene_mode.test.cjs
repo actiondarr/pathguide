@@ -4,6 +4,8 @@ const assert=require('node:assert/strict');
 const sharp=require('sharp');
 const scene=require('../scene_description');
 const trial=require('../scene_trial');
+const {mergeSet}=require('./firestore_merge_fake.cjs');
+const fixtures=require('../../../app/test/fixtures/scene_validation.json');
 const id=n=>n.toString(16).padStart(32,'0');
 const env={SCENE_TRIAL_ID:'room-test',SCENE_TRIAL_UID:'uid',SCENE_TRIAL_MAX_REQUESTS:'50',SCENE_TRIAL_BUDGET_MICRO_USD:'10000',QWEN_INPUT_USD_PER_MILLION:'0.2',QWEN_OUTPUT_USD_PER_MILLION:'1.6'};
 const observation={category:'table',position:'left',detail:'木枱'};
@@ -22,7 +24,7 @@ function database(state) {
   return {docs,doc:p=>p,runTransaction(fn){const op=serial.then(async()=>{
     const writes=[];
     const value=await fn({get:async p=>({exists:docs.has(p),data:()=>docs.get(p)}),set:(p,v,o)=>writes.push([p,v,o])});
-    for(const [p,v,o] of writes)docs.set(p,o?.merge?{...docs.get(p),...v}:v);
+    for(const [p,v,o] of writes)docs.set(p,mergeSet(docs.get(p),v,o));
     return value;
   });serial=op.catch(()=>{});return op;}};
 }
@@ -160,6 +162,11 @@ test('recent numeric results survive subsequent reservation and retain at most t
     // Advance only mock rate guard; real trial totals/costs remain monotonic.
     const counter=db.docs.get('users/uid/private/sceneDescriptionLimit');if(counter)counter.blockedUntil=0;
     await scene.handle(request,{db,enabled:true,trial:config,key:()=> 'mock',rates:{input:0.2,output:1.6},fetcher:async()=>i===0?response(['右邊見到門。'],[{...observation,category:'cupboard'}]):response(['左邊見到木枱。'])});
+    const written=db.docs.get('users/uid/private/sceneDescriptionLimit');
+    assert.deepEqual(written.lastResult,written.recentResults.at(-1));
+    assert.equal(written.count,i+1);
+    assert.deepEqual(written.ids,Array.from({length:i+1},(_,n)=>id(40+n)));
+    assert.ok(written.blockedUntil>Date.now());
   }
   const counter=db.docs.get('users/uid/private/sceneDescriptionLimit');
   assert.equal(counter.recentResults.length,3);assert.deepEqual(counter.recentResults.map(v=>v.requestId),[id(41),id(42),id(43)]);
@@ -188,4 +195,58 @@ test('higher supported budget does not amend a live allowance or bypass its fing
   assert.notEqual(higher.fingerprint,oldConfig.fingerprint);
   assert.throws(()=>trial.allocate(old,id(40),higher,1000),{code:'failed-precondition'});
   assert.equal(old.fingerprint,oldConfig.fingerprint);assert.equal(old.spentMicroUsd,3483);
+});
+
+test('shared synthetic kitchen/bathroom fixtures retain complete overview/update validation',async()=>{
+  for (const fixture of fixtures.accepted) {
+    for (const mode of ['overview','update']) {
+      const sentences=mode==='overview'?fixture.sentences:fixture.sentences.slice(0,1);
+      let calls=0;
+      const result=await scene.describe(await data(mode),{key:'fake',fetcher:async()=>{calls++;return response(sentences,fixture.observations);}});
+      assert.equal(calls,1);assert.equal(result.status,'complete');
+      assert.equal(result.text,sentences.join(''));assert.deepEqual(result.observations,fixture.observations);
+    }
+  }
+});
+test('shared noun exceptions cannot hide distance, floor, safety or navigation restrictions',()=>{
+  for (const text of fixtures.rejectedText) {
+    assert.throws(()=>scene.validateText(text,{min:1,max:1}),{code:'data-loss'},text);
+    assert.throws(()=>scene.validateObservations([{category:'other',position:'left',detail:text.replace(/[。！？]$/u,'')}]),{code:'data-loss'},text);
+  }
+});
+test('synthetic malformed observations retain precise rejection details and return no partial content',async()=>{
+  for (const fixture of fixtures.rejectedObservations) {
+    const result=await scene.describe(await data(),{key:'fake',fetcher:async()=>response(['右邊有洗衣機。'],fixture.items)});
+    assert.equal(result.status,'rejected');assert.equal(result.rejectionDetail,fixture.detail);
+    assert.ok(!('text' in result));assert.ok(!('observations' in result));assert.deepEqual(result.metrics.usage,usage);
+  }
+});
+
+test('full-map telemetry replacement clears optional rejection keys and stale metrics while preserving counters',async()=>{
+  const db=database();
+  const path='users/uid/private/sceneDescriptionLimit';
+  db.docs.set(path,{unrelated:{preserve:true}});
+  for (let i=0;i<3;i++) {
+    const current=await data();current.requestId=id(60+i);
+    const counter=db.docs.get(path);counter.blockedUntil=0;
+    const request={app:{appId:'test'},auth:{uid:'uid',token:{firebase:{sign_in_provider:'google.com'}}},data:current};
+    await scene.handle(request,{db,enabled:true,key:()=> 'fake',rates:{input:0.2,output:1.6},fetcher:async()=>{
+      const payload={choices:[{finish_reason:i===1?'content_filter':'stop',message:{content:JSON.stringify({sentences:[i===0?'請向左行。':'右邊有洗手盆。'],observations:[]})}}],...(i<2?{usage}:{})};
+      return new Response(JSON.stringify(payload),{headers:{'content-type':'application/json'}});
+    }});
+    const written=db.docs.get(path);
+    assert.deepEqual(written.unrelated,{preserve:true});assert.equal(written.count,i+1);
+    assert.equal(written.ids.length,i+1);assert.equal(written.lastResult.requestId,current.requestId);
+    assert.deepEqual(written.lastResult,written.recentResults.at(-1));
+    if(i===1) {assert.equal(written.lastResult.rejectionReason,'provider-refusal');assert.ok(!('rejectionDetail' in written.lastResult));}
+    if(i===2) {
+      assert.equal(written.lastResult.status,'complete');
+      assert.ok(!('rejectionReason' in written.lastResult));assert.ok(!('rejectionDetail' in written.lastResult));
+      assert.equal(written.lastResult.metrics.usage,null);assert.equal(written.lastResult.metrics.estimate,null);
+    }
+  }
+  const history=db.docs.get(path).recentResults;
+  assert.equal(history.length,3);assert.equal(history[0].rejectionDetail,'text-content');
+  assert.equal(history[1].rejectionReason,'provider-refusal');
+  assert.ok(!JSON.stringify([...db.docs]).includes('洗手盆'));
 });

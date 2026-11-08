@@ -2,6 +2,7 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const sharp = require('sharp');
+const {mergeSet}=require('./firestore_merge_fake.cjs');
 const {describe,cleanImage,validateText,renderAnswer,usageOf,estimate,reserve,handle,BASE} = require('../scene_description');
 const good = '畫面左邊有張木枱。中間見到一道門，右邊有張凳。';
 const id = 'a'.repeat(32);
@@ -17,7 +18,7 @@ function fakeDb() {
   let active = true, deleted = false;
   let serial = Promise.resolve();
   return {doc:p=>p, deactivate(){active=false;deleted=true;}, get value(){return state;}, runTransaction(fn) {
-    const op=serial.then(()=>fn({get:async path=>path === 'users/uid' ? {data:()=>({status:active?'active':'deleting'})} : path === 'account_deletions/uid' ? {exists:deleted} : {data:()=>state},set:(_,value,opts)=>{state=opts?.merge?{...state,...value}:value;}}));
+    const op=serial.then(()=>fn({get:async path=>path === 'users/uid' ? {data:()=>({status:active?'active':'deleting'})} : path === 'account_deletions/uid' ? {exists:deleted} : {data:()=>state},set:(_,value,opts)=>{state=mergeSet(state,value,opts);}}));
     serial=op.catch(()=>{}); return op;
   }};
 }

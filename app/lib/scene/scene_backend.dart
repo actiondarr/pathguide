@@ -148,14 +148,21 @@ String validateSceneText(
 }) {
   if (value is! String) throw const SceneFailure('invalid-answer');
   final text = value.trim();
+  // Keep in sync with backend scene_description.js. Only these nouns exempt
+  // 米/層; all other restrictions still inspect the complete original text.
+  final nonNounText = text.replaceAll(
+    RegExp(r'米缸|米桶|米袋|米飯|玉米|粟米|米白色|層架|層板'),
+    '',
+  );
   final sentences = RegExp(r'[^。！？]+[。！？]').allMatches(text).toList();
   if (text.length > 240 ||
       sentences.length < minSentences ||
       sentences.length > maxSentences ||
       sentences.map((m) => m[0]).join() != text ||
       !RegExp(r'[\u3400-\u9fff]').hasMatch(text) ||
+      RegExp(r'[米層]').hasMatch(nonNounText) ||
       RegExp(
-        r'[\r\n<>0-9０-９]|米|公尺|厘米|公里|met(?:er|re)|樓(?!梯)|層|目的地|安全|暢通|通行|避開|繞過|向左|向右|左轉|右轉|可以行|可以走|往前|前進|直行|行過去|走過去|左邊行|右邊行|靠左|靠右|向前|向後|往左|往右|前行|後退|退後|行去|行入|行出|走去|走入|走出|繼續行|繼續走|可通過|可行|可走|請|建議|應該|必須|你可|呎|尺|英寸|英吋|马|车|门|栏|电|这|个|侧|见|间|楼|层',
+        r'[\r\n<>0-9０-９]|公尺|厘米|公里|met(?:er|re)|樓(?!梯)|目的地|安全|暢通|通行|避開|繞過|向左|向右|左轉|右轉|可以行|可以走|往前|前進|直行|行過去|走過去|左邊行|右邊行|靠左|靠右|向前|向後|往左|往右|前行|後退|退後|行去|行入|行出|走去|走入|走出|繼續行|繼續走|可通過|可行|可走|請|建議|應該|必須|你可|呎|尺|英寸|英吋|马|车|门|栏|电|这|个|侧|见|间|楼|层',
         caseSensitive: false,
       ).hasMatch(text)) {
     throw const SceneFailure('invalid-answer');
