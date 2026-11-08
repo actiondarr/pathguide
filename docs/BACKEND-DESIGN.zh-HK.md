@@ -1,6 +1,6 @@
 # Backend：PathGuide 資料、服務契約與交付
 
-2026-11-08交付準備：1.9.0+18已通過562項Flutter（另1項flag關閉時略過）、啟用flag的46項場景／語音／iOS UI、analyze、57項原生Simulator、簽署Profile及deep strict codesign；四模型SHA保持一致。來源fb57220及不可變tag／GitHub prerelease v1.9.0+18已推送並核對遠端後才嘗試更新。首次連線重設，裝置資訊及重試確認iPhone仍鎖定／disconnected；新版尚未安裝，需使用者解鎖並接USB，不刪App或清資料。即時辨識整合的真人／Motion／VoiceOver及自動取相驗收未完成，不以1.8.2+17獨立單次成功代替。單次CAS恢復腳本已準備但未執行，原帳本2次／2593 microUSD／halted及已消耗recovery不變。排程只啟動本輪一次，後續由本聊天接續。
+2026-11-08即時辨識整合已裝機：使用者解鎖並接好USB後，初次仍遇CoreDevice連線重設；device info重新連線後更新安裝成功，獨立裝置清單核對1.9.0／build18，正常啟動成功。沒有移除App或清除資料。來源fb57220及不可變v1.9.0+18 tag／GitHub prerelease已於安裝前核遠端，562項Flutter（另1項flag關閉時略過）、flag-on 46項、analyze、57原生、簽署與四模型SHA核對保留。以updateTime CAS保存前次recovery到history後，放行即時辨識整合的一次受控測試，沿用原20次／10000 microUSD額度；count=2、spent=2593、IDs、halted與其餘欄位不變，沒有新增代理付費推理。已請使用者在即時辨識明示開啟自動模式，站定房間枱／椅／門，回報自動文字／廣東話及本機辨識是否繼續；整合版真人／轉向門檻／VoiceOver驗收仍未完成，不以裝機或舊獨立入口成功代替。
 
 2026-11-08即時辨識整合：App新增變化後穩定才取相的可開關自動候選，沿用既有describeScene、新加坡固定端點、Secret v2、Auth／App Check／指定帳戶。沒有本輪後端程式／部署或推理。至少45秒冷卻與每次進入3次是client附加限制，無法重設或解除原帳本；count=2、保守2593 microUSD（含首次未知2458）、halted與已消耗單次recovery均保留。需要手機測試時另以CAS保存舊recovery／次數／估算並單次放行，不能宣稱自動模式已有額外或無限額度。新App感測／穩定門檻及工程驗證見Frontend與[本輪證據](../verification/live-scene-recognition-20261108.json)，先前手機成功僅屬獨立單次入口。
 

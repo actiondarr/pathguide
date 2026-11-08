@@ -15,7 +15,7 @@
     "detector-hk9.json": "020c57899aeb91c8fedc0421f76a73c39c7aa79e1a90de6e353d69f98c1367bf"
   },
   "modelsUnchanged": true,
-  "phoneInstall": "not installed: first connection reset, retry/device info confirms device still locked; user unlock/USB required",
+  "phoneInstall": "updated existing app after device-info reconnected; installed inventory independently confirms 1.9.0 build 18; normal launch succeeded",
   "phoneAcceptance": "integrated scene/motion/VoiceOver pending; standalone 1.8.2+17 already passed",
   "privateBinaryUploaded": false,
   "release": {
@@ -26,5 +26,10 @@
     "prerelease": true,
     "assets": []
   },
-  "phoneDataCleared": false
+  "phoneDataCleared": false,
+  "installedVersionVerified": {
+    "version": "1.9.0",
+    "build": "18"
+  },
+  "launch": "success"
 }

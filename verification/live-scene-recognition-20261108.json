@@ -36,7 +36,7 @@
   },
   "provider": "existing Singapore fixed URL / Secret 2; no backend source or deployment change",
   "ledger": "count 2, spentMicroUsd 2593 incl original unknown reservation 2458, halted; no reset",
-  "phoneAcceptance": "integrated page pending; previous standalone description/Cantonese passed",
+  "phoneAcceptance": "waiting for user: automatic stable-scene capture, Cantonese and continued local detection in integrated page",
   "paidInferenceRequestsByAgent": 0,
   "review": "Implementing-agent review; no independent review. Checked camera borrowing, encoder epoch/deadline, stale motion/frame rejection, cancellation, speech priority, bounded attempts and unchanged server ledger. Parameters uncalibrated on handset.",
   "release": {
@@ -47,8 +47,8 @@
     "prerelease": true,
     "assets": []
   },
-  "phoneInstall": "blocked by locked phone / CoreDevice disconnected; no install success claimed",
-  "controlledPhoneTest": "one-attempt CAS recovery prepared but NOT armed; original consumed recovery/count/cost/halt unchanged",
+  "phoneInstall": "1.9.0+18 update installed; device inventory verified version/build; normal launch succeeded; no uninstall/data clear",
+  "controlledPhoneTest": "one-attempt CAS recovery armed within original 20 requests / 10000 microUSD allowance; prior recovery archived, count/cost/IDs unchanged; no agent inference",
   "ledgerReadback": {
     "trialCount": 2,
     "spentMicroUsd": 2593,
@@ -57,5 +57,22 @@
     "lastStatus": "complete",
     "recoveryStatus": "consumed",
     "checkedAtUtc": "2026-11-08T01:58:59.395Z"
+  },
+  "recoveryGrant": {
+    "checkedAtUtc": "2026-11-08T08:51:11.596Z",
+    "deploymentUpdateTime": "2026-11-07T20:46:10.087271987Z",
+    "secretVersion": "2",
+    "providerRegion": "Singapore",
+    "selectedAccountVerified": true,
+    "originalCountCostIdsUnchanged": true,
+    "priorRecoveryArchived": true,
+    "trialCount": 2,
+    "spentMicroUsd": 2593,
+    "halted": true,
+    "inFlight": false,
+    "lastStatus": "complete",
+    "recoveryStatus": "ready",
+    "recoveryExpiresAtUtc": "2026-11-08T20:51:10.082Z",
+    "paidInferenceRequestsByAgent": 0
   }
 }
