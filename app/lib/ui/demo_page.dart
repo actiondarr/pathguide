@@ -1,6 +1,11 @@
 import '../l10n/app_language.dart';
 
 import 'dart:async';
+import 'dart:typed_data';
+
+import '../scene/live_scene_controller.dart';
+import '../scene/scene_backend.dart';
+import '../tts/speech_coordinator.dart';
 
 import 'package:flutter/foundation.dart'
     show kDebugMode, defaultTargetPlatform, TargetPlatform;
@@ -69,6 +74,80 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   late final FlutterTtsSpeaker _speaker;
   late final EnvironmentSpeaker _environmentSpeaker;
   late final Announcer _announcer;
+  late final SpeechCoordinator _voice;
+  late final LiveSceneController _scene;
+  bool get _sceneFeature =>
+      _isIOS && const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED');
+
+  Future<Uint8List?> _captureScene() async {
+    final source = _source;
+    if (!_active ||
+        !_sourceReady ||
+        !_requestedRunning ||
+        _controlsOpen ||
+        source is! PlatformVision) {
+      return null;
+    }
+    final bytes = await source.captureSceneFrame();
+    return identical(source, _source) &&
+            _active &&
+            _requestedRunning &&
+            !_controlsOpen
+        ? bytes
+        : null;
+  }
+
+  void _sceneChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _startScene({required bool automatic}) async {
+    if (!_sceneFeature ||
+        !_sourceReady ||
+        !_requestedRunning ||
+        _mode != SourceMode.camera) {
+      return;
+    }
+    _stopSpeech();
+    _scene.interrupt();
+    _controlsOpen = true;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(automatic ? '開啟自動場景分析？' : '分析眼前場景？'),
+        content: SingleChildScrollView(
+          child: Text(
+            automatic
+                ? '本次只測房間枱、椅、門。會在畫面有重要變化或轉向後，手機穩定時取相傳到 Qwen 分析，可能產生費用。首次描述全景，之後略過完全重複的句子。本次使用最多三次，每次至少相隔四十五秒；仍受後端帳本及剩餘額度限制。只描述可見畫面，不判斷距離或通行。可隨時關閉；錯誤或用量未知會停止。'
+                : '本次只測房間枱、椅、門。會從正在辨識的相機取一張相傳到 Qwen 分析，可能產生費用。請站定使用。結果只描述可見畫面，不判斷距離或通行。',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('同意並開始'),
+          ),
+        ],
+      ),
+    );
+    _controlsOpen = false;
+    if (!mounted ||
+        !_active ||
+        !_requestedRunning ||
+        !_sourceReady ||
+        accepted != true) {
+      return;
+    }
+    if (automatic) {
+      _scene.setAutomatic(true);
+    } else {
+      await _scene.describe();
+    }
+  }
 
   StreamSubscription<VisionFrame>? _sub;
 
@@ -205,8 +284,18 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       announce: _announceWithScreenReader,
       translate: (text) => appText(text, widget.settings.language),
     );
+    _voice = SpeechCoordinator(_environmentSpeaker);
+    _scene = LiveSceneController(
+      capture: _captureScene,
+      backend: FirebaseSceneBackend(),
+      speaker: _CantoneseSceneSpeaker(
+        _voice.channel(SpeechChannel.scene),
+        () => _speakEnabled && (_screenReader || _speaker.isCantonese),
+      ),
+    );
+    _scene.addListener(_sceneChanged);
     _announcer = Announcer(
-      speaker: _environmentSpeaker,
+      speaker: _voice.channel(SpeechChannel.environment),
       minSpeakScore: widget.settings.speakThreshold,
     );
     widget.settings.addListener(_applySettings);
@@ -315,7 +404,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
               simulated: _mode == SourceMode.mock,
             );
       setState(() => _readback = text);
-      await _environmentSpeaker.speak(text);
+      await _voice.channel(SpeechChannel.environment).speak(text);
     } catch (error) {
       if (mounted) {
         setState(() => _ttsError = '未能讀出結果，請閱讀下方結果或稍後重試。');
@@ -392,6 +481,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   bool _isCurrent(int generation) => _active && _isRequested(generation);
 
   Future<void> _stopVision() async {
+    _scene.setAvailable(false);
     _resultExpiry?.cancel();
     _diagTimer?.cancel();
     _diagTimer = null;
@@ -466,6 +556,17 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         await _stopVision();
         return;
       }
+      if (_sceneFeature &&
+          mode == SourceMode.camera &&
+          source is PlatformVision) {
+        try {
+          await source.setSceneObservation(true);
+          if (!_isCurrent(generation)) return;
+          _scene.setAvailable(true);
+        } catch (_) {
+          _scene.setAvailable(false);
+        }
+      }
       await _announcePendingStatus();
       if (!_isCurrent(generation)) return;
       _armResultExpiry();
@@ -496,8 +597,9 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   }
 
   void _stopSpeech() {
+    _scene.interrupt();
     _announcer.enabled = false;
-    final stopping = _speaker.stop();
+    final stopping = _voice.stop();
     _speechStop = stopping;
     unawaited(
       stopping.then((_) {
@@ -529,7 +631,9 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       if (!_isCurrent(generation) || _controlsOpen) return;
       final text = _pendingStatusAnnouncement;
       _pendingStatusAnnouncement = null;
-      if (text != null) await _environmentSpeaker.speak(text);
+      if (text != null) {
+        await _voice.channel(SpeechChannel.environment).speak(text);
+      }
     } catch (_) {
       if (mounted) setState(() => _ttsError = '未能播放狀態提示，請檢查語音設定。');
     } finally {
@@ -629,6 +733,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   void _onFrame(VisionFrame frame) {
     if (!mounted || !_active || !_requestedRunning || !_sourceReady) return;
+    if (_sceneFeature) _scene.observe(frame.sceneSignal);
     final now = DateTime.now();
     final dt = now.difference(_lastFrameAt).inMicroseconds;
     _lastFrameAt = now;
@@ -698,6 +803,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _scene.removeListener(_sceneChanged);
     _resultExpiry?.cancel();
     _photoTimer?.cancel();
     widget.settings.removeListener(_applySettings);
@@ -709,6 +815,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     _stopSpeech();
     final stopping = _stopVision();
     _transition = _transition.then((_) => stopping);
+    _scene.dispose();
     _settingsFocus.dispose();
     super.dispose();
   }
@@ -819,6 +926,75 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                 ],
               ),
             ),
+            if (_sceneFeature)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.24,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                key: const ValueKey('live-scene-describe'),
+                                onPressed: _scene.canDescribe && !_controlsOpen
+                                    ? () => _startScene(automatic: false)
+                                    : null,
+                                child: const Text('描述前方'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton(
+                                key: const ValueKey('live-scene-cancel'),
+                                onPressed: () => _scene.interrupt(),
+                                child: const Text('停止場景分析'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SwitchListTile(
+                          key: const ValueKey('live-scene-auto'),
+                          dense: true,
+                          title: const Text('環境變化時自動描述'),
+                          value: _scene.automatic,
+                          onChanged:
+                              _scene.available &&
+                                  !_scene.usageUnknown &&
+                                  _scene.attempts < 3 &&
+                                  !_controlsOpen
+                              ? (value) {
+                                  if (value) {
+                                    unawaited(_startScene(automatic: true));
+                                  } else {
+                                    _scene.setAutomatic(false);
+                                  }
+                                }
+                              : null,
+                        ),
+                        Text(
+                          _scene.status,
+                          key: const ValueKey('live-scene-status'),
+                        ),
+                        if (_scene.text != null)
+                          Text(
+                            _scene.text!,
+                            key: const ValueKey('live-scene-result'),
+                          ),
+                        if (_scene.attempts > 0)
+                          Text(
+                            '本次使用已嘗試 ${_scene.attempts}／3 次；估算 US\$${_scene.estimatedUsd.toStringAsFixed(6)}${_scene.usageUnknown ? '（另有未知用量）' : ''}，不是帳單硬上限。',
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               child: Row(
@@ -2032,4 +2208,20 @@ class _GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CantoneseSceneSpeaker implements Speaker {
+  _CantoneseSceneSpeaker(this.output, this.available);
+  final Speaker output;
+  final bool Function() available;
+  @override
+  Future<void> speak(String text) async {
+    if (!available()) throw const SceneFailure('speech-unavailable');
+    await output.speak(text);
+  }
+
+  @override
+  Future<void> stop() => output.stop();
+  @override
+  Future<List<String>> languages() => output.languages();
 }

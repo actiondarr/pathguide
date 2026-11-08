@@ -34,6 +34,8 @@
 	</dict></array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMotionUsageDescription</key>
+	<string>場景分析用手機轉向及穩定狀態，避免讀出已轉離的畫面；不儲存動作資料。</string>
 	<key>NSCameraUsageDescription</key>
 	<string>領路通需要使用相機作即時物件辨識、拍攝菜單文字及本機 LiDAR 表面測距。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

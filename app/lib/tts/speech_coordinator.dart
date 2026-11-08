@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'announcer.dart';
 
-enum SpeechChannel { environment, navigation }
+enum SpeechChannel { scene, environment, navigation }
 
 /// One output, with navigation taking priority. Camera speech is never queued.
 /// Generations also invalidate requests waiting for a slow native stop call.
@@ -40,7 +40,7 @@ class SpeechCoordinator {
     if (_suspended ||
         (_owner != null &&
             channel.index <= _owner!.index &&
-            channel == SpeechChannel.environment)) {
+            channel != SpeechChannel.navigation)) {
       return;
     }
     final generation = ++_generation;

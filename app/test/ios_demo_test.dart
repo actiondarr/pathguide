@@ -95,6 +95,7 @@ void main() {
             'inputSize': 640,
           },
           'status' => <String, Object>{'ready': true},
+          'captureSceneFrame' => Uint8List.fromList([1]),
           _ => null,
         };
       },
@@ -265,6 +266,91 @@ void main() {
       expect(visionCalls, isNot(contains('startPreview')));
       await close(tester);
     },
+  );
+
+  testWidgets(
+    'live scene consent borrows camera; failure stops automatic analysis without stopping recognition',
+    (tester) async {
+      await start(tester, initialSection: AppSection.explore);
+      expect(visionCalls, contains('setSceneObservation'));
+      var sequence = 0;
+      Future<void> frame() async {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 200)),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+        await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              'hk.pathguide/vision/frame',
+              const StandardMethodCodec().encodeSuccessEnvelope({
+                'detections': [],
+                'inferenceMs': 10.0,
+                'frameWidth': 1280,
+                'frameHeight': 720,
+                'sceneSignal': {
+                  'sequence': ++sequence,
+                  'luma': List.filled(64, 40),
+                  'attitude': [0.0, 0.0, 0.0, 1.0],
+                  'rotationRate': 0.0,
+                  'motionFresh': true,
+                },
+              }),
+              (_) {},
+            );
+        await tester.pump();
+      }
+
+      for (var i = 0; i < 9; i++) {
+        await frame();
+      }
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const ValueKey('live-scene-describe')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      expect(visionCalls.where((x) => x == 'captureSceneFrame'), isEmpty);
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
+      await tester.pumpAndSettle();
+      expect(find.text('開啟自動場景分析？'), findsOneWidget);
+      expect(visionCalls.where((x) => x == 'captureSceneFrame'), isEmpty);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .value,
+        isFalse,
+      );
+      for (var i = 0; i < 9; i++) {
+        await frame();
+      }
+      await tester.tap(find.byKey(const ValueKey('live-scene-describe')));
+      await tester.pumpAndSettle();
+      expect(find.text('分析眼前場景？'), findsOneWidget);
+      await tester.tap(find.text('同意並開始'));
+      await tester.pumpAndSettle();
+      expect(visionCalls.where((x) => x == 'captureSceneFrame'), hasLength(1));
+      expect(visionCalls.where((x) => x == 'startPreview'), hasLength(1));
+      expect(find.text('暫停辨識'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('recognition-start-pause')));
+      await tester.pump();
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .value,
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
   );
 
   testWidgets('returning home disposes camera before choosing another task', (

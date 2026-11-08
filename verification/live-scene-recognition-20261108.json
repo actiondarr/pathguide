@@ -1,0 +1,42 @@
+{
+  "dateHongKong": "2026-11-08",
+  "version": "1.9.0+18",
+  "scope": "manual and opt-in change-triggered scene descriptions inside live recognition; navigation-page integration excluded",
+  "checks": {
+    "flutterFullPassed": 562,
+    "flutterFullSkippedFlagOff": 1,
+    "flagOnScopedPassed": 46,
+    "analyze": "pass",
+    "nativeSimulator": {
+      "passed": 57,
+      "result": "TEST SUCCEEDED",
+      "scope": "includes camera-owner guard, local grid and upright bounded JPEG / no GPS metadata"
+    },
+    "visualQa": "synthetic normal and 2x text PNGs inspected; scene controls scroll, fixed pause remains visible",
+    "signedProfileBuild": "passed",
+    "codesign": "deep strict passed",
+    "models": "all four hashes unchanged"
+  },
+  "policy": {
+    "cloudPollTimer": false,
+    "stableMs": 1200,
+    "cooldownSeconds": 45,
+    "localSessionAttemptCap": 3,
+    "motionMaxAgeMs": 500,
+    "frameMaxAgeMs": 1000,
+    "descriptionDeadlineSeconds": 20,
+    "nativeJpegDeadlineSeconds": 2,
+    "importantGridDifference": 0.12,
+    "importantAttitudeDegrees": 15,
+    "singleInFlight": true,
+    "automaticStartsOff": true,
+    "restartAutoAfterInterruption": false,
+    "semanticDeltaDetection": false,
+    "sentenceDedup": "exact full sentence match only"
+  },
+  "provider": "existing Singapore fixed URL / Secret 2; no backend source or deployment change",
+  "ledger": "count 2, spentMicroUsd 2593 incl original unknown reservation 2458, halted; no reset",
+  "phoneAcceptance": "integrated page pending; previous standalone description/Cantonese passed",
+  "paidInferenceRequestsByAgent": 0,
+  "review": "Implementing-agent review; no independent review. Checked camera borrowing, encoder epoch/deadline, stale motion/frame rejection, cancellation, speech priority, bounded attempts and unchanged server ledger. Parameters uncalibrated on handset."
+}

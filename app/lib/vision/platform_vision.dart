@@ -10,6 +10,7 @@ import 'dart:ui' show Size;
 import 'package:flutter/services.dart';
 
 import 'detection.dart';
+import '../scene/live_scene_signal.dart';
 import 'platform_contract.dart';
 import 'model_class_map.dart';
 import 'model_manifest.dart';
@@ -409,6 +410,20 @@ class PlatformVision implements VisionSource {
     _loaded = false;
   }
 
+  /// Borrow the active iOS camera; never acquires another camera lease.
+  Future<void> setSceneObservation(bool enabled) async {
+    if (!_disposed && _ready) {
+      await _method.invokeMethod<void>(VisionMethods.setSceneObservation, {
+        'enabled': enabled,
+      });
+    }
+  }
+
+  Future<Uint8List?> captureSceneFrame() async {
+    if (_disposed || !_ready) return null;
+    return _method.invokeMethod<Uint8List>(VisionMethods.captureSceneFrame);
+  }
+
   VisionFrame _parseFrame(Map<Object?, Object?> raw) {
     final w = _asInt(raw[VisionKeys.frameWidth]) ?? 0;
     final h = _asInt(raw[VisionKeys.frameHeight]) ?? 0;
@@ -423,6 +438,7 @@ class PlatformVision implements VisionSource {
       inferenceMs: _asDouble(raw[VisionKeys.inferenceMs]) ?? 0,
       frameWidth: w,
       frameHeight: h,
+      sceneSignal: LiveSceneSignal.parse(raw[VisionKeys.sceneSignal]),
     );
   }
 

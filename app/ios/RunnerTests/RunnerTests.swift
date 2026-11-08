@@ -1,6 +1,7 @@
 import Flutter
 import AVFoundation
 import CoreVideo
+import CoreImage
 import CryptoKit
 import CoreLocation
 import MapKit
@@ -10,6 +11,44 @@ import UIKit
 import XCTest
 
 class RunnerTests: XCTestCase {
+  func testLiveSceneCannotEnableMotionWithoutOwningTheCamera() {
+    let plugin = VisionPlugin(messenger: NavigationTestMessenger(), cameraCoordinator: CameraCoordinator())
+    var replies = 0
+    plugin.handle(FlutterMethodCall(methodName: "setSceneObservation", arguments: ["enabled": true])) { value in
+      replies += 1
+      XCTAssertEqual((value as? FlutterError)?.code, "not_running")
+    }
+    XCTAssertEqual(replies, 1)
+  }
+
+  func testLiveSceneJpegIsUprightBoundedAndHasNoLocationMetadata() throws {
+    let pixels = try routePixels(width: 1280, height: 720)
+    let jpeg = try XCTUnwrap(IOSSceneSignal.jpeg(pixels, context: CIContext(options: [.useSoftwareRenderer: true])))
+    XCTAssertLessThanOrEqual(jpeg.count, 524288)
+    let source = try XCTUnwrap(CGImageSourceCreateWithData(jpeg as CFData, nil))
+    let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+    XCTAssertEqual(properties[kCGImagePropertyPixelHeight] as? Int, 512)
+    XCTAssertEqual(properties[kCGImagePropertyPixelWidth] as? Int, 288)
+    XCTAssertNil(properties[kCGImagePropertyGPSDictionary])
+  }
+
+  func testLiveSceneGridComesFromUncroppedLumaAndRejectsUnsupportedBuffers() throws {
+    var value: CVPixelBuffer?
+    XCTAssertEqual(CVPixelBufferCreate(nil, 32, 16,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange, nil, &value), kCVReturnSuccess)
+    let buffer = try XCTUnwrap(value)
+    CVPixelBufferLockBaseAddress(buffer, [])
+    let bytes = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(buffer, 0)).assumingMemoryBound(to: UInt8.self)
+    let stride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)
+    for y in 0..<16 { for x in 0..<32 { bytes[y*stride+x] = UInt8(y*4+x*2) } }
+    CVPixelBufferUnlockBaseAddress(buffer, [])
+    let grid = try XCTUnwrap(IOSSceneSignal.luminance(buffer))
+    XCTAssertEqual(grid.count, 64)
+    XCTAssertEqual(grid.first, 6)
+    XCTAssertEqual(grid.last, 118)
+    XCTAssertNil(IOSSceneSignal.luminance(try routePixels()))
+  }
+
   func testRoutePreviewBindsOnlyRunningSessionAndDetachesBeforeStop() {
     let driver = RouteTestDriver()
     driver.previewSession = AVCaptureSession()

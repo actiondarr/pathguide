@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreVideo
 import CoreImage
+import CoreMotion
 import Flutter
 import TensorFlowLiteC
 import UIKit
@@ -46,6 +47,11 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   private let photoQueue = DispatchQueue(label: "hk.pathguide.vision.photos")
   private let photoContext = CIContext(options: [.cacheIntermediates: false])
   private var pendingPhoto: (id: UUID, result: FlutterResult, trigger: String, deadline: CFAbsoluteTime)?
+  private let sceneMotion = CMMotionManager()
+  private var sceneObservation = false // inferenceQueue
+  private var pendingScene: (id: UUID, result: FlutterResult)? // inferenceQueue
+  private var sceneEpoch = 0 // inferenceQueue; fences encoders after stop
+  private var sceneSequence: Int64 = 0
   private var lowCandidate: IOSDetection?
   private var lowSince: CFAbsoluteTime?
 
@@ -92,7 +98,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     frameChannel.setStreamHandler(self)
   }
 
-  deinit { NotificationCenter.default.removeObserver(self) }
+  deinit { sceneMotion.stopDeviceMotionUpdates(); NotificationCenter.default.removeObserver(self) }
 
   @objc private func enteredBackground() { release { _ in } }
 
@@ -108,6 +114,40 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    case "setSceneObservation":
+      let enabled = (call.arguments as? [String: Any])?["enabled"] as? Bool ?? false
+      guard !enabled || cameraAccess?.isCurrent == true else {
+        result(FlutterError(code: "not_running", message: "請先開始即時辨識", details: nil)); return
+      }
+      if enabled && sceneMotion.isDeviceMotionAvailable {
+        sceneMotion.deviceMotionUpdateInterval = 0.1
+        sceneMotion.startDeviceMotionUpdates(using: .xArbitraryZVertical)
+      } else { sceneMotion.stopDeviceMotionUpdates() }
+      inferenceQueue.async { [weak self] in
+        self?.sceneObservation = enabled
+        self?.sceneEpoch += 1
+        if let pending = self?.pendingScene {
+          self?.pendingScene = nil
+          DispatchQueue.main.async { pending.result(nil) }
+        }
+        DispatchQueue.main.async { result(nil) }
+      }
+    case "captureSceneFrame":
+      let id = UUID(), reply = CameraOnceReply<Any?>(result)
+      // The deadline includes time waiting for the shared photo encoder.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2) { reply.finish(nil) }
+      inferenceQueue.async { [weak self] in
+        guard let self, self.sceneObservation, self.captureSession.isRunning,
+          self.pendingScene == nil else {
+          DispatchQueue.main.async { reply.finish(nil) }; return
+        }
+        self.pendingScene = (id, { reply.finish($0) })
+        self.inferenceQueue.asyncAfter(deadline: .now() + 2) { [weak self] in
+          guard let self, let pending = self.pendingScene, pending.id == id else { return }
+          self.pendingScene = nil
+          DispatchQueue.main.async { pending.result(nil) }
+        }
+      }
     case "captureFrame":
       guard let args = call.arguments as? [String: Any],
         let trigger = args["trigger"] as? String,
@@ -318,6 +358,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
   }
 
   private func stopCaptureHardware(_ completion: @escaping () -> Void) {
+    sceneMotion.stopDeviceMotionUpdates()
     let group = DispatchGroup()
     group.enter()
     sessionQueue.async { [weak self] in
@@ -329,6 +370,12 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
     inferenceQueue.async { [weak self] in
       if let pending = self?.pendingPhoto {
         self?.pendingPhoto = nil
+        DispatchQueue.main.async { pending.result(nil) }
+      }
+      self?.sceneObservation = false
+      self?.sceneEpoch += 1
+      if let pending = self?.pendingScene {
+        self?.pendingScene = nil
         DispatchQueue.main.async { pending.result(nil) }
       }
       self?.interpreter = nil
@@ -557,7 +604,7 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
       analyzeError = ""
       skippedReason = ""
 
-      let payload: [String: Any] = [
+      var payload: [String: Any] = [
         "detections": detections.map(\.dictionary),
         "inferenceMs": inferenceMs,
         "frameWidth": prepared.rawWidth,
@@ -568,7 +615,32 @@ final class VisionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
         "frameMaxScore": Double(frameMaxScore),
         "frameFormat": frameFormat,
       ]
-      DispatchQueue.main.async { [weak self] in self?.eventSink?(payload) }
+      if sceneObservation {
+        sceneSequence += 1
+        if let luma = IOSSceneSignal.luminance(pixelBuffer), let motion = sceneMotion.deviceMotion {
+          let age = ProcessInfo.processInfo.systemUptime - motion.timestamp
+          let q = motion.attitude.quaternion, rate = motion.rotationRate
+          payload["sceneSignal"] = ["sequence": sceneSequence, "luma": luma,
+            "attitude": [q.x, q.y, q.z, q.w],
+            "rotationRate": sqrt(rate.x*rate.x + rate.y*rate.y + rate.z*rate.z),
+            "motionFresh": age >= 0 && age <= 0.5]
+        }
+        if let pending = pendingScene {
+          pendingScene = nil
+          let epoch = sceneEpoch
+          photoQueue.async { [weak self] in
+            guard let self else { DispatchQueue.main.async { pending.result(nil) }; return }
+            let jpeg = IOSSceneSignal.jpeg(pixelBuffer, context: self.photoContext)
+            self.inferenceQueue.async {
+              let valid = self.sceneObservation && self.sceneEpoch == epoch
+              let bytes = valid && (jpeg?.count ?? Int.max) <= 524288 ? jpeg : nil
+              DispatchQueue.main.async { pending.result(bytes.map { FlutterStandardTypedData(bytes: $0) }) }
+            }
+          }
+        }
+      }
+      let event = payload
+      DispatchQueue.main.async { [weak self] in self?.eventSink?(event) }
     } catch {
       analyzeErrors += 1
       analyzeError = "\(type(of: error)): \(error.localizedDescription)"
@@ -1138,6 +1210,40 @@ private enum VisionError: LocalizedError {
     case .pixelFormat: return "相機沒有提供可用的 NV12 雙平面畫面"
     case .inputSize: return "模型輸入尺寸尚未初始化"
     case let .runtime(message): return message
+    }
+  }
+}
+
+
+/// Small local-only grid from the uncropped camera luma plane, independent of
+/// detections/threshold. Four samples per cell reduce single-pixel aliasing.
+enum IOSSceneSignal {
+  static func jpeg(_ pixels: CVPixelBuffer, context: CIContext) -> Data? {
+    let image = CIImage(cvPixelBuffer: pixels).oriented(.right)
+    let factor = min(1, 512 / max(image.extent.width, image.extent.height))
+    let resized = image.transformed(by: CGAffineTransform(scaleX: factor, y: factor))
+    guard let cg = context.createCGImage(resized, from: resized.extent),
+      let bytes = UIImage(cgImage: cg).jpegData(compressionQuality: 0.8),
+      bytes.count <= 524288 else { return nil }
+    return bytes
+  }
+
+  static func luminance(_ pixels: CVPixelBuffer) -> [Int]? {
+    guard CVPixelBufferGetPlaneCount(pixels) >= 1 else { return nil }
+    CVPixelBufferLockBaseAddress(pixels, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(pixels, .readOnly) }
+    guard let address = CVPixelBufferGetBaseAddressOfPlane(pixels, 0) else { return nil }
+    let w = CVPixelBufferGetWidthOfPlane(pixels, 0), h = CVPixelBufferGetHeightOfPlane(pixels, 0)
+    guard w >= 16, h >= 16 else { return nil }
+    let stride = CVPixelBufferGetBytesPerRowOfPlane(pixels, 0)
+    let bytes = address.assumingMemoryBound(to: UInt8.self)
+    return (0..<64).map { cell in
+      let x = cell % 8, y = cell / 8
+      var sum = 0
+      for dy in [1,3] { for dx in [1,3] {
+        sum += Int(bytes[min(h-1,(y*4+dy)*h/32)*stride + min(w-1,(x*4+dx)*w/32)])
+      } }
+      return sum / 4
     }
   }
 }

@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-08即時辨識整合：App新增變化後穩定才取相的可開關自動候選，沿用既有describeScene、新加坡固定端點、Secret v2、Auth／App Check／指定帳戶。沒有本輪後端程式／部署或推理。至少45秒冷卻與每次進入3次是client附加限制，無法重設或解除原帳本；count=2、保守2593 microUSD（含首次未知2458）、halted與已消耗單次recovery均保留。需要手機測試時另以CAS保存舊recovery／次數／估算並單次放行，不能宣稱自動模式已有額外或無限額度。新App感測／穩定門檻及工程驗證見Frontend與[本輪證據](../verification/live-scene-recognition-20261108.json)，先前手機成功僅屬獨立單次入口。
+
 2026-11-08手機功能驗收通過：使用者完成原手機1.8.2+17一次取相，並確認「已有描述，而且廣東話讀出正常」。後端lastStatus=complete，模型1799ms，usage輸入267／輸出51／總318 tokens，第二次估算135 microUSD（US$0.000135）。舊未知用量2458 microUSD仍保留，合計保守估算2593 microUSD；不是實際帳單。count=2、inFlight=false、halted=true、recovery=consumed，單次恢復已按預期重新停止。這次驗證涵蓋手機取相→Qwen→完整回覆驗證→顯示→廣東話播音；未另行評分場景準確度、不同環境品質或取相至播音總延遲。原有試驗總額未重設，後續推理仍需另行受控放行。詳見[單次恢復與手機驗收證據](../verification/scene-one-shot-recovery-20261108.json)。
 
 2026-11-08一次性恢復已部署：describeScene ACTIVE，Secret v2／新加坡端點／原指定帳戶／最多20次／10000 microUSD均核對，匿名callable仍401。真實Firestore合成並發檢查通過，無Qwen推理，測試文件已清理。以updateTime前置條件只新增recovery許可，逐欄核對舊帳本完全保留：count=1、spentMicroUsd=2458、halted=true、inFlight=false、lastStatus=usage-unknown。許可狀態ready，香港時間2026-11-08 16:46到期，限一次；第一次未知用量未改寫為零。手機實際環境描述／廣東話結果等待使用者，不能視為已驗收。
@@ -149,7 +151,7 @@ N0仍為記憶體mock；P1另立本機加密樣例庫，可保存／重開／回
 
 離線重現：repo根目錄node --test backend/functions/test/scene_description.test.cjs；app目錄flutter test --no-pub test/scene_description_test.dart test/flutter_tts_speaker_test.dart test/speech_coordinator_test.dart。Windows在checkout用git rev-parse --show-toplevel定位，PowerShell用Join-Path切入app／backend，不需要Mac路徑。新測試均用合成JPEG／mock fetch，不讀真Key、不傳真圖。限流跨實例／刪除競態用transaction seam測試；真實Firebase部署、Secret／App Check及網絡仍待帳戶操作，不能當已驗。
 
-後續自動描述維持未實作：變化／明顯轉向後穩定才取相，首次全景、之後重要變化，不固定輪詢；10秒曾受質疑，5秒亦待實測，最終值未定。單次入口真實轉向訊號尚未接通；App只驗收到invalidate事件後不補播。US$5不是設定預算；自動模式用量提醒及上限尚未接。見[單次描述證據](../verification/scene-description-offline-20261107.json)。
+2026-11-08自動描述client已有即時辨識內工程候選：變化／明顯轉向後穩定才取相，首次全景、之後重要變化；不固定輪詢，5秒／10秒不是已採用週期。新增本機網格／CoreMotion保守訊號與去重、45秒冷卻、本次最多3次及已知費用／未知用量顯示；不是server額度或新付費授權。後端停止帳本仍生效，整合版實機／自動付費／語音驗收待補；獨立單次入口1.8.2+17已通過真人文字／廣東話。
 
 ### Qwen-VL單張試驗（2026-11-07，離線可驗；使用者回報收到雲端文字）
 
@@ -507,7 +509,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
 | B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生及analyze通過，手機實測未完成 ；#18樓層證據／必要確認已有516項Flutter工程候選，1.8.0+15已交付，真人複測待完成| 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接；選填路標訓練另立用途／快照／model-index交付，見持續改善契約；未接通 | F17；P3-C已接真相機／本機閉環，下一步真人實測及P4障礙／語音，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
-| B17 單次Qwen場景描述／S1 | 來源及離線測試已有，預設關閉未部署 | Auth／App Check→active帳戶transaction限流→有界JPEG→Qwen完整回答→安全metrics，Key留Secret Manager，原圖／回答不保存 | 圖片／具體付費額度／區域及資料政策先確認；帳戶配置及真實部署另批，手機／描述品質另驗 |
+| B17 Qwen場景描述／S1 | 新加坡代理及Secret v2已部署，獨立單次1.8.2+17真人文字／廣東話通過；即時辨識自動整合為client工程候選 | Auth／App Check→active帳戶transaction與停止帳本→有界JPEG→Qwen完整回答→安全metrics；Key留Secret Manager，原圖／回答不保存 | 原次數／估算不重設；整合版手機、自動付費、描述品質另驗；導航內入口仍未接 |
 
 管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
 
