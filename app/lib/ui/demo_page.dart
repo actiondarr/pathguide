@@ -104,12 +104,59 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         : null;
   }
 
+  int _lastSceneNotice = 0, _scenePreparationRetries = 0;
+  Timer? _scenePreparationRetry;
+  void _retryScenePreparation(int generation, PlatformVision source) {
+    if (_scenePreparationRetries >= 2) return;
+    _scenePreparationRetry?.cancel();
+    _scenePreparationRetries++;
+    _scenePreparationRetry = Timer(
+      Duration(milliseconds: 500 * _scenePreparationRetries),
+      () {
+        if (_isCurrent(generation) &&
+            identical(source, _source) &&
+            !_controlsOpen) {
+          unawaited(_prepareScene(retry: true));
+        }
+      },
+    );
+  }
+
   void _sceneChanged() {
+    final sequence = _scene.noticeSequence;
+    if (sequence != _lastSceneNotice) {
+      _lastSceneNotice = sequence;
+      final message = _scene.notice;
+      if (message == null) {
+        unawaited(_voice.stopOwned(SpeechChannel.sceneStatus));
+      }
+      if (message != null &&
+          mounted &&
+          _active &&
+          _requestedRunning &&
+          !_controlsOpen &&
+          _canSpeak &&
+          _speakEnabled) {
+        unawaited(
+          _voice
+              .speakStatus(
+                message,
+                isCurrent: () =>
+                    mounted &&
+                    _active &&
+                    _requestedRunning &&
+                    !_controlsOpen &&
+                    _scene.noticeSequence == sequence,
+              )
+              .catchError((Object _) {}),
+        );
+      }
+    }
     if (mounted) setState(() {});
   }
 
   bool _preparingScene = false;
-  Future<void> _prepareScene() async {
+  Future<void> _prepareScene({bool retry = false}) async {
     if (_preparingScene ||
         !_sceneFeature ||
         !_active ||
@@ -120,6 +167,8 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     }
     final source = _source, generation = _sourceGeneration;
     if (source is! PlatformVision) return;
+    _scenePreparationRetry?.cancel();
+    if (!retry) _scenePreparationRetries = 0;
     _preparingScene = true;
     try {
       await _sceneSub?.cancel();
@@ -129,10 +178,16 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
               identical(source, _source) &&
               !_controlsOpen) {
             _scene.observe(event.signal, sourceIssue: event.issue);
+            if (event.signal != null && _scene.available) {
+              _scenePreparationRetries = 0;
+            }
           }
         },
         onError: (Object _) {
-          if (_isCurrent(generation)) _scene.preparationFailed('scene_stream');
+          if (_isCurrent(generation)) {
+            _scene.preparationFailed('scene_stream');
+            _retryScenePreparation(generation, source);
+          }
         },
       );
       await source.setSceneObservation(true);
@@ -153,6 +208,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
           ? 'state_error'
           : 'unexpected';
       _scene.preparationFailed(code);
+      _retryScenePreparation(generation, source);
     } finally {
       _preparingScene = false;
       if (mounted) setState(() {});
@@ -176,7 +232,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         content: SingleChildScrollView(
           child: Text(
             automatic
-                ? '本次只測房間枱、椅、門。會在畫面有重要變化或轉向後，手機稍為穩定時取相傳到 Qwen 分析，可能產生費用。首次描述全景，之後略過完全重複的句子。本次使用最多三次，每次至少相隔四十五秒；仍受後端帳本及剩餘額度限制。只描述可見畫面，不判斷距離或通行。可隨時關閉；錯誤或用量未知會停止。'
+                ? '本次只測房間枱、椅、門。會在畫面有重要變化或轉向後，手機稍為穩定時取相傳到 Qwen 分析，可能產生費用。首次描述兩至三句，之後以一句補充新重點；普通物件報名暫停，導航仍優先。本次測試最多五十次、每次至少相隔三秒；仍受後端有期限許可及估算費用限制，可能提早停止。只描述可見畫面，不判斷距離或通行。可隨時關閉；暫時失敗會等候；用量未知或額度不足會顯示受限。'
                 : '本次只測房間枱、椅、門。會從正在辨識的相機取一張相傳到 Qwen 分析，可能產生費用。請保持手機大致穩定。結果只描述可見畫面，不判斷距離或通行。',
           ),
         ),
@@ -357,7 +413,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       speaker: _CantoneseSceneSpeaker(
         _voice,
         () => _speakEnabled && (_screenReader || _speaker.isCantonese),
-        () => _scene.canDeliverSpeech,
+        (value) => _scene.canDeliverText(value),
         (event) => _scene.speechEvent(event),
       ),
       speechEnvironment: () =>
@@ -552,6 +608,8 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   bool _isCurrent(int generation) => _active && _isRequested(generation);
 
   Future<void> _stopVision() async {
+    _scenePreparationRetry?.cancel();
+    _scenePreparationRetries = 0;
     _scene.setAvailable(false);
     final sceneCancelled = _sceneSub?.cancel();
     _sceneSub = null;
@@ -823,6 +881,9 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     }
     _announcer.enabled =
         _speakEnabled &&
+        !_scene.automatic &&
+        !_scene.busy &&
+        !_scene.speaking &&
         _canSpeak &&
         _speechStop == null &&
         !_controlsOpen &&
@@ -877,6 +938,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _scenePreparationRetry?.cancel();
     _scene.removeListener(_sceneChanged);
     _resultExpiry?.cancel();
     _photoTimer?.cancel();
@@ -1039,8 +1101,10 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                           value: _scene.automatic,
                           onChanged:
                               _scene.available &&
-                                  !_scene.usageUnknown &&
-                                  _scene.attempts < 3 &&
+                                  (_scene.automatic ||
+                                      !_scene.restricted &&
+                                          _scene.attempts <
+                                              _scene.maxSessionAttempts) &&
                                   !_controlsOpen
                               ? (value) {
                                   if (value) {
@@ -1076,6 +1140,10 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                             key: const ValueKey('live-scene-result'),
                           ),
                         Text('播音：${_scene.speechStatus}'),
+                        if (_scene.serverLimits != null)
+                          Text(
+                            '伺服器累計 ${_scene.serverLimits!.count}／${_scene.serverLimits!.maxRequests} 次；當前許可餘下 ${_scene.serverLimits!.windowRemaining} 次；仍受費用上限限制。',
+                          ),
                         ExpansionTile(
                           key: const ValueKey('live-scene-diagnostics'),
                           title: const Text('場景測試資料'),
@@ -1110,7 +1178,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                           ),
                         if (_scene.attempts > 0)
                           Text(
-                            '本次使用已嘗試 ${_scene.attempts}／3 次；估算 US\$${_scene.estimatedUsd.toStringAsFixed(6)}${_scene.usageUnknown ? '（另有未知用量）' : ''}，不是帳單硬上限。',
+                            '本次使用已嘗試 ${_scene.attempts}／${_scene.maxSessionAttempts} 次；估算 US\$${_scene.estimatedUsd.toStringAsFixed(6)}${_scene.usageUnknown ? '（另有未知用量）' : ''}，不是帳單硬上限。',
                           ),
                       ],
                     ),
@@ -2341,16 +2409,29 @@ class _CantoneseSceneSpeaker implements Speaker {
   );
   final SpeechCoordinator coordinator;
   final bool Function() available;
-  final bool Function() isCurrent;
+  final bool Function(String) isCurrent;
   final void Function(SceneSpeechEvent) onEvent;
   @override
   Future<void> speak(String text) async {
     if (!available()) throw const SceneFailure('speech-unavailable');
-    await coordinator.speakScene(text, isCurrent: isCurrent, onEvent: onEvent);
+    if (coordinator.owner == SpeechChannel.scene) {
+      await coordinator.channel(SpeechChannel.scene).stop();
+    }
+    await coordinator.speakScene(
+      text,
+      isCurrent: () => isCurrent(text),
+      onEvent: (event) {
+        if (isCurrent(text)) onEvent(event);
+      },
+    );
   }
 
   @override
-  Future<void> stop() => coordinator.channel(SpeechChannel.scene).stop();
+  Future<void> stop() async {
+    await coordinator.channel(SpeechChannel.scene).stop();
+    await coordinator.stopOwned(SpeechChannel.sceneStatus);
+  }
+
   @override
   Future<List<String>> languages() => coordinator.output.languages();
 }

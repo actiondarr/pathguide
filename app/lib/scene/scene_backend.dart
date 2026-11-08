@@ -9,8 +9,9 @@ import 'package:firebase_core/firebase_core.dart';
 import '../platform/app_attestation.dart';
 
 class SceneFailure implements Exception {
-  const SceneFailure(this.code);
+  const SceneFailure(this.code, {this.beforeProvider = false});
   final String code;
+  final bool beforeProvider;
 }
 
 String sceneRequestId() => List.generate(
@@ -19,13 +20,17 @@ String sceneRequestId() => List.generate(
 ).join();
 
 // Defense in depth; a prompt alone is not an output validation boundary.
-String validateSceneText(Object? value) {
+String validateSceneText(
+  Object? value, {
+  int minSentences = 2,
+  int maxSentences = 3,
+}) {
   if (value is! String) throw const SceneFailure('invalid-answer');
   final text = value.trim();
   final sentences = RegExp(r'[^。！？]+[。！？]').allMatches(text).toList();
   if (text.length > 240 ||
-      sentences.length < 2 ||
-      sentences.length > 3 ||
+      sentences.length < minSentences ||
+      sentences.length > maxSentences ||
       sentences.map((m) => m[0]).join() != text ||
       !RegExp(r'[\u3400-\u9fff]').hasMatch(text) ||
       RegExp(
@@ -43,8 +48,21 @@ class SceneReply {
       throw const SceneFailure('wrong-request');
     }
     metrics = SceneMetrics.fromMap(map['metrics']);
+    limits = SceneTrialLimits.parse(map['limits']);
+    final value = map['mode'];
+    if (value != null && value != 'overview' && value != 'update') {
+      throw const SceneFailure('invalid-answer');
+    }
+    mode = value as String?;
     if (map['status'] == 'complete') {
-      text = validateSceneText(map['text']);
+      text = validateSceneText(
+        map['text'],
+        minSentences: mode == 'update' ? 1 : 2,
+        maxSentences: mode == 'update' ? 1 : 3,
+      );
+      if (mode != null) {
+        observations = SceneObservation.parseList(map['observations']);
+      }
     } else if (map['status'] != 'rejected' || map.containsKey('text')) {
       throw const SceneFailure('invalid-answer');
     } else if (const {
@@ -59,8 +77,122 @@ class SceneReply {
       rejectionReason = map['rejectionReason'] as String;
     }
   }
-  String? text, rejectionReason;
+  String? text, rejectionReason, mode;
+  List<SceneObservation> observations = const [];
+  SceneTrialLimits? limits;
   late final SceneMetrics metrics;
+}
+
+/// Ephemeral visible facts, compared only on the phone; never diagnostic content.
+class SceneObservation {
+  const SceneObservation(this.category, this.position, this.detail);
+  final String category, position, detail;
+  static List<SceneObservation> parseList(Object? value) {
+    const categories = {
+      'person',
+      'door',
+      'stairs',
+      'table',
+      'chair',
+      'passage',
+      'vehicle',
+      'sign',
+      'other',
+    };
+    const positions = {'left', 'centre', 'right'};
+    if (value is! List || value.length > 6) {
+      throw const SceneFailure('invalid-answer');
+    }
+    final seen = <String>{};
+    return value
+        .map((o) {
+          if (o is! Map ||
+              o.length != 3 ||
+              !categories.contains(o['category']) ||
+              !positions.contains(o['position']) ||
+              o['detail'] is! String) {
+            throw const SceneFailure('invalid-answer');
+          }
+          final detail = (o['detail'] as String).trim();
+          if (detail.isEmpty ||
+              detail.length > 40 ||
+              RegExp(r'[。！？]').hasMatch(detail)) {
+            throw const SceneFailure('invalid-answer');
+          }
+          validateSceneText('$detail。未能確認。');
+          final key = '${o['category']}:${o['position']}';
+          if (!seen.add(key)) throw const SceneFailure('invalid-answer');
+          return SceneObservation(
+            o['category'] as String,
+            o['position'] as String,
+            detail,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  String get semanticKey {
+    final normalized = detail
+        .replaceAll('棕', '啡')
+        .replaceAll('開咗', '打開')
+        .replaceAll('關咗', '關閉');
+    final features = RegExp(
+      '紅|黃|藍|綠|白|黑|啡|木|金屬|玻璃|多人|少人|稀少|一般|密集|窗|櫃|出口|升降機|扶手|走廊|貨架|打開|關閉|闊|窄|空',
+    ).allMatches(normalized).map((m) => m[0]!).toSet().toList()..sort();
+    return '$category:$position:${features.join(',')}';
+  }
+}
+
+abstract interface class SceneModeBackend implements SceneBackend {
+  Future<SceneReply> describeMode(
+    Uint8List jpeg,
+    String requestId, {
+    required String mode,
+    bool Function()? isCurrent,
+  });
+}
+
+class SceneTrialLimits {
+  SceneTrialLimits(
+    this.count,
+    this.maxRequests,
+    this.spentMicroUsd,
+    this.budgetMicroUsd,
+    this.windowRemaining,
+    this.expiresAtMs,
+  );
+  final int count,
+      maxRequests,
+      spentMicroUsd,
+      budgetMicroUsd,
+      windowRemaining,
+      expiresAtMs;
+  static SceneTrialLimits? parse(Object? value) {
+    if (value is! Map) return null;
+    const keys = [
+      'count',
+      'maxRequests',
+      'spentMicroUsd',
+      'budgetMicroUsd',
+      'windowRemaining',
+      'expiresAtMs',
+    ];
+    if (keys.any((k) => value[k] is! int || value[k] < 0)) return null;
+    if (value['maxRequests'] > 50 ||
+        value['count'] > value['maxRequests'] ||
+        value['budgetMicroUsd'] > 10000 ||
+        value['windowRemaining'] > 50) {
+      return null;
+    }
+    return SceneTrialLimits(
+      value['count'],
+      value['maxRequests'],
+      value['spentMicroUsd'],
+      value['budgetMicroUsd'],
+      value['windowRemaining'],
+      value['expiresAtMs'],
+    );
+  }
 }
 
 /// Only bounded numerical telemetry crosses into the retained measurements.
@@ -101,8 +233,12 @@ Future<void> awaitSceneAttestation(
   bool Function()? isCurrent,
 ) async {
   final ready = await activation;
-  if (!(isCurrent?.call() ?? true)) throw const SceneFailure('cancelled');
-  if (!ready) throw const SceneFailure('app-check-unavailable');
+  if (!(isCurrent?.call() ?? true)) {
+    throw const SceneFailure('cancelled', beforeProvider: true);
+  }
+  if (!ready) {
+    throw const SceneFailure('app-check-unavailable', beforeProvider: true);
+  }
 }
 
 abstract interface class SceneBackend {
@@ -113,7 +249,7 @@ abstract interface class SceneBackend {
   });
 }
 
-class FirebaseSceneBackend implements SceneBackend {
+class FirebaseSceneBackend implements SceneModeBackend {
   // Only used to isolate in-memory numerical diagnostics across page re-entry.
   // The scope itself is never included in a diagnostic report.
   String? get diagnosticScope =>
@@ -125,14 +261,27 @@ class FirebaseSceneBackend implements SceneBackend {
     Uint8List jpeg,
     String requestId, {
     bool Function()? isCurrent,
+  }) => _describe(jpeg, requestId, isCurrent: isCurrent);
+  @override
+  Future<SceneReply> describeMode(
+    Uint8List jpeg,
+    String requestId, {
+    required String mode,
+    bool Function()? isCurrent,
+  }) => _describe(jpeg, requestId, mode: mode, isCurrent: isCurrent);
+  Future<SceneReply> _describe(
+    Uint8List jpeg,
+    String requestId, {
+    String? mode,
+    bool Function()? isCurrent,
   }) async {
-    if (_inFlight) throw const SceneFailure('busy');
+    if (_inFlight) throw const SceneFailure('busy', beforeProvider: true);
     _inFlight = true;
     try {
       if (!const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED') ||
           Firebase.apps.isEmpty ||
           FirebaseAuth.instance.currentUser == null) {
-        throw const SceneFailure('not-configured');
+        throw const SceneFailure('not-configured', beforeProvider: true);
       }
       await awaitSceneAttestation(activateAppAttestation(), isCurrent);
       final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -142,7 +291,8 @@ class FirebaseSceneBackend implements SceneBackend {
             options: HttpsCallableOptions(timeout: const Duration(seconds: 40)),
           )
           .call<dynamic>({
-            'schemaVersion': 1,
+            'schemaVersion': mode == null ? 1 : 2,
+            'mode': ?mode,
             'expectedUid': uid,
             'requestId': requestId,
             'mimeType': 'image/jpeg',
@@ -152,9 +302,18 @@ class FirebaseSceneBackend implements SceneBackend {
         throw const SceneFailure('stale-account');
       }
       if (response.data is! Map) throw const SceneFailure('invalid-answer');
-      return SceneReply.fromMap(response.data as Map, requestId);
+      final reply = SceneReply.fromMap(response.data as Map, requestId);
+      if (mode != null && reply.text != null && reply.mode != mode) {
+        throw const SceneFailure('invalid-answer');
+      }
+      return reply;
     } on FirebaseFunctionsException catch (error) {
-      throw SceneFailure(error.code);
+      throw SceneFailure(
+        error.code,
+        beforeProvider:
+            error.details is Map &&
+            (error.details as Map)['beforeProvider'] == true,
+      );
     } finally {
       _inFlight = false;
     }

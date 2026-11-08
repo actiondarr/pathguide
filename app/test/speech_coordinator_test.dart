@@ -31,6 +31,32 @@ class Output implements Speaker {
 
 Future<void> tick() => Future<void>.delayed(Duration.zero);
 void main() {
+  test('clearing scene status withdraws only that notice and cannot stop navigation', () async {
+    final out = Output();
+    final voice = SpeechCoordinator(out);
+    final notice = voice.speakStatus('等候更新', isCurrent: () => true);
+    await tick();
+    expect(out.words, ['等候更新']);
+    await voice.stopOwned(SpeechChannel.sceneStatus);
+    await notice;
+    final route = voice.channel(SpeechChannel.navigation).speak('導航');
+    await tick();
+    await voice.stopOwned(SpeechChannel.sceneStatus);
+    expect(out.speaking!.isCompleted, isFalse);
+    out.finish();
+    await route;
+  });
+  test('status notice revalidates after native stop and never announces an obsolete state', () async {
+    final out = Output()..stopping = Completer<void>();
+    final voice = SpeechCoordinator(out);
+    var current = true;
+    final work = voice.speakStatus('等候更新', isCurrent: () => current);
+    await tick();
+    current = false;
+    out.stopping!.complete();
+    await work;
+    expect(out.words, isEmpty);
+  });
   test(
     'fresh scene waits for a local alert and submits once after it finishes',
     () async {

@@ -11,7 +11,7 @@ function configure(env) {
   const id=env.SCENE_TRIAL_ID, uid=env.SCENE_TRIAL_UID;
   const maxRequests=Number(env.SCENE_TRIAL_MAX_REQUESTS), budgetMicroUsd=Number(env.SCENE_TRIAL_BUDGET_MICRO_USD);
   if (!/^[a-z0-9-]{1,80}$/.test(id||'') || typeof uid!=='string' || !uid || uid.length>128 || uid.includes('/') ||
-      !Number.isInteger(maxRequests) || maxRequests<1 || maxRequests>20 ||
+      !Number.isInteger(maxRequests) || maxRequests<1 || maxRequests>50 ||
       !Number.isInteger(budgetMicroUsd) || budgetMicroUsd<1 || budgetMicroUsd>10000 ||
       Number(env.QWEN_INPUT_USD_PER_MILLION)!==0.2 || Number(env.QWEN_OUTPUT_USD_PER_MILLION)!==1.6) fail('failed-precondition');
   const config={id,uid,maxRequests,budgetMicroUsd,reserveMicroUsd:Math.ceil((INPUT_BOUND*2+OUTPUT_BOUND*16)/10)};
@@ -30,9 +30,17 @@ function allocate(old, requestId, config, now=Date.now()) {
     recovery.baselineLastStatus===state.lastStatus &&
     Number.isSafeInteger(recovery.expiresAtMs) && recovery.expiresAtMs>now &&
     recovery.expiresAtMs<=now+86400000;
-  if ((state.halted && !recover) || state.inFlight || state.count>=config.maxRequests || state.ids.includes(requestId) ||
+  const window=state.window;
+  const windowAllowed=state.halted===true && window?.status==='ready' &&
+    /^[a-z0-9-]{1,80}$/.test(window.id||'') && Number.isInteger(window.baseCount) &&
+    window.baseCount>=0 && window.baseCount<=state.count && Number.isInteger(window.maxCount) &&
+    window.maxCount>window.baseCount && window.maxCount<=config.maxRequests && state.count<window.maxCount &&
+    Number.isSafeInteger(window.expiresAtMs) && window.expiresAtMs>now && window.expiresAtMs<=now+86400000 &&
+    state.lastStatus!=='usage-unknown';
+  if ((state.halted && !recover && !windowAllowed) || state.inFlight || state.count>=config.maxRequests || state.ids.includes(requestId) ||
       state.spentMicroUsd+config.reserveMicroUsd>config.budgetMicroUsd) fail('resource-exhausted');
   return {...state,...(recover?{recovery:{...recovery,status:'consumed',requestId,consumedAtMs:now}}:{}),
+    ...(windowAllowed?{window:{...window,lastRequestId:requestId}}:{}),
     count:state.count+1,ids:[...state.ids,requestId],inFlight:requestId,
     reservedMicroUsd:config.reserveMicroUsd,maxRequests:config.maxRequests,budgetMicroUsd:config.budgetMicroUsd};
 }
@@ -48,7 +56,8 @@ async function settle(db, config, requestId, result) {
     const charged=known?Math.ceil((usage.prompt_tokens*2+usage.completion_tokens*16)/10):config.reserveMicroUsd;
     tx.set(ref,{...old,inFlight:null,reservedMicroUsd:0,
       spentMicroUsd:old.spentMicroUsd+charged,
-      halted:old.recovery?.status==='consumed' || !known || charged>config.reserveMicroUsd,
+      halted:!!old.window || old.recovery?.status==='consumed' || !known || charged>config.reserveMicroUsd,
+      ...(old.window?{window:{...old.window,status:!known?'halted':old.count>=old.window.maxCount?'consumed':old.window.status}}:{}),
       lastStatus:known?result.status:'usage-unknown',notBillingCap:true});
   });
 }

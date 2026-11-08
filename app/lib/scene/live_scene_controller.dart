@@ -9,15 +9,17 @@ import 'live_scene_signal.dart';
 
 /// Change-triggered cloud descriptions borrowed from the active camera.
 /// No timer uploads, camera ownership, image retention or paid retries.
+enum SceneModeState { off, observing, analysing, speaking, waiting, restricted }
+
 class LiveSceneController extends ChangeNotifier {
   LiveSceneController({
     required this.capture,
     required this.backend,
     required this.speaker,
     DateTime Function()? clock,
-    this.cooldown = const Duration(seconds: 45),
-    this.stableFor = const Duration(milliseconds: 700),
-    this.maxSessionAttempts = 3,
+    this.cooldown = const Duration(seconds: 3),
+    this.stableFor = const Duration(milliseconds: 250),
+    this.maxSessionAttempts = 50,
     this.speechEnvironment,
   }) : _clock = clock ?? DateTime.now {
     _historyScope = backend is FirebaseSceneBackend
@@ -72,7 +74,74 @@ class LiveSceneController extends ChangeNotifier {
   LiveSceneSignal? _latest, _stable, _baseline, _evidence;
   DateTime? _received, _stableSince, _lastAttempt;
   String? _previousFullText;
-  Timer? _freshness, _expiry;
+  Timer? _freshness, _expiry, _speechExpiry;
+  bool restricted = false;
+  SceneTrialLimits? serverLimits;
+  bool get _knownExhausted {
+    final limits = serverLimits;
+    return limits != null &&
+        (limits.count >= limits.maxRequests ||
+            limits.windowRemaining == 0 ||
+            limits.spentMicroUsd + 2458 > limits.budgetMicroUsd ||
+            limits.expiresAtMs > 0 &&
+                _clock().millisecondsSinceEpoch >= limits.expiresAtMs);
+  }
+
+  int noticeSequence = 0;
+  String? notice, _noticeKey;
+  void _setNotice(String key, String message) {
+    if (!automatic || _noticeKey == key) return;
+    _noticeKey = key;
+    notice = message;
+    noticeSequence++;
+    _record('狀態提示：$key');
+  }
+
+  void _clearNotice() {
+    notice = null;
+    _noticeKey = null;
+    noticeSequence++;
+  }
+
+  int _job = 0, _unsentFailures = 0, _rejectedReplies = 0;
+  DateTime? _lastLocalAttempt;
+  List<SceneObservation> _previousObservations = const [];
+  LiveSceneSignal? _deliveredEvidence;
+  String? spokenRequestId;
+  SceneModeState get modeState => restricted
+      ? SceneModeState.restricted
+      : busy
+      ? SceneModeState.analysing
+      : speaking
+      ? SceneModeState.speaking
+      : automatic
+      ? (!stable || failure.isNotEmpty
+            ? SceneModeState.waiting
+            : SceneModeState.observing)
+      : SceneModeState.off;
+  bool _newDirection = false;
+  void _withdrawDescription(String reason) {
+    _speechExpiry?.cancel();
+    if (text != null || speaking) {
+      unawaited(speaker.stop().catchError((Object _) {}));
+    }
+    text = null;
+    speaking = false;
+    speechStatus = '舊描述已撤回：$reason';
+    _record(speechStatus);
+  }
+
+  void _clearContext() {
+    _clearNotice();
+    _previousFullText = null;
+    _previousObservations = const [];
+    _deliveredEvidence = null;
+    _newDirection = false;
+  }
+
+  bool canDeliverText(String value) =>
+      canDeliverSpeech && (_speechProbe || text == value);
+
   String phase = '未開始', backendStatus = '未送出', lastInvalidation = '無';
   String invalidationDetails = '無';
   String? rejectionReason, lastRequestId;
@@ -124,6 +193,7 @@ class LiveSceneController extends ChangeNotifier {
     if (!canTestSpeech) return;
     _archive();
     automatic = false;
+    _clearContext();
     ++_generation;
     _expiry?.cancel();
     _evidence = null;
@@ -170,8 +240,10 @@ class LiveSceneController extends ChangeNotifier {
   }
 
   int get cooldownSeconds {
-    if (_lastAttempt == null) return 0;
-    final ms = (cooldown - _clock().difference(_lastAttempt!)).inMilliseconds;
+    final times = [?_lastAttempt, ?_lastLocalAttempt];
+    if (times.isEmpty) return 0;
+    final latest = times.reduce((a, b) => a.isAfter(b) ? a : b);
+    final ms = (cooldown - _clock().difference(latest)).inMilliseconds;
     return ms <= 0 ? 0 : (ms / 1000).ceil();
   }
 
@@ -186,16 +258,19 @@ class LiveSceneController extends ChangeNotifier {
         ].join('\n\n');
   String get _currentDiagnostics => [
     '模式：${automatic ? '自動開啟' : '自動關閉（手動單次）'}；相機來源：${available ? '可用' : '未準備'}',
-    '階段：$phase；後端結果：$backendStatus',
+    '階段：$phase；模式狀態：${modeState.name}；後端結果：$backendStatus',
+    '播音所屬請求：${spokenRequestId ?? '無'}；脈絡觀察項目：${_previousObservations.length}',
     '有效描述字數：${text?.length ?? 0}；播音：$speechStatus',
     if (speechEnvironment != null) '語音設定：${speechEnvironment!()}',
     '請求 ID：${lastRequestId ?? '未送出'}',
     '作廢原因：$lastInvalidation；拒絕原因：$rejectionDescription；錯誤碼：${failure.isEmpty ? '無' : failure}',
     '作廢時數值：$invalidationDetails',
     '穩定：${stable ? '是' : '否'}（需 ${stableFor.inMilliseconds} ms）；畫面年齡：${_received == null ? '未知' : '${_clock().difference(_received!).inMilliseconds} ms'}',
-    '角速度：${_latest?.rotationRate.toStringAsFixed(3) ?? '未知'} rad/s（取相上限 0.45）',
-    '與上次請求相比：畫面差 ${_baseline == null || _latest == null ? '未知' : _baseline!.difference(_latest!).toStringAsFixed(3)}／轉向 ${_baseline == null || _latest == null ? '未知' : _baseline!.angle(_latest!).toStringAsFixed(1)} 度（自動觸發門檻 0.12／15 度）',
+    '角速度：${_latest?.rotationRate.toStringAsFixed(3) ?? '未知'} rad/s（取相上限 0.8）',
+    '與上次請求相比：畫面差 ${_baseline == null || _latest == null ? '未知' : _baseline!.difference(_latest!).toStringAsFixed(3)}／轉向 ${_baseline == null || _latest == null ? '未知' : _baseline!.angle(_latest!).toStringAsFixed(1)} 度（候選門檻：結構差 0.12／18 度，並非語意變化）',
     '冷卻剩餘：$cooldownSeconds 秒；本次已嘗試：$attempts／$maxSessionAttempts',
+    '伺服器最近核對：${serverLimits == null ? '未知' : '累計 ${serverLimits!.count}／${serverLimits!.maxRequests} 次；許可餘下 ${serverLimits!.windowRemaining} 次；估算 ${serverLimits!.spentMicroUsd}／${serverLimits!.budgetMicroUsd} microUSD'}',
+    '許可到期：${serverLimits == null || serverLimits!.expiresAtMs == 0 ? '未知' : DateTime.fromMillisecondsSinceEpoch(serverLimits!.expiresAtMs).toLocal().toIso8601String()}',
     '取相：${captureMs ?? '未知'} ms；後端往返：${backendMs ?? '未知'} ms；模型：${metrics?.modelMs ?? '未知'} ms',
     'Token 輸入／輸出／合計：${metrics?.promptTokens ?? '未知'}／${metrics?.completionTokens ?? '未知'}／${metrics?.totalTokens ?? '未知'}',
     '最近一次估算：US\$${metrics?.estimatedUsd?.toStringAsFixed(6) ?? '未知'}；本次已知累計：US\$${estimatedUsd.toStringAsFixed(6)}${usageUnknown ? '（另有未知用量）' : ''}；不是帳單硬上限',
@@ -216,24 +291,30 @@ class LiveSceneController extends ChangeNotifier {
   bool get canRequest =>
       available &&
       !busy &&
+      !restricted &&
+      !_knownExhausted &&
       !_speechProbe &&
       attempts < maxSessionAttempts &&
-      (_lastAttempt == null || _clock().difference(_lastAttempt!) >= cooldown);
+      (_lastAttempt == null ||
+          _clock().difference(_lastAttempt!) >= cooldown) &&
+      (_lastLocalAttempt == null ||
+          _clock().difference(_lastLocalAttempt!) >= cooldown);
   bool get canDescribe => canRequest && stable;
   bool get _changed =>
+      (_previousFullText == null && failure != 'rejected') ||
       _baseline == null ||
       (_latest != null &&
-          (_baseline!.difference(_latest!) >= 0.12 ||
-              _baseline!.angle(_latest!) >= 15));
+          (_baseline!.structuralDifference(_latest!) >= 0.12 ||
+              _baseline!.angle(_latest!) >= 18));
 
-  void setAvailable(bool value) {
+  void setAvailable(bool value, {bool preserveMode = false}) {
     if (_disposed) return;
     available = value;
     if (value) preparationCode = null;
     if (!value) {
-      automatic = false;
+      if (!preserveMode) automatic = false;
       _latest = _stable = _baseline = null;
-      _previousFullText = null;
+      if (!preserveMode) _clearContext();
       _stableSince = _received = null;
       _freshness?.cancel();
       invalidate(reason: '辨識暫停／來源停止');
@@ -245,7 +326,8 @@ class LiveSceneController extends ChangeNotifier {
   }
 
   void preparationFailed(String code) {
-    setAvailable(false);
+    setAvailable(false, preserveMode: true);
+    _setNotice('source-wait', '場景暫時未能更新，等候相機重新接通。');
     preparationCode = code;
     status = switch (code) {
       'not_running' || 'not_ready' => '場景取相尚未接上辨識相機，請按「重試場景準備」。',
@@ -259,11 +341,18 @@ class LiveSceneController extends ChangeNotifier {
   void setAutomatic(bool value) {
     if (_disposed) return;
     automatic =
-        value && available && attempts < maxSessionAttempts && !usageUnknown;
-    if (!automatic) invalidate(reason: '自動模式關閉');
+        value &&
+        available &&
+        attempts < maxSessionAttempts &&
+        !usageUnknown &&
+        !restricted;
+    if (!automatic) {
+      _clearContext();
+      invalidate(reason: '自動模式關閉');
+    }
     if (automatic) {
       _baseline = null;
-      _previousFullText = null;
+      _clearContext();
     }
     status = automatic ? '已開啟自動場景分析，環境有重要變化且穩定後才取相。' : '自動場景分析已關閉。';
     _notify();
@@ -272,6 +361,7 @@ class LiveSceneController extends ChangeNotifier {
   /// Explicit interruption: no automatic restart after overlays/background.
   void interrupt() {
     automatic = false;
+    _clearContext();
     invalidate(reason: '使用者停止／操作中斷');
     _notify();
   }
@@ -279,9 +369,10 @@ class LiveSceneController extends ChangeNotifier {
   void invalidate({String reason = '已取消', String details = '無'}) {
     ++_generation;
     _expiry?.cancel();
+    _speechExpiry?.cancel();
     lastInvalidation = reason;
     invalidationDetails = details;
-    phase = '已作廢／已取消';
+    phase = restricted ? '受限待處理' : '已作廢／已取消';
     _speechProbe = false;
     _speechSubmitted = false;
     _record('作廢：$reason${details == '無' ? '' : '；$details'}');
@@ -290,7 +381,9 @@ class LiveSceneController extends ChangeNotifier {
     }
     text = null;
     _evidence = null;
-    status = automatic
+    status = restricted
+        ? '場景模式受限，舊描述已撤回；需要核對後再分析。'
+        : automatic
         ? '舊描述已作廢；自動模式仍開啟，等新畫面穩定及冷卻完成後再分析。'
         : '舊描述已作廢；自動模式關閉，不會自行再分析。';
     _notify();
@@ -311,6 +404,7 @@ class LiveSceneController extends ChangeNotifier {
         return;
       }
       invalidate(reason: sourceIssue ?? '畫面／轉向訊號無效');
+      _setNotice('source-wait', '場景暫時未能更新，等候有效畫面。');
       status = switch (sourceIssue) {
         'waiting-motion' => '正在等候手機轉向感測資料，未有取相或雲端請求。',
         'motion-stale' => '手機轉向資料已過期，等候新資料後再分析。',
@@ -338,24 +432,35 @@ class LiveSceneController extends ChangeNotifier {
       }
       invalidate(reason: '畫面超過一秒未更新');
       status = '畫面已過期，場景描述已作廢。';
+      _setNotice('source-wait', '場景暫時未能更新，等候有效畫面。');
       _notify();
     });
     // Hand tremor does not invalidate content. Fast panning or accumulated
     // scene/attitude change still fences old replies immediately.
-    final moving = signal.rotationRate > 0.45;
-    final fastTurn = signal.rotationRate > 0.8;
+    final moving = signal.rotationRate > 0.8;
+    final fastTurn = signal.rotationRate > 1.8;
     final drift =
         _stable != null &&
-        (_stable!.difference(signal) > 0.06 || _stable!.angle(signal) > 5);
+        (_stable!.structuralDifference(signal) > 0.12 ||
+            _stable!.angle(signal) > 12);
     final evidenceChanged =
         _evidence != null &&
-        (_evidence!.difference(signal) > 0.12 || _evidence!.angle(signal) > 12);
-    if (evidenceChanged || (fastTurn && _evidence != null)) {
+        (_evidence!.angle(signal) >= 29.5 ||
+            _evidence!.structuralDifference(signal) > 0.4);
+    if (evidenceChanged ||
+        (fastTurn && _evidence != null && _evidence!.angle(signal) > 12)) {
+      _newDirection = true;
       invalidate(
         reason: fastTurn ? '快速轉向' : '相對取相畫面／姿態明顯改變',
         details:
-            '角速度 ${signal.rotationRate.toStringAsFixed(3)} rad/s；相對取相畫面差 ${_evidence!.difference(signal).toStringAsFixed(3)}／轉向 ${_evidence!.angle(signal).toStringAsFixed(1)} 度（作廢門檻 0.8 rad/s、0.12／12 度）',
+            '角速度 ${signal.rotationRate.toStringAsFixed(3)} rad/s；相對取相畫面差 ${_evidence!.difference(signal).toStringAsFixed(3)}／轉向 ${_evidence!.angle(signal).toStringAsFixed(1)} 度（作廢門檻：30 度／結構差 0.4；快轉須累積轉角）',
       );
+    }
+    if (_deliveredEvidence != null &&
+        text != null &&
+        _deliveredEvidence!.angle(signal) >= 29.5) {
+      _newDirection = true;
+      _withdrawDescription('方向已改變');
     }
     if (moving || drift || _stable == null || _stableSince == null) {
       _stable = signal;
@@ -369,6 +474,12 @@ class LiveSceneController extends ChangeNotifier {
             : '畫面移動中；自動模式關閉。可按「描述前方」等穩定後取相。';
       }
     }
+    if (automatic && _knownExhausted && !busy && !speaking) {
+      restricted = true;
+      phase = '受限待處理';
+      status = '許可、次數或估算費用已達限制，暫停新分析。';
+      _setNotice('restricted', '場景試驗已到限制，暫停新分析。');
+    }
     if (automatic && canDescribe && _changed) {
       unawaited(describe(manual: false));
     }
@@ -378,6 +489,9 @@ class LiveSceneController extends ChangeNotifier {
   Future<void> describe({bool manual = true}) async {
     if (!(manual ? canRequest : canDescribe) || (!manual && !automatic)) return;
     _archive();
+    final job = ++_job;
+    final mode = _previousFullText == null ? 'overview' : 'update';
+    _lastLocalAttempt = _clock();
     busy = true;
     failure = '';
     rejectionReason = null;
@@ -397,7 +511,6 @@ class LiveSceneController extends ChangeNotifier {
           ? '自動首次描述'
           : '環境重要變化觸發',
     );
-    text = null;
     final generation = ++_generation;
     _evidence = null;
     bool active() => !_disposed && available && generation == _generation;
@@ -413,7 +526,7 @@ class LiveSceneController extends ChangeNotifier {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
       if (!active()) return;
-      if (!stable) throw const SceneFailure('not-stable');
+      if (!stable) throw const SceneFailure('not-stable', beforeProvider: true);
       _evidence = _latest;
       phase = '取相中';
       _record('開始本機取相');
@@ -427,9 +540,9 @@ class LiveSceneController extends ChangeNotifier {
         return;
       }
       if (jpeg == null || jpeg.isEmpty || jpeg.length > 524288) {
-        throw const SceneFailure('no-frame');
+        throw const SceneFailure('no-frame', beforeProvider: true);
       }
-      if ((_latest?.rotationRate ?? double.infinity) > 0.45) {
+      if ((_latest?.rotationRate ?? double.infinity) > 0.8) {
         invalidate(reason: '編碼後手機仍在移動，未送出');
         return;
       }
@@ -442,22 +555,27 @@ class LiveSceneController extends ChangeNotifier {
       lastRequestId = sceneRequestId();
       backendStarted = _clock();
       _record('已交後端連接器進行驗證／送出，尚待回覆確認');
-      _expiry = Timer(const Duration(seconds: 20), () {
+      _expiry = Timer(const Duration(seconds: 12), () {
         if (!_disposed && generation == _generation) {
           final pending = busy;
-          invalidate(reason: pending ? '分析超過二十秒' : '描述有效期結束');
-          if (pending) automatic = false;
+          invalidate(reason: pending ? '分析超過十二秒' : '描述有效期結束');
+          // Keep mode intent; no second request while the first is in flight.
           status = pending ? '場景分析逾時，沒有自動重試。' : '場景描述已過期。';
           _notify();
         }
       });
       awaitingResult = true;
-      final reply = await backend.describe(
-        jpeg,
-        lastRequestId!,
-        isCurrent: current,
-      );
+      final id = lastRequestId!;
+      final reply = backend is SceneModeBackend
+          ? await (backend as SceneModeBackend).describeMode(
+              jpeg,
+              id,
+              mode: mode,
+              isCurrent: current,
+            )
+          : await backend.describe(jpeg, id, isCurrent: current);
       awaitingResult = false;
+      _expiry?.cancel();
       if (!_disposed) {
         backendMs = _clock().difference(backendStarted).inMilliseconds;
         backendStatus = reply.text == null ? '拒絕' : '成功';
@@ -466,20 +584,27 @@ class LiveSceneController extends ChangeNotifier {
           '後端：$backendStatus${rejectionReason == null ? '' : '／$rejectionReason'}',
         );
         metrics = reply.metrics;
+        serverLimits = reply.limits ?? serverLimits;
         if (reply.metrics.estimatedUsd == null ||
             reply.metrics.totalTokens == null) {
           usageUnknown = true;
-          automatic = false;
+          restricted = true;
+          _setNotice('restricted', '場景分析暫停，用量需要核對。');
         } else {
           estimatedUsd += reply.metrics.estimatedUsd!;
         }
       }
       if (reply.text == null) {
-        automatic = false;
         failure = 'rejected';
+        _rejectedReplies++;
+        if (_rejectedReplies >= 2) restricted = true;
+        _setNotice(
+          restricted ? 'restricted' : 'answer-wait',
+          restricted ? '場景分析暫停，回覆需要核對。' : '暫時未能提供新描述，等候新畫面。',
+        );
         if (current()) {
-          phase = '回覆被拒絕';
-          status = '場景回覆未符合格式或內容要求，未有顯示或播音；詳見測試資料。';
+          phase = restricted ? '受限待處理' : '回覆被拒絕';
+          status = restricted ? '連續回覆未符合要求，暫停新分析。' : '回覆未符合要求；等候新環境，不重傳同一畫面。';
           _expiry?.cancel();
           _evidence = null;
         }
@@ -490,39 +615,78 @@ class LiveSceneController extends ChangeNotifier {
         _record(speechStatus);
         return;
       }
-      final full = validateSceneText(reply.text);
-      final previous = _previousFullText;
-      _previousFullText = full;
-      final sentences = RegExp(r'[^。！？]+[。！？]')
-          .allMatches(full)
-          .map((m) => m[0]!)
-          .toList();
-      final spoken = manual || previous == null
-          ? full
-          : sentences.where((s) => !previous.contains(s)).join();
-      if (spoken.isEmpty) {
-        status = '場景描述沒有新內容，略過重複播音。';
+      if (!restricted) _clearNotice();
+      _rejectedReplies = _unsentFailures = 0;
+      final full = validateSceneText(
+        reply.text,
+        minSentences: reply.mode == 'update' ? 1 : 2,
+        maxSentences: reply.mode == 'update' ? 1 : 3,
+      );
+      final facts = reply.observations.map((o) => o.semanticKey).toSet();
+      final previousFacts = _previousObservations
+          .map((o) => o.semanticKey)
+          .toSet();
+      final newDirection =
+          _newDirection ||
+          _deliveredEvidence != null &&
+              _latest != null &&
+              _deliveredEvidence!.angle(_latest!) >= 29.5;
+      final duplicate = reply.mode == null
+          ? _previousFullText == full
+          : facts.difference(previousFacts).isEmpty &&
+                previousFacts.difference(facts).isEmpty &&
+                !newDirection;
+      if (!manual && mode == 'update' && duplicate) {
+        phase = '持續觀察';
+        status = '未有值得補充的新重點，略過重複播音。';
+        _record('本機重點比較：沒有新資訊');
         return;
       }
+      final previousFullText = _previousFullText;
+      _newDirection = false;
+      _previousFullText = full;
+      _previousObservations = reply.observations;
+      _deliveredEvidence = _latest;
+      final spoken = reply.mode == null && !manual && previousFullText != null
+          ? RegExp(r'[^。！？]+[。！？]')
+                .allMatches(full)
+                .map((m) => m[0]!)
+                .where((sentence) => !previousFullText.contains(sentence))
+                .join()
+          : full;
+      if (spoken.isEmpty) {
+        status = '沒有新句子，略過重複播音。';
+        return;
+      }
+      spokenRequestId = id;
       text = spoken;
       phase = '有效文字已備妥／交予播音';
       speechStatus = '等候語音協調器';
       _record('有效文字已備妥，交予語音協調器');
       status = '場景描述完成。';
+      busy = false;
       speaking = true;
+      _speechExpiry?.cancel();
+      _speechExpiry = Timer(const Duration(seconds: 15), () {
+        if (!_disposed && spokenRequestId == id && text == spoken) {
+          _withdrawDescription('描述有效期結束');
+        }
+      });
       _notify();
       try {
         await speaker.speak(spoken);
       } catch (_) {
-        if (current()) {
+        if (current() && spokenRequestId == id) {
           failure = 'speech-unavailable';
-          automatic = false;
           speechStatus = '未能啟動廣東話播音';
           _record('廣東話播音未能開始');
           status = '廣東話播音未能開始，可閱讀場景文字。';
         }
+      } finally {
+        if (spokenRequestId == id) speaking = false;
       }
     } catch (error) {
+      final safe = error is SceneFailure && error.beforeProvider;
       if (!_disposed) {
         if (awaitingResult) {
           backendStatus = '失敗';
@@ -531,30 +695,47 @@ class LiveSceneController extends ChangeNotifier {
         failure = error is SceneFailure ? error.code : 'unavailable';
         _record('失敗：$failure');
       }
-      if (!_disposed && awaitingResult) {
-        usageUnknown = true;
-        automatic = false;
+      if (!_disposed && awaitingResult && !safe) {
+        usageUnknown = restricted = true;
+      }
+      if (safe && failure != 'not-stable') {
+        _unsentFailures++;
+        if (_unsentFailures > 2 ||
+            const {
+              'resource-exhausted',
+              'not-configured',
+              'unauthenticated',
+              'permission-denied',
+              'app-check-unavailable',
+            }.contains(failure)) {
+          restricted = true;
+        } else {
+          _baseline = null;
+        }
       }
       if (!active()) return;
-      automatic = false;
-      phase = '失敗';
+      _setNotice(
+        restricted ? 'restricted' : 'update-wait',
+        restricted ? '場景分析暫停，額度或結果需要核對。' : '場景暫時未能更新，稍後自動恢復。',
+      );
+      phase = restricted ? '受限待處理' : '等候更新';
       _expiry?.cancel();
       _evidence = null;
       text = null;
       status = switch (failure) {
         'not-stable' => '畫面仍在移動，今次未取相或上傳；稍為穩定後可再按。',
-        'resource-exhausted' => '場景分析額度已停止，請由開發者核對；物件辨識繼續。',
+        'resource-exhausted' => '場景模式受限，額度或許可需核對；暫停新分析。',
         'app-check-unavailable' ||
         'unauthenticated' ||
         'not-configured' => '場景分析登入或手機驗證未完成；物件辨識繼續。',
         'speech-unavailable' => '廣東話播音未能開始，可閱讀場景文字。',
-        _ => '場景分析未完成，自動模式已停止，沒有自動重試。',
+        _ => restricted ? '場景模式受限，結果或費用需核對，暫停新分析。' : '暫時未能更新；在確認未送出及次數限制內恢復。',
       };
     } finally {
-      busy = false;
-      speaking = false;
+      if (job == _job) busy = false;
       if (!_disposed && attempts >= maxSessionAttempts) {
-        automatic = false;
+        restricted = true;
+        _setNotice('restricted', '場景分析已達測試次數上限，暫停新分析。');
         status += ' 本次使用的分析次數已達上限。';
       }
       _notify();
@@ -569,6 +750,7 @@ class LiveSceneController extends ChangeNotifier {
     _disposed = true;
     _freshness?.cancel();
     _expiry?.cancel();
+    _speechExpiry?.cancel();
     super.dispose();
   }
 }

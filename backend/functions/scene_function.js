@@ -28,7 +28,8 @@ return onCall({...options,timeoutSeconds:40,secrets:[qwenKey]}, async request =>
       console.warn(JSON.stringify({event:'scene-provider-failure',...error.diagnostic}));
     }
     const code = error instanceof scene.SceneFailure || error instanceof sceneTrial.TrialFailure ? error.code : 'unavailable';
-    throw new HttpsError(code,'場景描述未完成；沒有自動重試。取消後上游仍可能計費。');
+    throw new HttpsError(code,'場景描述未完成；沒有自動重試。取消後上游仍可能計費。',
+      error.beforeProvider === true ? {beforeProvider:true} : undefined);
   }
 });
 

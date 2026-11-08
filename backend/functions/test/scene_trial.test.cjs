@@ -14,7 +14,7 @@ const ledger=db=>db.docs.get('scene_description_trials/room-20261108-v1');
 const result=(p=100,c=20)=>({status:'complete',metrics:{usage:{prompt_tokens:p,completion_tokens:c,total_tokens:p+c},estimate:scene.estimate({prompt_tokens:p,completion_tokens:c},{input:0.2,output:1.6})}});
 test('trial configuration fixes allowance, account and rates; missing/oversized inputs fail closed',()=>{
  const c=cfg();assert.equal(c.maxRequests,20);assert.equal(c.budgetMicroUsd,10000);assert.equal(c.reserveMicroUsd,2458);
- for(const override of [{SCENE_TRIAL_UID:''},{SCENE_TRIAL_MAX_REQUESTS:'21'},{SCENE_TRIAL_BUDGET_MICRO_USD:'10001'},{QWEN_OUTPUT_USD_PER_MILLION:'0'},{SCENE_TRIAL_ID:'../x'}])assert.throws(()=>trial.configure({...env,...override}),{code:'failed-precondition'});
+ for(const override of [{SCENE_TRIAL_UID:''},{SCENE_TRIAL_MAX_REQUESTS:'51'},{SCENE_TRIAL_BUDGET_MICRO_USD:'10001'},{QWEN_OUTPUT_USD_PER_MILLION:'0'},{SCENE_TRIAL_ID:'../x'}])assert.throws(()=>trial.configure({...env,...override}),{code:'failed-precondition'});
 });
 test('one transaction reserves both trial and daily limits; concurrent paid attempts cannot both win',async()=>{
  const db=database(), c=cfg(), now=Date.UTC(2026,10,8);

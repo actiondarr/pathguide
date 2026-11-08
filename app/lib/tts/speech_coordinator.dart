@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'announcer.dart';
 
-enum SpeechChannel { scene, environment, navigation }
+enum SpeechChannel { scene, environment, sceneStatus, navigation }
 
 enum SceneSpeechEvent {
   waiting,
@@ -79,6 +79,9 @@ class SpeechCoordinator {
       onSceneEvent: onEvent,
     );
   }
+
+  Future<void> speakStatus(String text, {required bool Function() isCurrent}) =>
+      _speak(SpeechChannel.sceneStatus, text, isCurrent: isCurrent);
 
   Speaker channel(SpeechChannel channel) => _ChannelSpeaker(this, channel);
 

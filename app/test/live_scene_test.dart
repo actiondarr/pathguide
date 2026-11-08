@@ -87,6 +87,9 @@ class Harness {
       backend: backend,
       speaker: voice,
       clock: () => now,
+      cooldown: const Duration(seconds: 45),
+      stableFor: const Duration(milliseconds: 700),
+      maxSessionAttempts: 3,
     );
     controller.setAvailable(true);
     bytes.complete(Uint8List.fromList([1]));
@@ -101,7 +104,10 @@ class Harness {
   LiveSceneSignal signal({int luma = 40, double yaw = 0, double rate = 0}) =>
       LiveSceneSignal(
         sequence: ++seq,
-        luma: List.filled(64, luma),
+        luma: List<int>.generate(
+          64,
+          (i) => i < 32 ? luma : (220 - luma).clamp(0, 255).toInt(),
+        ),
         attitude: [
           0,
           0,
@@ -185,14 +191,14 @@ void main() {
       final requestId = h.backend.ids.single;
       expect(h.controller.backendStatus, '等待回覆');
       expect(h.controller.cooldownSeconds, greaterThan(40));
-      await h.frame(yaw: 30, rate: 1);
+      await h.frame(yaw: 30, rate: 2.2);
       expect(h.controller.lastInvalidation, '快速轉向');
       h.backend.finish(rejected: true, rejectionReason: 'sentence-count');
       await tester.pump();
       expect(h.controller.backendStatus, '拒絕');
       expect(h.controller.rejectionReason, 'sentence-count');
       expect(h.controller.failure, 'rejected');
-      expect(h.controller.automatic, isFalse);
+      expect(h.controller.automatic, isTrue);
       expect(h.controller.text, isNull);
       expect(h.voice.said, isEmpty);
       final report = h.controller.diagnostics;
@@ -204,10 +210,10 @@ void main() {
       expect(report, isNot(contains(full)));
       expect(h.controller.backendMs, isNotNull);
       await h.stable(yaw: 30, frames: 240);
-      expect(h.backend.calls, 1);
-      expect(h.controller.backendStatus, '拒絕');
-      h.controller.observe(null, sourceIssue: 'motion-stale');
-      expect(h.controller.rejectionReason, 'sentence-count');
+      expect(h.backend.calls, 2);
+      h.backend.finish();
+      await tester.pump();
+      expect(h.controller.diagnostics, contains('sentence-count'));
       h.controller.dispose();
     },
   );
@@ -226,7 +232,7 @@ void main() {
       await work;
       expect(h.controller.phase, '回覆被拒絕');
       final status = h.controller.status;
-      await h.frame(yaw: 25, rate: 1);
+      await h.frame(yaw: 45, rate: 2.2);
       await tester.pump(const Duration(seconds: 21));
       expect(h.controller.status, status);
       expect(
@@ -245,7 +251,7 @@ void main() {
       await tester.pump();
       h.backend.finish();
       await work;
-      await h.frame(yaw: 30, rate: 1);
+      await h.frame(yaw: 30, rate: 2.2);
       expect(h.controller.status, contains('自動模式關閉'));
       await h.stable(yaw: 30, frames: 240);
       expect(h.backend.calls, 1);
@@ -296,7 +302,7 @@ void main() {
       await h.frame(yaw: 3, rate: 0.3);
       expect(h.controller.text, isNotNull);
       expect(h.controller.automatic, isTrue);
-      await h.frame(yaw: 25, rate: 1);
+      await h.frame(yaw: 45, rate: 2.2);
       expect(h.controller.text, isNull);
       expect(h.controller.automatic, isTrue);
       h.controller.dispose();
@@ -336,7 +342,8 @@ void main() {
       expect(h.backend.calls, 0);
       expect(h.controller.attempts, 0);
       expect(h.controller.failure, 'not-stable');
-      expect(h.controller.canRequest, isTrue);
+      expect(h.controller.canRequest, isFalse);
+      expect(h.controller.cooldownSeconds, greaterThan(0));
       h.controller.dispose();
     },
   );
@@ -350,7 +357,7 @@ void main() {
       final pending = h.controller.describe();
       await tester.pump();
       await h.frame(yaw: 6, rate: 0.3);
-      expect(h.controller.stable, isFalse);
+      expect(h.controller.stable, isTrue);
       h.bytes.complete(Uint8List(1));
       await tester.pump();
       expect(h.backend.calls, 1);
@@ -407,7 +414,7 @@ void main() {
       h.controller.setAutomatic(true);
       await h.stable();
       expect(h.backend.calls, 1);
-      await h.frame(yaw: 30, rate: 1);
+      await h.frame(yaw: 30, rate: 2.2);
       await h.stable(yaw: 30);
       expect(h.backend.calls, 1);
       h.backend.finish();
@@ -440,24 +447,26 @@ void main() {
       h.controller.dispose();
     },
   );
-  testWidgets('missing usage stops auto; later motion stops speech', (
-    tester,
-  ) async {
-    final h = Harness(tester);
-    addTearDown(h.controller.dispose);
-    h.controller.setAutomatic(true);
-    await h.stable();
-    h.voice.wait = Completer<void>();
-    h.backend.finish(usage: false);
-    await tester.pump();
-    expect(h.controller.usageUnknown, isTrue);
-    expect(h.controller.automatic, isFalse);
-    expect(h.voice.said, [full]);
-    await h.frame(rate: 1);
-    expect(h.controller.text, isNull);
-    expect(h.voice.stops, greaterThan(0));
-    h.controller.dispose();
-  });
+  testWidgets(
+    'unknown usage blocks new analysis while mode intent remains on; turn withdraws speech',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      h.controller.setAutomatic(true);
+      await h.stable();
+      h.voice.wait = Completer<void>();
+      h.backend.finish(usage: false);
+      await tester.pump();
+      expect(h.controller.usageUnknown, isTrue);
+      expect(h.controller.automatic, isTrue);
+      expect(h.controller.restricted, isTrue);
+      expect(h.voice.said, [full]);
+      await h.frame(yaw: 45, rate: 2.2);
+      expect(h.controller.text, isNull);
+      expect(h.voice.stops, greaterThan(0));
+      h.controller.dispose();
+    },
+  );
   testWidgets(
     'exhausted backend never auto repeats and leaves local camera availability intact',
     (tester) async {
@@ -469,7 +478,8 @@ void main() {
         const SceneFailure('resource-exhausted'),
       );
       await tester.pump();
-      expect(h.controller.automatic, isFalse);
+      expect(h.controller.automatic, isTrue);
+      expect(h.controller.restricted, isTrue);
       expect(h.controller.available, isTrue);
       await h.stable(luma: 100, frames: 240);
       expect(h.backend.calls, 1);
@@ -509,7 +519,8 @@ void main() {
         h.backend.finish();
         await tester.pump();
       }
-      expect(h.controller.automatic, isFalse);
+      expect(h.controller.automatic, isTrue);
+      expect(h.controller.restricted, isTrue);
       await h.stable(luma: 240, frames: 240);
       await h.controller.describe();
       expect(h.backend.calls, 3);

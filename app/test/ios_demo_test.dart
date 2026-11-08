@@ -301,6 +301,72 @@ void main() {
   );
 
   testWidgets(
+    'scene mode suppresses routine object names while detector rendering continues',
+    (tester) async {
+      await start(tester, initialSection: AppSection.explore);
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('同意並開始'));
+      await tester.pumpAndSettle();
+      speechCalls.clear();
+      Future<void> frame() async {
+        await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              'hk.pathguide/vision/frame',
+              const StandardMethodCodec().encodeSuccessEnvelope({
+                'detections': [
+                  {'id': 7, 'score': .95, 'cx': .5, 'cy': .5, 'w': .2, 'h': .2},
+                ],
+                'frameWidth': 1280,
+                'frameHeight': 720,
+              }),
+              (_) {},
+            );
+        await tester.pump();
+        await flushAsync(tester);
+      }
+
+      await frame();
+      expect(painter(tester).mapped, hasLength(1));
+      expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
+      expect(visionCalls.where((c) => c == 'captureSceneFrame'), isEmpty);
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
+      await tester.pumpAndSettle();
+      await frame();
+      expect(speechCalls.where((c) => c.method == 'speak'), isNotEmpty);
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+  testWidgets(
+    'scene preparation retries are bounded and borrow the same camera without paid work',
+    (tester) async {
+      scenePreparationFailures = 10;
+      await start(tester, initialSection: AppSection.explore);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(seconds: 2));
+        await flushAsync(tester);
+      }
+      expect(
+        visionCalls.where((c) => c == 'setSceneObservation'),
+        hasLength(3),
+      );
+      expect(visionCalls.where((c) => c == 'startPreview'), hasLength(1));
+      expect(visionCalls.where((c) => c == 'captureSceneFrame'), isEmpty);
+      scenePreparationFailures = 0;
+      final retry = find.byKey(const ValueKey('live-scene-prepare'));
+      await tester.ensureVisible(retry);
+      await tester.tap(retry);
+      await flushAsync(tester);
+      expect(
+        visionCalls.where((c) => c == 'setSceneObservation'),
+        hasLength(4),
+      );
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+  testWidgets(
     'local scene voice test reaches native TTS and copies playback events without capture or cloud work',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);

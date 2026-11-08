@@ -52,6 +52,15 @@ class LiveSceneSignal {
     return total / (64 * 255);
   }
 
+  /// Remove uniform exposure changes before treating a frame as a candidate.
+  /// This is a visual candidate measure, not evidence of semantic novelty.
+  double structuralDifference(LiveSceneSignal other) {
+    final offsets = List.generate(64, (i) => luma[i] - other.luma[i]);
+    final mean = offsets.reduce((a, b) => a + b) / 64;
+    return offsets.fold<double>(0, (sum, v) => sum + (v - mean).abs()) /
+        (64 * 255);
+  }
+
   double angle(LiveSceneSignal other) {
     var dot = 0.0;
     for (var i = 0; i < 4; i++) {
