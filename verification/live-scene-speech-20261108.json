@@ -46,6 +46,14 @@
   "backendChange": false,
   "newPaidGrant": false,
   "paidInferenceRequestsByAgent": 0,
-  "phoneAcceptance": "pending local synthetic speech test; original live integration still not accepted",
-  "review": "Implementing-agent review, no independent agent. Checked priority ownership, cancellation, validity after native stop, bounded timeouts, identity-scoped memory and no content retained in reports."
+  "phoneAcceptance": "pending local synthetic speech test and user acoustic confirmation; original live integration still not accepted",
+  "review": "Implementing-agent review, no independent agent. Checked priority ownership, cancellation, validity after native stop, bounded timeouts, identity-scoped memory and no content retained in reports.",
+  "release": {
+    "tag": "v1.9.5+23",
+    "sourceCommit": "e34a8f209ee5b8a633abad9cffb7b0af3cfd404b",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.9.5%2B23",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  },
+  "phoneInstall": "Installed in place after user unlocked phone; independent devicectl inventory verified 1.9.5 / build 23 and normal launch succeeded. No uninstall/data clear. Initial connection reset then iOS locked-device rejection preserved as installation history."
 }
