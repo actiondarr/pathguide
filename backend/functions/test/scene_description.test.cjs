@@ -52,6 +52,30 @@ test('missing or invalid usage cannot invent tokens or a zero-dollar estimate',a
   assert.equal(usageOf({...usage,prompt_tokens:-1}),null);
   assert.equal(estimate(usage,{input:null,output:null}),null);
 });
+test('rejections expose only a fixed reason, retain usage, and never retry or return content',async()=>{
+  const cases = [
+    [payload(`${good}\n凳。`),'answer-format'],
+    [payload('枱。'),'sentence-count'],
+    [payload('枱。門。凳。櫃。'),'sentence-count'],
+    [payload('枱'.repeat(241)+'。門。'),'answer-length'],
+    [payload('前方可以安全通行。請向左行。'),'disallowed-content'],
+    [payload('前方有门。左邊有枱。'),'disallowed-content'],
+    [payload(good,'length'),'incomplete-answer'],
+    [payload(good,'content_filter'),'provider-refusal'],
+    [{...payload(),choices:[{finish_reason:'stop',message:{refusal:'private content'}}]},'provider-refusal'],
+    [{error:{message:'private content'}},'provider-response'],
+  ];
+  for (const [p, reason] of cases) {
+    let calls=0;
+    const result=await describe(await request(),{key:'fake',fetcher:async()=>{calls++;return response(p);}});
+    assert.equal(calls,1);
+    assert.equal(result.status,'rejected');
+    assert.equal(result.rejectionReason,reason);
+    assert.deepEqual(Object.keys(result).sort(),['metrics','rejectionReason','requestId','status']);
+    if (p.usage) assert.deepEqual(result.metrics.usage,usage);
+    assert.ok(!JSON.stringify(result).includes('private content'));
+  }
+});
 test('JPEG only, byte/pixel/base64 limits; strip image metadata',async()=>{
   const data=await request(); assert.ok((await cleanImage(data)).length);
   for(const d of [{...data,mimeType:'image/png'},{...data,jpegBase64:'a'.repeat(800000)},
@@ -138,6 +162,17 @@ test('callable stores only latest safe metrics and cannot resurrect a deleted ac
   const db2=fakeDb();
   await handle(r,{db:db2,enabled:true,key:()=> 'fake',fetcher:async()=>{db2.deactivate();return response(payload());}});
   assert.equal(db2.value.lastResult,undefined);
+});
+test('callable retains a rejection category with numerical usage, never the rejected answer',async()=>{
+  const data={...await request(),expectedUid:'uid'};
+  const r={data,app:{appId:'attested'},auth:{uid:'uid',token:{firebase:{sign_in_provider:'google.com'}}}};
+  const db=fakeDb();
+  const privateAnswer='前方可以安全通行。請向左行。';
+  const result=await handle(r,{db,enabled:true,key:()=> 'fake',fetcher:async()=>response(payload(privateAnswer))});
+  assert.equal(result.rejectionReason,'disallowed-content');
+  assert.deepEqual(db.value.lastResult,{status:'rejected',metrics:result.metrics,rejectionReason:'disallowed-content'});
+  assert.ok(!JSON.stringify(db.value).includes(privateAnswer));
+  assert.ok(!JSON.stringify(db.value).includes('base64'));
 });
 test('exported Firebase callable remains closed by default, before secret/Firestore access',async()=>{
   const previous=process.env.SCENE_DESCRIPTION_ENABLED;

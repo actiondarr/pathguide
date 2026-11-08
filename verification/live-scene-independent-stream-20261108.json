@@ -24,6 +24,6 @@
   "provider": "existing Singapore endpoint/Secret2; no backend change",
   "ledger": "count3 / spent2764 microUSD incl original unknown2458 and known135+171; halted/recovery consumed; no reset",
   "paidInferenceRequestsByAgent": 0,
-  "phoneAcceptance": "pending independent stream phone rerun",
+  "phoneAcceptance": "FAILED: user confirms 1.9.3+21 installed/version verified, controls usable but no description/speech; final status quota stopped. Fourth provider attempt rejected; followup live-scene-rejection-20261108.json.",
   "review": "Implementing-agent review, not independent. Checked queue/state ownership, epoch/generation, native blocked-model test, separate client streams, shared camera, bounded encoding and unchanged financial/auth guards."
 }

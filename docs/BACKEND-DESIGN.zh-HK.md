@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-08即時辨識複測仍未通過：使用者確認1.9.3+21已裝機及核對版本，按鈕可操作，但沒有文字／語音，最後顯示「場景分析額度已停止」。後端讀回累計4次／2947 microUSD（含首次未知2458），halted=true、無inFlight、recovery=consumed；最新一次是rejected，模型2464ms、267輸入／81輸出／總348 tokens、估算183 microUSD。這證明一次請求已到供應商而被輸出驗證拒絕，其後請求受停止帳本阻擋；舊記錄沒有拒絕原因或原文，不能推定是哪條驗證規則。新增固定拒絕原因enum（格式、長度、句數、受限內容、上游格式／拒答／未完整結束），回傳及private數值量測只加該分類，不存／記照片、完整回答或上游錯誤。提示明確要求單段無換行／標題／編號且不提建議；驗證允許範圍、一次請求、原帳戶／App Check／預算均不放寬。30項離線測試通過，包含各拒絕分類、零內容洩漏、usage保留、並發／停止與原額度保護；具體舊拒絕原因及手機文字／廣東話仍未驗收。此為後端修補，手機維持1.9.3+21；部署／單次受控放行結果見[本輪證據](../verification/live-scene-rejection-20261108.json)。
+
 2026-11-08場景準備逾時／1.9.3+21候選：使用者在1.9.2+20確認框同意後沒有文字或語音，重入後顯示「場景準備逾時」。後端實有一次complete：267輸入／73輸出token、模型1517ms，token估算0.0001702美元、帳本向上取整171 microUSD；帳本累計3次／2764 microUSD，舊一次許可已消耗，故整合版真人仍未通過。程式確認場景準備、status回讀、場景取樣及物件推理原共用inferenceQueue，且scene訊號跟著物件frame交付，會受慢推理阻塞／誤判過期。1.9.3保留單一相機及lease，將captureQueue／motionQueue與單一在途inferenceQueue分開；場景控制直接回{enabled,epoch}，同相機的本機網格／姿態以獨立vision/scene串流交付（約150ms本機採樣，不是定時拍照或上傳），JPEG仍只在必要請求時取下一幀。Motion用回調快照，不在模型工作內同步讀sensor；來源epoch拒舊事件、相機generation拒舊模型回包、JPEG一次編碼及兩秒期限保留。診斷輪詢限一次在途；物件結果過期只撤回物件聲音，不關閉仍有新畫面的場景模式。570個Flutter案例中567通過、3個flag關閉時略過；flag-on相關70項、analyze及59原生Simulator通過，含刻意阻塞模型時控制／JPEG仍及時回覆、完全沒有物件frame仍可走獨立場景stream、物件失效不關自動或切走場景語音。這證明工程隔離，不代替原手機時序根因堆疊或真人驗收；簽署裝機與逐次受控複測另記。
 
 2026-11-08手持修補版已裝機：1.9.2+20來源9b24b66、不可變tag／GitHub prerelease先核遠端，68項相關Flutter及analyze、簽署Profile／deep strict codesign與四模型SHA核對通過；Swift未改，沿用58項原生基線。已覆蓋更新到使用者iPhone，獨立清單核對1.9.2／build20及正常啟動，沒有移除App或清資料。已請使用者正常手持重新進入即時辨識、明示開啟自動描述，等待第一次文字／廣東話，再回報小幅晃動是否仍令控制／結果消失。手機手持／自動描述複驗仍等待；不以工程通過宣稱已修復。
@@ -50,6 +52,8 @@
 
 <a id="service-state"></a>
 ## 2. 現況與已確認限制
+
+目前場景描述狀態（2026-11-08）：獨立單次入口曾通過文字／廣東話；即時辨識1.9.3+21真人仍未通過。最新Qwen回答被驗證拒絕，原一次許可消耗後顯示額度停止；4次／2947 microUSD保留，不能靠等冷卻或重裝解除。本輪只部署後端固定拒絕原因診斷及更明確格式提示，原驗證邊界不變；單次受控複測已ready，香港時間20:14到期，手機功能與具體舊拒絕規則仍未確認。
 
 <a id="1-已有程式與缺口"></a>
 
@@ -521,7 +525,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | B14 個人路線記憶、觀察及場地版本／S4–S7 | 本機樣例已有，完整floor／connector／perception契約待實作；N0已有，無正式雲端API | Sol凍結RouteMemory／LandmarkNode／RouteObservation／MatchResult，路線、固定node、時序觀察與特徵revision分開；有向已走通路段不套用無向BFS假設，未知與歧義不出方向 | F14／D09；基本版本機無帳戶，floor／connector列P0主線，更多場地後續；不能把AI候選或GPS當樓層真值 |
 | B15 路線錄製／場景理解與選填同步／S1–S4 | P2-C/D相機已接；P3-A schema2及有界加密媒體候選已有工程檢查，真機儲存probe已過；P3-B核心471項Flutter／51原生及analyze已過，手機fixture亦通過，P3-C旅程接線已有工程候選490項Flutter／53原生及analyze通過，手機實測未完成 ；#18樓層證據／必要確認已有516項Flutter工程候選，1.8.0+15已交付，真人複測待完成| 本機版本／draft、重開、回退／刪除與容量保護已驗；平常重行不累積影像，首次錄路／更新才存受限關鍵幀。圖像／opaque特徵blob已有有界本機候選；SceneAnalyzer／跨裝置備份／同步未接；選填路標訓練另立用途／快照／model-index交付，見持續改善契約；未接通 | F17；P3-C已接真相機／本機閉環，下一步真人實測及P4障礙／語音，優化後置；雲端另同意／預算，不默認錄影或公開路線 |
 | B16 Apple／電話連結與跨平台／S7 | Google現行；其他未接 | 使用Firebase明確provider linking，在驗證後維持原UID與私人資料，處理已有帳號衝突，不以同電郵猜合併；Android與iOS使用各自App／簽署設定 | F18；重新登入、登出、刪除與相同UID恢復有雙平台證據 |
-| B17 Qwen場景描述／S1 | 新加坡代理及Secret v2已部署，獨立單次1.8.2+17真人文字／廣東話通過；即時辨識自動整合為client工程候選 | Auth／App Check→active帳戶transaction與停止帳本→有界JPEG→Qwen完整回答→安全metrics；Key留Secret Manager，原圖／回答不保存 | 原次數／估算不重設；整合版手機、自動付費、描述品質另驗；導航內入口仍未接 |
+| B17 Qwen場景描述／S1 | 新加坡代理及Secret v2已部署；獨立單次曾通過，1.9.3+21整合真人未通過；4次／2947 microUSD，拒絕原因診斷已部署，單次複測ready | Auth／App Check→active帳戶transaction與停止帳本→有界JPEG→Qwen完整回答→安全metrics；Key留Secret Manager，原圖／回答不保存 | 原次數／估算不重設；整合版手機、自動付費、描述品質另驗；導航內入口仍未接 |
 
 管理員角色依據：[Firebase custom claims](https://firebase.google.com/docs/auth/admin/custom-claims)；GPU工作／時限依據：[Batch GPU工作](https://docs.cloud.google.com/batch/docs/create-run-job-gpus)、[工作時限](https://docs.cloud.google.com/batch/docs/create-run-basic-job)。這些是規劃所用平台能力，未表示本專案服務已部署。
 

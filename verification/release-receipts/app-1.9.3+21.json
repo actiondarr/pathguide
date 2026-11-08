@@ -13,8 +13,8 @@
     "detector-hk9.json": "020c57899aeb91c8fedc0421f76a73c39c7aa79e1a90de6e353d69f98c1367bf"
   },
   "modelsUnchanged": true,
-  "phoneInstall": "pending",
-  "phoneAcceptance": "pending independent scene stream / normal handheld / Cantonese rerun",
+  "phoneInstall": "User confirmed 1.9.3+21 installed and version verified on 2026-11-08.",
+  "phoneAcceptance": "FAILED: controls usable, no description/speech, quota stopped; fourth backend result rejected. See live-scene-rejection-20261108.json.",
   "privateBinaryUploaded": false,
   "phoneDataCleared": false
 }
