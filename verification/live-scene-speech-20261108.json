@@ -44,9 +44,9 @@
     "fourModelsUnchanged": true
   },
   "backendChange": false,
-  "newPaidGrant": false,
+  "newPaidGrant": true,
   "paidInferenceRequestsByAgent": 0,
-  "phoneAcceptance": "pending local synthetic speech test and user acoustic confirmation; original live integration still not accepted",
+  "phoneAcceptance": "Local fixed speech audible per user; real scene text/speech and automatic walking flow remain pending.",
   "review": "Implementing-agent review, no independent agent. Checked priority ownership, cancellation, validity after native stop, bounded timeouts, identity-scoped memory and no content retained in reports.",
   "release": {
     "tag": "v1.9.5+23",
@@ -55,5 +55,32 @@
     "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
     "privateBinaryUploaded": false
   },
-  "phoneInstall": "Installed in place after user unlocked phone; independent devicectl inventory verified 1.9.5 / build 23 and normal launch succeeded. No uninstall/data clear. Initial connection reset then iOS locked-device rejection preserved as installation history."
+  "phoneInstall": "Installed in place after user unlocked phone; independent devicectl inventory verified 1.9.5 / build 23 and normal launch succeeded. No uninstall/data clear. Initial connection reset then iOS locked-device rejection preserved as installation history.",
+  "localSpeechAcceptance": {
+    "dateHongKong": "2026-11-08",
+    "version": "1.9.5+23",
+    "userConfirmation": "有聲",
+    "scope": "Local fixed synthetic speech through scene output path; not a new cloud scene description or automatic walking-mode acceptance."
+  },
+  "integratedRecoveryGrant": {
+    "state": "ACTIVE",
+    "entryPoint": "describeScene",
+    "timeoutSeconds": 40,
+    "maxInstances": 2,
+    "checkedAtUtc": "2026-11-08T14:13:38.708Z",
+    "deploymentUpdateTime": "2026-11-08T10:27:52.373495352Z",
+    "secretVersion": "2",
+    "providerRegion": "Singapore",
+    "selectedAccountVerified": true,
+    "originalCountCostIdsUnchanged": true,
+    "priorRecoveryArchived": true,
+    "trialCount": 6,
+    "spentMicroUsd": 3296,
+    "halted": true,
+    "inFlight": false,
+    "lastStatus": "complete",
+    "recoveryStatus": "ready",
+    "recoveryExpiresAtUtc": "2026-11-08T16:13:37.182Z",
+    "paidInferenceRequestsByAgent": 0
+  }
 }
