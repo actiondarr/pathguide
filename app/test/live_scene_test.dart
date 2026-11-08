@@ -144,6 +144,90 @@ void main() {
     }
   });
   testWidgets(
+    'ordinary hand tremor keeps controls available and does not discard a paid reply',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      expect(h.controller.canRequest, isTrue);
+      expect(h.controller.canDescribe, isFalse);
+      h.controller.setAutomatic(true);
+      for (var i = 0; i < 8; i++) {
+        await h.frame(yaw: i.isEven ? 2 : -2, rate: 0.25);
+      }
+      expect(h.backend.calls, 1);
+      expect(h.controller.automatic, isTrue);
+      h.backend.finish();
+      await tester.pump();
+      expect(h.voice.said, [full]);
+      await h.frame(yaw: 3, rate: 0.3);
+      expect(h.controller.text, isNotNull);
+      expect(h.controller.automatic, isTrue);
+      await h.frame(yaw: 25, rate: 1);
+      expect(h.controller.text, isNull);
+      expect(h.controller.automatic, isTrue);
+      h.controller.dispose();
+    },
+  );
+  testWidgets(
+    'manual request waits locally for stable handheld frames before any capture/upload',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      final pending = h.controller.describe();
+      await tester.pump();
+      expect(h.captures, 0);
+      expect(h.backend.calls, 0);
+      await h.frame(rate: 1);
+      await h.stable();
+      expect(h.captures, 1);
+      expect(h.backend.calls, 1);
+      h.backend.finish();
+      await pending;
+      expect(h.voice.said, [full]);
+      h.controller.dispose();
+    },
+  );
+  testWidgets(
+    'unstable manual request expires without photo, cost debit, or automatic retry',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      final pending = h.controller.describe();
+      await tester.pump();
+      for (var i = 0; i < 15; i++) {
+        await h.frame(yaw: i * 10, rate: 1);
+      }
+      await pending;
+      expect(h.captures, 0);
+      expect(h.backend.calls, 0);
+      expect(h.controller.attempts, 0);
+      expect(h.controller.failure, 'not-stable');
+      expect(h.controller.canRequest, isTrue);
+      h.controller.dispose();
+    },
+  );
+  testWidgets(
+    'small pose drift during encoding and reply does not erase a valid snapshot',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      h.bytes = Completer<Uint8List?>();
+      await h.stable();
+      final pending = h.controller.describe();
+      await tester.pump();
+      await h.frame(yaw: 6, rate: 0.3);
+      expect(h.controller.stable, isFalse);
+      h.bytes.complete(Uint8List(1));
+      await tester.pump();
+      expect(h.backend.calls, 1);
+      h.backend.finish();
+      await pending;
+      expect(h.voice.said, [full]);
+      expect(h.controller.text, full);
+      h.controller.dispose();
+    },
+  );
+  testWidgets(
     'first stable scene triggers once; unchanged video never polls cloud even after cooldown',
     (tester) async {
       final h = Harness(tester);

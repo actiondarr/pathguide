@@ -15,7 +15,7 @@ class LiveSceneController extends ChangeNotifier {
     required this.speaker,
     DateTime Function()? clock,
     this.cooldown = const Duration(seconds: 45),
-    this.stableFor = const Duration(milliseconds: 1200),
+    this.stableFor = const Duration(milliseconds: 700),
     this.maxSessionAttempts = 3,
   }) : _clock = clock ?? DateTime.now;
   final Future<Uint8List?> Function() capture;
@@ -51,12 +51,12 @@ class LiveSceneController extends ChangeNotifier {
       _fresh &&
       _stableSince != null &&
       _clock().difference(_stableSince!) >= stableFor;
-  bool get canDescribe =>
+  bool get canRequest =>
       available &&
-      stable &&
       !busy &&
       attempts < maxSessionAttempts &&
       (_lastAttempt == null || _clock().difference(_lastAttempt!) >= cooldown);
+  bool get canDescribe => canRequest && stable;
   bool get _changed =>
       _baseline == null ||
       (_latest != null &&
@@ -148,21 +148,26 @@ class LiveSceneController extends ChangeNotifier {
       status = '畫面已過期，場景描述已作廢。';
       _notify();
     });
-    final moving = signal.rotationRate > 0.15;
+    // Hand tremor does not invalidate content. Fast panning or accumulated
+    // scene/attitude change still fences old replies immediately.
+    final moving = signal.rotationRate > 0.45;
+    final fastTurn = signal.rotationRate > 0.8;
     final drift =
         _stable != null &&
-        (_stable!.difference(signal) > 0.035 || _stable!.angle(signal) > 3);
+        (_stable!.difference(signal) > 0.06 || _stable!.angle(signal) > 5);
     final evidenceChanged =
         _evidence != null &&
-        (_evidence!.difference(signal) > 0.08 || _evidence!.angle(signal) > 8);
-    if (moving || evidenceChanged) invalidate();
+        (_evidence!.difference(signal) > 0.12 || _evidence!.angle(signal) > 12);
+    if (evidenceChanged || (fastTurn && _evidence != null)) invalidate();
     if (moving || drift || _stable == null || _stableSince == null) {
       _stable = signal;
       _stableSince = now;
     }
     if (moving) {
       _stableSince = null;
-      status = '手機移動中，穩定後再分析。';
+      if (!busy && text == null) {
+        status = automatic ? '等畫面稍為穩定後再分析；自動模式仍然開啟。' : '畫面移動中，可按「描述前方」等穩定後取相。';
+      }
     }
     if (automatic && canDescribe && _changed) {
       unawaited(describe(manual: false));
@@ -171,24 +176,34 @@ class LiveSceneController extends ChangeNotifier {
   }
 
   Future<void> describe({bool manual = true}) async {
-    if (!canDescribe || (!manual && !automatic)) return;
+    if (!(manual ? canRequest : canDescribe) || (!manual && !automatic)) return;
     busy = true;
     failure = '';
     text = null;
     final generation = ++_generation;
-    _evidence = _latest;
-    bool current() =>
-        !_disposed && available && generation == _generation && _fresh;
-    status = '正在分析場景；即時物件辨識繼續運行。';
+    _evidence = null;
+    bool active() => !_disposed && available && generation == _generation;
+    bool current() => active() && _fresh;
+    status = '等畫面稍為穩定後取相；即時物件辨識繼續運行。';
     _notify();
     var awaitingResult = false;
     try {
+      // A manual request can wait locally; no camera photo or paid work is
+      // queued. Pause/exit cancels this wait before any upload.
+      for (var i = 0; manual && active() && !stable && i < 25; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      if (!active()) return;
+      if (!stable) throw const SceneFailure('not-stable');
+      _evidence = _latest;
+      status = '正在分析場景；即時物件辨識繼續運行。';
+      _notify();
       final jpeg = await capture();
       if (!current()) return;
       if (jpeg == null || jpeg.isEmpty || jpeg.length > 524288) {
         throw const SceneFailure('no-frame');
       }
-      if (!stable) {
+      if ((_latest?.rotationRate ?? double.infinity) > 0.45) {
         invalidate();
         return;
       }
@@ -222,7 +237,7 @@ class LiveSceneController extends ChangeNotifier {
           estimatedUsd += reply.metrics.estimatedUsd!;
         }
       }
-      if (!current() || !stable) return;
+      if (!current()) return;
       if (reply.text == null) throw const SceneFailure('rejected');
       final full = validateSceneText(reply.text);
       final previous = _previousFullText;
@@ -256,11 +271,12 @@ class LiveSceneController extends ChangeNotifier {
         usageUnknown = true;
         automatic = false;
       }
-      if (!current()) return;
+      if (!active()) return;
       automatic = false;
       failure = error is SceneFailure ? error.code : 'unavailable';
       text = null;
       status = switch (failure) {
+        'not-stable' => '畫面仍在移動，今次未取相或上傳；稍為穩定後可再按。',
         'resource-exhausted' => '場景分析額度已停止，請由開發者核對；物件辨識繼續。',
         'app-check-unavailable' ||
         'unauthenticated' ||

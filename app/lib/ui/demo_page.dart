@@ -162,8 +162,8 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         content: SingleChildScrollView(
           child: Text(
             automatic
-                ? '本次只測房間枱、椅、門。會在畫面有重要變化或轉向後，手機穩定時取相傳到 Qwen 分析，可能產生費用。首次描述全景，之後略過完全重複的句子。本次使用最多三次，每次至少相隔四十五秒；仍受後端帳本及剩餘額度限制。只描述可見畫面，不判斷距離或通行。可隨時關閉；錯誤或用量未知會停止。'
-                : '本次只測房間枱、椅、門。會從正在辨識的相機取一張相傳到 Qwen 分析，可能產生費用。請站定使用。結果只描述可見畫面，不判斷距離或通行。',
+                ? '本次只測房間枱、椅、門。會在畫面有重要變化或轉向後，手機稍為穩定時取相傳到 Qwen 分析，可能產生費用。首次描述全景，之後略過完全重複的句子。本次使用最多三次，每次至少相隔四十五秒；仍受後端帳本及剩餘額度限制。只描述可見畫面，不判斷距離或通行。可隨時關閉；錯誤或用量未知會停止。'
+                : '本次只測房間枱、椅、門。會從正在辨識的相機取一張相傳到 Qwen 分析，可能產生費用。請保持手機大致穩定。結果只描述可見畫面，不判斷距離或通行。',
           ),
         ),
         actions: [
@@ -980,7 +980,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                             Expanded(
                               child: OutlinedButton(
                                 key: const ValueKey('live-scene-describe'),
-                                onPressed: _scene.canDescribe && !_controlsOpen
+                                onPressed: _scene.canRequest && !_controlsOpen
                                     ? () => _startScene(automatic: false)
                                     : null,
                                 child: const Text('描述前方'),

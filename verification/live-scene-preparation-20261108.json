@@ -10,7 +10,7 @@
     "analyze": "pass",
     "signedBuild": "private Profile pass; deep strict codesign pass; model hashes unchanged"
   },
-  "phoneAcceptance": "pending integrated-page rerun; 1.9.0+18 not accepted",
+  "phoneAcceptance": "User reports switch usable on 1.9.1+19, but must remain completely still; minor movement disables/clears, automatic description still not accepted",
   "privacy": "User screenshot kept out of repository/training; no picture or answer logging",
   "ledger": "count 2 / 2593 microUSD / halted; existing one-attempt grant ready; no reset or new agent inference",
   "paidInferenceRequestsByAgent": 0,
@@ -31,5 +31,6 @@
     "lastStatus": "complete",
     "recoveryStatus": "ready",
     "checkedAtUtc": "2026-11-08T09:19:47.766Z"
-  }
+  },
+  "followupEvidence": "live-scene-handheld-20261108.json"
 }
