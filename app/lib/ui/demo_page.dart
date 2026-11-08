@@ -1055,6 +1055,30 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                           _scene.status,
                           key: const ValueKey('live-scene-status'),
                         ),
+                        Text(
+                          '後端：${_scene.backendStatus}；拒絕原因：${_scene.rejectionDescription}',
+                          key: const ValueKey('live-scene-outcome'),
+                        ),
+                        ExpansionTile(
+                          key: const ValueKey('live-scene-diagnostics'),
+                          title: const Text('場景測試資料'),
+                          children: [
+                            TextButton.icon(
+                              key: const ValueKey(
+                                'live-scene-copy-diagnostics',
+                              ),
+                              onPressed: () => Clipboard.setData(
+                                ClipboardData(text: _scene.diagnostics),
+                              ),
+                              icon: const Icon(Icons.copy),
+                              label: const Text('複製測試資料'),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Text(_scene.diagnostics),
+                            ),
+                          ],
+                        ),
                         if (_scene.preparationCode != null)
                           ExpansionTile(
                             title: const Text('場景準備資料'),

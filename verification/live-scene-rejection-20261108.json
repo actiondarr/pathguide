@@ -71,5 +71,15 @@
     "paidInferenceRequestsByAgent": 0
   },
   "paidInferenceRequestsByAgent": 0,
-  "phoneAcceptance": "failed on 1.9.3+21; controlled rerun pending; no claim of functional fix"
+  "phoneAcceptance": "FAILED again: fifth attempt sentence-count, phone displayed scene changed; diagnostics candidate tracked separately.",
+  "controlledRerun": {
+    "trialCount": 5,
+    "spentMicroUsd": 3125,
+    "lastStatus": "rejected",
+    "rejectionReason": "sentence-count",
+    "recoveryStatus": "consumed",
+    "mode": "manual, auto off",
+    "phoneDisplayed": "場景已改變",
+    "followup": "live-scene-test-data-20261108.json"
+  }
 }

@@ -47,9 +47,19 @@ class SceneReply {
       text = validateSceneText(map['text']);
     } else if (map['status'] != 'rejected' || map.containsKey('text')) {
       throw const SceneFailure('invalid-answer');
+    } else if (const {
+      'answer-format',
+      'answer-length',
+      'sentence-count',
+      'disallowed-content',
+      'provider-response',
+      'provider-refusal',
+      'incomplete-answer',
+    }.contains(map['rejectionReason'])) {
+      rejectionReason = map['rejectionReason'] as String;
     }
   }
-  String? text;
+  String? text, rejectionReason;
   late final SceneMetrics metrics;
 }
 

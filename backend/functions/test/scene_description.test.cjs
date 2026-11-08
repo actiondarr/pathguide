@@ -2,7 +2,7 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const sharp = require('sharp');
-const {describe,cleanImage,validateText,usageOf,estimate,reserve,handle,BASE} = require('../scene_description');
+const {describe,cleanImage,validateText,renderAnswer,usageOf,estimate,reserve,handle,BASE} = require('../scene_description');
 const good = '畫面左邊有張木枱。中間見到一道門，右邊有張凳。';
 const id = 'a'.repeat(32);
 const usage = {prompt_tokens:110,completion_tokens:30,total_tokens:140};
@@ -11,7 +11,7 @@ async function request() {
   return {schemaVersion:1,requestId:id,mimeType:'image/jpeg',jpegBase64:jpeg.toString('base64')};
 }
 const response = (payload, status=200) => new Response(JSON.stringify(payload),{status,headers:{'content-type':'application/json'}});
-const payload = (text=good, reason='stop') => ({choices:[{finish_reason:reason,message:{content:text}}],usage});
+const payload = (text=good, reason='stop') => ({choices:[{finish_reason:reason,message:{content:JSON.stringify({sentences:text.split(/(?<=[。！？])/u).filter(Boolean)})}}],usage});
 function fakeDb() {
   let state;
   let active = true, deleted = false;
@@ -21,6 +21,20 @@ function fakeDb() {
     serial=op.catch(()=>{}); return op;
   }};
 }
+test('structured fields render two or three complete sentences despite JSON whitespace or omitted terminal punctuation',()=>{
+  assert.equal(renderAnswer(JSON.stringify({sentences:['畫面左邊有張木枱','中間見到一道門，右邊有張凳。']},null,2)),good);
+  assert.equal(renderAnswer(JSON.stringify({sentences:[' 左邊有枱。 ','中間有門','右邊有凳！']})),'左邊有枱。中間有門。右邊有凳！');
+});
+test('structured output cannot hide unsafe content, extra sentences, unknown fields or malformed partial JSON',()=>{
+  for (const content of [
+    null, ['{"sentences":["枱。","門。"]}'],
+    good, '{"sentences":["枱。","門。"', '```json\n{"sentences":["枱。","門。"]}\n```',
+    JSON.stringify({sentences:['枱。','門。'],extra:'向左行'}),
+    ...[null,[],{},['枱。'],['枱。','門。','凳。','櫃。'],['枱。門。','凳。'],['枱。',42],
+      ['枱。',''],['枱。','\n門。'],['枱。','請向左行。'],['枱。','右邊可以安全通行。'],
+      ['枱。','距離三米。'],['枱。','右邊有门。']].map(sentences=>JSON.stringify({sentences})),
+  ]) assert.throws(()=>renderAnswer(content),{code:'data-loss'});
+});
 test('one bounded, non-thinking, non-streaming POST; metadata-only measurement',async()=>{
   let calls=0;
   const result=await describe(await request(),{key:'fake-test-key',base:BASE,rates:{input:1,output:2},fetcher:async(url,opts)=>{
@@ -28,7 +42,7 @@ test('one bounded, non-thinking, non-streaming POST; metadata-only measurement',
     assert.equal(opts.redirect,'error'); assert.ok(opts.signal);
     const body=JSON.parse(opts.body);
     assert.equal(body.model,'qwen3-vl-plus'); assert.equal(body.enable_thinking,false);
-    assert.equal(body.stream,false); assert.equal(body.max_tokens,512);
+    assert.equal(body.stream,false); assert.deepEqual(body.response_format,{type:'json_object'}); assert.match(body.messages[0].content,/JSON/u); assert.equal(body.max_tokens,512);
     assert.equal(body.vl_high_resolution_images,false); assert.equal(body.messages[1].content[0].max_pixels,262144);
     assert.match(body.messages[1].content[0].image_url.url,/^data:image\/jpeg;base64,/);
     return response(payload());
@@ -157,7 +171,7 @@ test('callable stores only latest safe metrics and cannot resurrect a deleted ac
   const db=fakeDb();
   const result=await handle(r,{db,enabled:true,key:()=> 'fake',fetcher:async()=>response(payload())});
   assert.equal(result.text,good);
-  assert.deepEqual(db.value.lastResult,{status:'complete',metrics:result.metrics});
+  assert.deepEqual(db.value.lastResult,{requestId:id,status:'complete',metrics:result.metrics});
   assert.ok(!JSON.stringify(db.value).includes(good)); assert.ok(!JSON.stringify(db.value).includes('base64'));
   const db2=fakeDb();
   await handle(r,{db:db2,enabled:true,key:()=> 'fake',fetcher:async()=>{db2.deactivate();return response(payload());}});
@@ -170,7 +184,7 @@ test('callable retains a rejection category with numerical usage, never the reje
   const privateAnswer='前方可以安全通行。請向左行。';
   const result=await handle(r,{db,enabled:true,key:()=> 'fake',fetcher:async()=>response(payload(privateAnswer))});
   assert.equal(result.rejectionReason,'disallowed-content');
-  assert.deepEqual(db.value.lastResult,{status:'rejected',metrics:result.metrics,rejectionReason:'disallowed-content'});
+  assert.deepEqual(db.value.lastResult,{requestId:id,status:'rejected',metrics:result.metrics,rejectionReason:'disallowed-content'});
   assert.ok(!JSON.stringify(db.value).includes(privateAnswer));
   assert.ok(!JSON.stringify(db.value).includes('base64'));
 });

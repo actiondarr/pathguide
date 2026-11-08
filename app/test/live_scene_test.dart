@@ -27,12 +27,18 @@ class Backend implements SceneBackend {
     return c.future;
   }
 
-  void finish({String text = full, bool usage = true}) {
+  void finish({
+    String text = full,
+    bool usage = true,
+    bool rejected = false,
+    String? rejectionReason,
+  }) {
     pending.last.complete(
       SceneReply.fromMap({
-        'status': 'complete',
+        'status': rejected ? 'rejected' : 'complete',
         'requestId': ids.last,
-        'text': text,
+        if (!rejected) 'text': text,
+        'rejectionReason': ?rejectionReason,
         'metrics': {
           'modelMs': 50,
           'usage': usage
@@ -119,6 +125,84 @@ class Harness {
 }
 
 void main() {
+  testWidgets(
+    'a rejected late reply keeps separate backend and invalidation evidence without answer content',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      h.controller.setAutomatic(true);
+      await h.stable();
+      final requestId = h.backend.ids.single;
+      expect(h.controller.backendStatus, '等待回覆');
+      expect(h.controller.cooldownSeconds, greaterThan(40));
+      await h.frame(yaw: 30, rate: 1);
+      expect(h.controller.lastInvalidation, '快速轉向');
+      h.backend.finish(rejected: true, rejectionReason: 'sentence-count');
+      await tester.pump();
+      expect(h.controller.backendStatus, '拒絕');
+      expect(h.controller.rejectionReason, 'sentence-count');
+      expect(h.controller.failure, 'rejected');
+      expect(h.controller.automatic, isFalse);
+      expect(h.controller.text, isNull);
+      expect(h.voice.said, isEmpty);
+      final report = h.controller.diagnostics;
+      expect(report, contains(requestId));
+      expect(report, contains('快速轉向'));
+      expect(report, contains('sentence-count'));
+      expect(report, contains('100／20／120'));
+      expect(report, contains('0.000052'));
+      expect(report, isNot(contains(full)));
+      expect(h.controller.backendMs, isNotNull);
+      await h.stable(yaw: 30, frames: 240);
+      expect(h.backend.calls, 1);
+      expect(h.controller.backendStatus, '拒絕');
+      h.controller.observe(null, sourceIssue: 'motion-stale');
+      expect(h.controller.rejectionReason, 'sentence-count');
+      h.controller.dispose();
+    },
+  );
+  testWidgets(
+    'rejection status survives motion and expiry; unknown reason content is not copied',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      await h.stable();
+      final work = h.controller.describe();
+      await tester.pump();
+      h.backend.finish(
+        rejected: true,
+        rejectionReason: 'private upstream content',
+      );
+      await work;
+      expect(h.controller.phase, '回覆被拒絕');
+      final status = h.controller.status;
+      await h.frame(yaw: 25, rate: 1);
+      await tester.pump(const Duration(seconds: 21));
+      expect(h.controller.status, status);
+      expect(
+        h.controller.diagnostics,
+        isNot(contains('private upstream content')),
+      );
+    },
+  );
+  testWidgets(
+    'manual mode does not trigger again after a scene change or cooldown',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      await h.stable();
+      final work = h.controller.describe();
+      await tester.pump();
+      h.backend.finish();
+      await work;
+      await h.frame(yaw: 30, rate: 1);
+      expect(h.controller.status, contains('自動模式關閉'));
+      await h.stable(yaw: 30, frames: 240);
+      expect(h.backend.calls, 1);
+      expect(h.controller.cooldownSeconds, 0);
+      h.controller.dispose();
+    },
+  );
   test('motion parsing rejects stale/missing/malformed evidence instead of guessing stability', () {
     final v = {
       'sequence': 1,

@@ -293,6 +293,48 @@ void main() {
   );
 
   testWidgets(
+    'scene diagnostics can be opened and copied without capturing or changing test controls',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await start(tester, initialSection: AppSection.explore);
+      String? copied;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      final panel = find.byKey(const ValueKey('live-scene-diagnostics'));
+      await tester.ensureVisible(panel);
+      await tester.tap(panel);
+      await tester.pumpAndSettle();
+      final copy = find.byKey(const ValueKey('live-scene-copy-diagnostics'));
+      await tester.ensureVisible(copy);
+      await tester.tap(copy);
+      await tester.pump();
+      expect(copied, contains('請求 ID：未送出'));
+      expect(copied, contains('模型：未知'));
+      expect(copied, contains('自動關閉（手動單次）'));
+      await capture(tester, 'scene-diagnostics');
+      expect(visionCalls.where((v) => v == 'captureSceneFrame'), isEmpty);
+      expect(find.byKey(const ValueKey('live-scene-describe')), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-scene-auto')), findsOneWidget);
+      expect(find.text('暫停辨識'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+
+  testWidgets(
     'scene preparation failure is actionable; retry connects existing camera without photo or paid request',
     (tester) async {
       scenePreparationFailures = 1;
