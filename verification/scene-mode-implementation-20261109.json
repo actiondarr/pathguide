@@ -10,7 +10,7 @@
     "Scene speech suppresses ordinary object names; navigation retains priority; latest valid speech only",
     "Two finite retries only for positively identified before-provider failures; unknown paid result restricts",
     "Expanded numeric diagnostics: mode state, speech request, local observation count, remote limits and expiry",
-    "Count ceiling 20 to 50; original US$0.01 estimate budget unchanged; guarded ledger amendment pending install"
+    "Count ceiling 20 to 50; original US$0.01 estimate budget unchanged; audited updateTime CAS appended allowance history and granted 12-hour window after installation"
   ],
   "checks": {
     "flutterDefault": {
@@ -56,7 +56,35 @@
     "anonymousStatus": 401,
     "ledgerAwaitingAuditedCountAmendment": true
   },
-  "ledgerAmendment": "Pending audited CAS after installation; old ledger retained and mismatched fingerprint currently prevents allocations",
+  "ledgerAmendment": {
+    "state": "ACTIVE",
+    "entryPoint": "describeScene",
+    "timeoutSeconds": 40,
+    "maxInstances": 2,
+    "checkedAtUtc": "2026-11-08T16:06:25.443Z",
+    "deploymentUpdateTime": "2026-11-08T15:59:26.124892024Z",
+    "region": "asia-east2",
+    "secretVersion": "2",
+    "providerRegion": "Singapore",
+    "selectedAccountVerified": true,
+    "maxRequests": 50,
+    "budgetMicroUsd": 10000,
+    "paidInferenceRequestsByAgent": 0,
+    "trialCount": 7,
+    "spentMicroUsd": 3483,
+    "halted": true,
+    "inFlight": false,
+    "lastStatus": "complete",
+    "recoveryStatus": "consumed",
+    "windowStatus": "ready",
+    "allowanceHistoryAppended": true,
+    "originalCountCostIdsUnknownHistoryUnchanged": true,
+    "nominalRemaining": 43,
+    "windowExpiresAtUtc": "2026-11-09T04:06:25.443Z",
+    "windowExpiresAtHongKong": "2026-11-09 12:06:25",
+    "nextRequestReserveMicroUsd": 2458,
+    "notBillingCap": true
+  },
   "limitations": [
     "Semantic comparison and motion thresholds are engineering candidates, not calibrated quality evidence",
     "No human acceptance of integrated scene text/audio or walking mode yet",
@@ -67,5 +95,21 @@
     "US$0.01 is app estimated stop policy, not provider invoice cap; Firebase costs separate"
   ],
   "paidInferenceRequestsByAgent": 0,
-  "phoneInstall": "Pending verified release checkpoint"
+  "phoneInstall": {
+    "bundleIdentifier": "hk.pathguide.pathguide",
+    "version": "1.10.0",
+    "bundleVersion": "24",
+    "independentInventoryVerified": true,
+    "installedInPlace": true,
+    "dataCleared": false,
+    "normalLaunchSucceeded": true,
+    "humanAcceptance": "Pending"
+  },
+  "release": {
+    "tag": "v1.10.0+24",
+    "sourceCommit": "624b0e446943e9e8f5bc8e793721ad0cde1d0536",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.10.0%2B24",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  }
 }
