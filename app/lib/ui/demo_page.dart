@@ -216,7 +216,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _startScene({required bool automatic}) async {
+  Future<void> _startScene() async {
     if (!_sceneFeature ||
         !_sourceReady ||
         !_requestedRunning ||
@@ -229,12 +229,10 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(automatic ? '開啟自動場景分析？' : '分析眼前場景？'),
+        title: const Text('開啟場景模式？'),
         content: SingleChildScrollView(
           child: Text(
-            automatic
-                ? '本次只測房間枱、椅、門。會在畫面有重要變化或轉向後，手機稍為穩定時取相傳到 Qwen 分析，可能產生費用。首次描述兩至三句，之後以一句補充新重點；普通物件報名暫停，導航仍優先。本次測試最多五十次、每次至少相隔三秒；仍受後端有期限許可及估算費用限制，可能提早停止。只描述可見畫面，不判斷距離或通行。可隨時關閉；暫時失敗會等候；用量未知或額度不足會顯示受限。'
-                : '本次只測房間枱、椅、門。會從正在辨識的相機取一張相傳到 Qwen 分析，可能產生費用。請保持手機大致穩定。結果只描述可見畫面，不判斷距離或通行。',
+            '開啟後會先描述相機可見環境，再於重要變化或轉向後，手機稍為穩定時取相傳到 Qwen 分析，可能產生費用。首次描述兩至三句，之後以一句補充新重點；普通物件報名暫停，導航仍優先。累計仍受伺服器許可、到期時間及估算費用限制，開關不會重設用量。只描述可見畫面，不判斷距離或通行。可隨時關閉；暫時失敗會等候；用量未知或額度不足會顯示受限。',
           ),
         ),
         actions: [
@@ -257,11 +255,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         accepted != true) {
       return;
     }
-    if (automatic) {
-      _scene.setAutomatic(true);
-    } else {
-      await _scene.describe();
-    }
+    _scene.setAutomatic(true);
   }
 
   StreamSubscription<VisionFrame>? _sub;
@@ -1074,31 +1068,10 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                key: const ValueKey('live-scene-describe'),
-                                onPressed: _scene.canRequest && !_controlsOpen
-                                    ? () => _startScene(automatic: false)
-                                    : null,
-                                child: const Text('描述前方'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton(
-                                key: const ValueKey('live-scene-cancel'),
-                                onPressed: () => _scene.interrupt(),
-                                child: const Text('停止場景分析'),
-                              ),
-                            ),
-                          ],
-                        ),
                         SwitchListTile(
                           key: const ValueKey('live-scene-auto'),
                           dense: true,
-                          title: const Text('環境變化時自動描述'),
+                          title: const Text('場景模式'),
                           value: _scene.automatic,
                           onChanged:
                               _scene.available &&
@@ -1109,7 +1082,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                                   !_controlsOpen
                               ? (value) {
                                   if (value) {
-                                    unawaited(_startScene(automatic: true));
+                                    unawaited(_startScene());
                                   } else {
                                     _scene.setAutomatic(false);
                                   }

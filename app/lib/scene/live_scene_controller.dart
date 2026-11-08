@@ -296,7 +296,7 @@ class LiveSceneController extends ChangeNotifier {
           ..._reports.values,
         ].join('\n\n');
   String get _currentDiagnostics => [
-    '模式：${automatic ? '自動開啟' : '自動關閉（手動單次）'}；相機來源：${available ? '可用' : '未準備'}',
+    '模式：${automatic ? '自動開啟' : '自動關閉'}；相機來源：${available ? '可用' : '未準備'}',
     '階段：$phase；模式狀態：${modeState.name}；後端結果：$backendStatus',
     '播音所屬請求：${spokenRequestId ?? '無'}；脈絡觀察項目：${_previousObservations.length}',
     '有效描述字數：${text?.length ?? 0}；播音：$speechStatus',
@@ -526,7 +526,7 @@ class LiveSceneController extends ChangeNotifier {
       if (!restricted && !busy && text == null && failure.isEmpty) {
         status = automatic
             ? '等畫面稍為穩定後再分析；自動模式仍然開啟。'
-            : '畫面移動中；自動模式關閉。可按「描述前方」等穩定後取相。';
+            : '畫面移動中；場景模式關閉。開啟模式後會等穩定再取相。';
       }
     }
     if (automatic && _knownExhausted && !busy && !speaking) {

@@ -252,7 +252,7 @@ void main() {
       h.backend.finish();
       await work;
       await h.frame(yaw: 30, rate: 2.2);
-      expect(h.controller.status, contains('自動模式關閉'));
+      expect(h.controller.status, contains('場景模式關閉'));
       await h.stable(yaw: 30, frames: 240);
       expect(h.backend.calls, 1);
       expect(h.controller.cooldownSeconds, 0);

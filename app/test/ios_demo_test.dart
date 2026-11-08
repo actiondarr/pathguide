@@ -391,7 +391,8 @@ void main() {
       expect(find.textContaining('原生 TTS 已開始'), findsOneWidget);
       expect(find.textContaining('原生 TTS 已完成'), findsOneWidget);
       expect(find.textContaining('請求 ID：未送出'), findsOneWidget);
-      expect(find.byKey(const ValueKey('live-scene-describe')), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-scene-describe')), findsNothing);
+      expect(find.byKey(const ValueKey('live-scene-cancel')), findsNothing);
       await capture(tester, 'scene-local-voice');
       await close(tester);
     },
@@ -428,11 +429,13 @@ void main() {
       await tester.pump();
       expect(copied, contains('請求 ID：未送出'));
       expect(copied, contains('模型：未知'));
-      expect(copied, contains('自動關閉（手動單次）'));
+      expect(copied, contains('自動關閉'));
       await capture(tester, 'scene-diagnostics');
       expect(visionCalls.where((v) => v == 'captureSceneFrame'), isEmpty);
-      expect(find.byKey(const ValueKey('live-scene-describe')), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-scene-describe')), findsNothing);
+      expect(find.byKey(const ValueKey('live-scene-cancel')), findsNothing);
       expect(find.byKey(const ValueKey('live-scene-auto')), findsOneWidget);
+      expect(find.text('場景模式'), findsOneWidget);
       expect(find.text('暫停辨識'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await close(tester);
@@ -583,16 +586,16 @@ void main() {
       }
       expect(
         tester
-            .widget<OutlinedButton>(
-              find.byKey(const ValueKey('live-scene-describe')),
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
             )
-            .onPressed,
+            .onChanged,
         isNotNull,
       );
       expect(visionCalls.where((x) => x == 'captureSceneFrame'), isEmpty);
       await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
       await tester.pumpAndSettle();
-      expect(find.text('開啟自動場景分析？'), findsOneWidget);
+      expect(find.text('開啟場景模式？'), findsOneWidget);
       expect(visionCalls.where((x) => x == 'captureSceneFrame'), isEmpty);
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
@@ -607,11 +610,14 @@ void main() {
       for (var i = 0; i < 9; i++) {
         await frame();
       }
-      await tester.tap(find.byKey(const ValueKey('live-scene-describe')));
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
       await tester.pumpAndSettle();
-      expect(find.text('分析眼前場景？'), findsOneWidget);
+      expect(find.text('開啟場景模式？'), findsOneWidget);
       await tester.tap(find.text('同意並開始'));
       await tester.pumpAndSettle();
+      for (var i = 0; i < 9; i++) {
+        await frame();
+      }
       expect(visionCalls.where((x) => x == 'captureSceneFrame'), hasLength(1));
       expect(visionCalls.where((x) => x == 'startPreview'), hasLength(1));
       expect(find.text('暫停辨識'), findsOneWidget);
