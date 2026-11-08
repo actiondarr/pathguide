@@ -19,7 +19,7 @@ class LiveSceneController extends ChangeNotifier {
     DateTime Function()? clock,
     this.cooldown = const Duration(seconds: 3),
     this.stableFor = const Duration(milliseconds: 250),
-    this.maxSessionAttempts = 50,
+    this.maxSessionAttempts = 100,
     this.speechEnvironment,
   }) : _clock = clock ?? DateTime.now {
     _historyScope = backend is FirebaseSceneBackend

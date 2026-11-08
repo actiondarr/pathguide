@@ -11,7 +11,7 @@ function configure(env) {
   const id=env.SCENE_TRIAL_ID, uid=env.SCENE_TRIAL_UID;
   const maxRequests=Number(env.SCENE_TRIAL_MAX_REQUESTS), budgetMicroUsd=Number(env.SCENE_TRIAL_BUDGET_MICRO_USD);
   if (!/^[a-z0-9-]{1,80}$/.test(id||'') || typeof uid!=='string' || !uid || uid.length>128 || uid.includes('/') ||
-      !Number.isInteger(maxRequests) || maxRequests<1 || maxRequests>50 ||
+      !Number.isInteger(maxRequests) || maxRequests<1 || maxRequests>100 ||
       !Number.isInteger(budgetMicroUsd) || budgetMicroUsd<1 || budgetMicroUsd>500000 ||
       Number(env.QWEN_INPUT_USD_PER_MILLION)!==0.2 || Number(env.QWEN_OUTPUT_USD_PER_MILLION)!==1.6) fail('failed-precondition');
   const config={id,uid,maxRequests,budgetMicroUsd,reserveMicroUsd:Math.ceil((INPUT_BOUND*2+OUTPUT_BOUND*16)/10)};
@@ -35,7 +35,7 @@ function assess(old, requestId, config, now=Date.now()) {
     /^[a-z0-9-]{1,80}$/.test(window.id||'') && Number.isInteger(window.baseCount) &&
     window.baseCount>=0 && window.baseCount<=state.count && Number.isInteger(window.maxCount) &&
     window.maxCount>window.baseCount && window.maxCount<=config.maxRequests && state.count<window.maxCount &&
-    Number.isSafeInteger(window.expiresAtMs) && window.expiresAtMs>now && window.expiresAtMs<=now+86400000 &&
+    Number.isSafeInteger(window.expiresAtMs) && window.expiresAtMs>now && window.expiresAtMs<=now+5*86400000 &&
     state.lastStatus!=='usage-unknown';
   const block=reason=>{throw new TrialFailure('resource-exhausted',reason,publicLimits(state,config));};
   if(state.inFlight) block('in-flight');

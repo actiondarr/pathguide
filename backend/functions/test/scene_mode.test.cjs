@@ -87,7 +87,7 @@ test('bounded window keeps old count/cost/IDs, wins once concurrently, and stops
 test('window cannot bypass expiry, configuration ceiling, budget or unknown settlement',async()=>{
   const config=trial.configure(env);
   assert.equal(config.maxRequests,50);
-  assert.throws(()=>trial.configure({...env,SCENE_TRIAL_MAX_REQUESTS:'51'}),{code:'failed-precondition'});
+  assert.throws(()=>trial.configure({...env,SCENE_TRIAL_MAX_REQUESTS:'101'}),{code:'failed-precondition'});
   for(const change of [
     {window:{...stopped(config).window,expiresAtMs:999}},
     {window:{...stopped(config).window,maxCount:51}},
@@ -249,4 +249,13 @@ test('full-map telemetry replacement clears optional rejection keys and stale me
   assert.equal(history.length,3);assert.equal(history[0].rejectionDetail,'text-content');
   assert.equal(history[1].rejectionReason,'provider-refusal');
   assert.ok(!JSON.stringify([...db.docs]).includes('洗手盆'));
+});
+
+test('100 cumulative attempts and five-day window preserve spent history and stop on expiry or unknown usage',()=>{
+ const c=trial.configure({...env,SCENE_TRIAL_MAX_REQUESTS:'100',SCENE_TRIAL_BUDGET_MICRO_USD:'500000'}),now=1000;
+ const s=stopped(c,now);s.window.maxCount=100;s.window.expiresAtMs=now+5*86400000;
+ assert.equal(trial.allocate(s,id(99),c,now).count,8);assert.equal(s.spentMicroUsd,3483);
+ assert.equal(trial.inspect(s,c,now+5*86400000).stopReason,'window-expired');
+ assert.equal(trial.inspect({...s,lastStatus:'usage-unknown'},c,now).stopReason,'usage-unknown');
+ assert.throws(()=>trial.allocate({...s,window:{...s.window,expiresAtMs:s.window.expiresAtMs+1}},id(99),c,now));
 });

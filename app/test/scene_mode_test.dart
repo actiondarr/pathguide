@@ -136,6 +136,18 @@ class H {
 }
 
 void main() {
+  test('100 request allowance accepted, 101 fails closed', () {
+    final values = {
+      'count': 32,
+      'maxRequests': 100,
+      'spentMicroUsd': 13331,
+      'budgetMicroUsd': 500000,
+      'windowRemaining': 68,
+      'expiresAtMs': 1794620000000,
+    };
+    expect(SceneTrialLimits.parse(values)!.maxRequests, 100);
+    expect(SceneTrialLimits.parse({...values, 'maxRequests': 101}), isNull);
+  });
   test(
     'structured quota details keep only allowlisted reasons and valid limits',
     () {

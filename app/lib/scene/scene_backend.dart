@@ -307,10 +307,10 @@ class SceneTrialLimits {
       'expiresAtMs',
     ];
     if (keys.any((k) => value[k] is! int || value[k] < 0)) return null;
-    if (value['maxRequests'] > 50 ||
+    if (value['maxRequests'] > 100 ||
         value['count'] > value['maxRequests'] ||
         value['budgetMicroUsd'] > 500000 ||
-        value['windowRemaining'] > 50) {
+        value['windowRemaining'] > 100) {
       return null;
     }
     return SceneTrialLimits(
