@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-08交付準備：1.9.0+18已通過562項Flutter（另1項flag關閉時略過）、啟用flag的46項場景／語音／iOS UI、analyze、57項原生Simulator、簽署Profile及deep strict codesign；四模型SHA保持一致。來源fb57220及不可變tag／GitHub prerelease v1.9.0+18已推送並核對遠端後才嘗試更新。首次連線重設，裝置資訊及重試確認iPhone仍鎖定／disconnected；新版尚未安裝，需使用者解鎖並接USB，不刪App或清資料。即時辨識整合的真人／Motion／VoiceOver及自動取相驗收未完成，不以1.8.2+17獨立單次成功代替。單次CAS恢復腳本已準備但未執行，原帳本2次／2593 microUSD／halted及已消耗recovery不變。排程只啟動本輪一次，後續由本聊天接續。
+
 2026-11-08即時辨識整合：App新增變化後穩定才取相的可開關自動候選，沿用既有describeScene、新加坡固定端點、Secret v2、Auth／App Check／指定帳戶。沒有本輪後端程式／部署或推理。至少45秒冷卻與每次進入3次是client附加限制，無法重設或解除原帳本；count=2、保守2593 microUSD（含首次未知2458）、halted與已消耗單次recovery均保留。需要手機測試時另以CAS保存舊recovery／次數／估算並單次放行，不能宣稱自動模式已有額外或無限額度。新App感測／穩定門檻及工程驗證見Frontend與[本輪證據](../verification/live-scene-recognition-20261108.json)，先前手機成功僅屬獨立單次入口。
 
 2026-11-08手機功能驗收通過：使用者完成原手機1.8.2+17一次取相，並確認「已有描述，而且廣東話讀出正常」。後端lastStatus=complete，模型1799ms，usage輸入267／輸出51／總318 tokens，第二次估算135 microUSD（US$0.000135）。舊未知用量2458 microUSD仍保留，合計保守估算2593 microUSD；不是實際帳單。count=2、inFlight=false、halted=true、recovery=consumed，單次恢復已按預期重新停止。這次驗證涵蓋手機取相→Qwen→完整回覆驗證→顯示→廣東話播音；未另行評分場景準確度、不同環境品質或取相至播音總延遲。原有試驗總額未重設，後續推理仍需另行受控放行。詳見[單次恢復與手機驗收證據](../verification/scene-one-shot-recovery-20261108.json)。

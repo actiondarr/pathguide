@@ -15,7 +15,16 @@
     "detector-hk9.json": "020c57899aeb91c8fedc0421f76a73c39c7aa79e1a90de6e353d69f98c1367bf"
   },
   "modelsUnchanged": true,
-  "phoneInstall": "pending",
+  "phoneInstall": "not installed: first connection reset, retry/device info confirms device still locked; user unlock/USB required",
   "phoneAcceptance": "integrated scene/motion/VoiceOver pending; standalone 1.8.2+17 already passed",
-  "privateBinaryUploaded": false
+  "privateBinaryUploaded": false,
+  "release": {
+    "tag": "v1.9.0+18",
+    "sourceCommit": "fb57220f49f08a08625de9bb042ccef3a623a99e",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.9.0%2B18",
+    "remoteTagPeeledCommitVerified": true,
+    "prerelease": true,
+    "assets": []
+  },
+  "phoneDataCleared": false
 }
