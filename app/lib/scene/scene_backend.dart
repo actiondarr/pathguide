@@ -9,9 +9,130 @@ import 'package:firebase_core/firebase_core.dart';
 import '../platform/app_attestation.dart';
 
 class SceneFailure implements Exception {
-  const SceneFailure(this.code, {this.beforeProvider = false});
+  const SceneFailure(
+    this.code, {
+    this.beforeProvider = false,
+    this.stopReason,
+    this.limits,
+  });
+  factory SceneFailure.fromBackend(String code, Object? details) =>
+      SceneFailure(
+        code,
+        beforeProvider: details is Map && details['beforeProvider'] == true,
+        stopReason: details is Map
+            ? parseSceneStopReason(details['stopReason'])
+            : null,
+        limits: details is Map
+            ? SceneTrialLimits.parse(details['limits'])
+            : null,
+      );
   final String code;
   final bool beforeProvider;
+  final String? stopReason;
+  final SceneTrialLimits? limits;
+}
+
+String? parseSceneStopReason(Object? value) =>
+    const {
+      'budget-reserve',
+      'trial-count',
+      'window-expired',
+      'allowance-stopped',
+      'in-flight',
+      'duplicate-request',
+      'rate-cooldown',
+      'daily-count',
+      'configuration-mismatch',
+      'usage-unknown',
+    }.contains(value)
+    ? value as String
+    : null;
+
+String? parseSceneRejectionDetail(Object? value) =>
+    const {
+      'text-format',
+      'text-length',
+      'text-content',
+      'json-syntax',
+      'answer-fields',
+      'sentence-count',
+      'observations-array',
+      'observation-fields',
+      'observation-category',
+      'observation-position',
+      'observation-detail',
+      'observation-content',
+      'observation-duplicate',
+      'provider-truncated',
+    }.contains(value)
+    ? value as String
+    : null;
+
+String sceneStopMessage(
+  String? reason,
+  SceneTrialLimits? limits,
+) => switch (reason) {
+  'budget-reserve' =>
+    limits == null
+        ? '估算預算餘額不足下一次預留，已暫停新分析。'
+        : '估算預算餘額 US\$${((limits.budgetMicroUsd - limits.spentMicroUsd).clamp(0, limits.budgetMicroUsd) / 1000000).toStringAsFixed(6)}，不足下一次預留 US\$0.002458；已暫停新分析。',
+  'trial-count' => '已達累計測試次數上限，已暫停新分析。',
+  'window-expired' => '場景測試許可已到期，已暫停新分析。',
+  'in-flight' => '伺服器仍有一個請求未結算，暫停新分析。',
+  'usage-unknown' => '前次用量未能確認，暫停新分析並等待核對。',
+  'rate-cooldown' => '伺服器冷卻尚未完成，今次沒有呼叫模型。',
+  'daily-count' => '已達伺服器當日次數限制，暫停新分析。',
+  'configuration-mismatch' => '場景許可設定與帳本未一致，暫停新分析並等待核對。',
+  'duplicate-request' => '伺服器拒絕重複請求，今次沒有呼叫模型。',
+  _ => '場景模式受限，額度或許可需核對；暫停新分析。',
+};
+
+abstract interface class SceneStatusBackend {
+  Future<SceneAccountStatus> readStatus();
+}
+
+class SceneAccountStatus {
+  SceneAccountStatus.fromMap(Map map) {
+    limits = SceneTrialLimits.parse(map['limits']);
+    stopReason = parseSceneStopReason(map['stopReason']);
+    final values = map['recentResults'];
+    if (values is List) {
+      for (final value in values.take(3)) {
+        if (value is! Map ||
+            value['requestId'] is! String ||
+            !RegExp(r'^[a-f0-9]{32}$').hasMatch(value['requestId'] as String) ||
+            !const {'complete', 'rejected'}.contains(value['status'])) {
+          continue;
+        }
+        try {
+          final metrics = SceneMetrics.fromMap(value['metrics']);
+          final reason = value['rejectionReason'];
+          final allowedReason =
+              const {
+                'answer-format',
+                'answer-length',
+                'sentence-count',
+                'disallowed-content',
+                'provider-response',
+                'provider-refusal',
+                'incomplete-answer',
+              }.contains(reason)
+              ? reason as String
+              : '無';
+          final detail =
+              parseSceneRejectionDetail(value['rejectionDetail']) ?? '無';
+          recentReports.add(
+            '請求 ${value['requestId']}；後端 ${value['status']}；拒絕 $allowedReason／$detail；模型 ${metrics.modelMs} ms；tokens ${metrics.totalTokens ?? '未知'}；估算 US\$${metrics.estimatedUsd?.toStringAsFixed(6) ?? '未知'}',
+          );
+        } on SceneFailure {
+          /* Ignore malformed numerical history, never render arbitrary values. */
+        }
+      }
+    }
+  }
+  SceneTrialLimits? limits;
+  String? stopReason;
+  final List<String> recentReports = [];
 }
 
 String sceneRequestId() => List.generate(
@@ -48,6 +169,7 @@ class SceneReply {
       throw const SceneFailure('wrong-request');
     }
     metrics = SceneMetrics.fromMap(map['metrics']);
+    rejectionDetail = parseSceneRejectionDetail(map['rejectionDetail']);
     limits = SceneTrialLimits.parse(map['limits']);
     final value = map['mode'];
     if (value != null && value != 'overview' && value != 'update') {
@@ -77,7 +199,7 @@ class SceneReply {
       rejectionReason = map['rejectionReason'] as String;
     }
   }
-  String? text, rejectionReason, mode;
+  String? text, rejectionReason, rejectionDetail, mode;
   List<SceneObservation> observations = const [];
   SceneTrialLimits? limits;
   late final SceneMetrics metrics;
@@ -180,7 +302,7 @@ class SceneTrialLimits {
     if (keys.any((k) => value[k] is! int || value[k] < 0)) return null;
     if (value['maxRequests'] > 50 ||
         value['count'] > value['maxRequests'] ||
-        value['budgetMicroUsd'] > 10000 ||
+        value['budgetMicroUsd'] > 500000 ||
         value['windowRemaining'] > 50) {
       return null;
     }
@@ -249,13 +371,35 @@ abstract interface class SceneBackend {
   });
 }
 
-class FirebaseSceneBackend implements SceneModeBackend {
+class FirebaseSceneBackend implements SceneModeBackend, SceneStatusBackend {
   // Only used to isolate in-memory numerical diagnostics across page re-entry.
   // The scope itself is never included in a diagnostic report.
   String? get diagnosticScope =>
       Firebase.apps.isEmpty ? null : FirebaseAuth.instance.currentUser?.uid;
   // Across page/controller replacement: cancellation never starts a second call.
   static bool _inFlight = false;
+  @override
+  Future<SceneAccountStatus> readStatus() async {
+    if (!const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED') ||
+        Firebase.apps.isEmpty ||
+        FirebaseAuth.instance.currentUser == null) {
+      throw const SceneFailure('not-configured', beforeProvider: true);
+    }
+    await awaitSceneAttestation(activateAppAttestation(), null);
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final response = await FirebaseFunctions.instanceFor(region: 'asia-east2')
+        .httpsCallable(
+          'describeScene',
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 12)),
+        )
+        .call<dynamic>({'operation': 'status', 'expectedUid': uid});
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw const SceneFailure('stale-account');
+    }
+    if (response.data is! Map) throw const SceneFailure('invalid-answer');
+    return SceneAccountStatus.fromMap(response.data as Map);
+  }
+
   @override
   Future<SceneReply> describe(
     Uint8List jpeg,
@@ -308,12 +452,7 @@ class FirebaseSceneBackend implements SceneModeBackend {
       }
       return reply;
     } on FirebaseFunctionsException catch (error) {
-      throw SceneFailure(
-        error.code,
-        beforeProvider:
-            error.details is Map &&
-            (error.details as Map)['beforeProvider'] == true,
-      );
+      throw SceneFailure.fromBackend(error.code, error.details);
     } finally {
       _inFlight = false;
     }

@@ -193,6 +193,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       await source.setSceneObservation(true);
       if (_isCurrent(generation) && identical(source, _source)) {
         _scene.setAvailable(true);
+        unawaited(_scene.refreshStatus());
       }
     } catch (error) {
       if (!_isCurrent(generation) || !identical(source, _source)) return;

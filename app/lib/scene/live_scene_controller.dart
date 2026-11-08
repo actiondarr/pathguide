@@ -75,22 +75,61 @@ class LiveSceneController extends ChangeNotifier {
   DateTime? _received, _stableSince, _lastAttempt;
   String? _previousFullText;
   Timer? _freshness, _expiry, _speechExpiry;
-  bool restricted = false;
-  SceneTrialLimits? serverLimits;
-  bool get _knownExhausted {
-    final limits = serverLimits;
-    return limits != null &&
-        (limits.count >= limits.maxRequests ||
-            limits.windowRemaining == 0 ||
-            limits.spentMicroUsd + 2458 > limits.budgetMicroUsd ||
-            limits.expiresAtMs > 0 &&
-                _clock().millisecondsSinceEpoch >= limits.expiresAtMs);
+  bool restricted = false, _checkingStatus = false;
+  String? stopReason, rejectionDetail;
+  List<String> _remoteReports = const [];
+  Future<void> refreshStatus() async {
+    if (_disposed || _checkingStatus || backend is! SceneStatusBackend) return;
+    _checkingStatus = true;
+    final job = _job;
+    _notify();
+    try {
+      final result = await (backend as SceneStatusBackend).readStatus().timeout(
+        const Duration(seconds: 14),
+      );
+      if (_disposed || job != _job) return;
+      serverLimits = result.limits ?? serverLimits;
+      _remoteReports = result.recentReports;
+      if (result.stopReason != null) {
+        stopReason = result.stopReason;
+        restricted = true;
+        phase = '受限待處理';
+        status = sceneStopMessage(stopReason, serverLimits);
+        _setNotice('restricted', '場景試驗已受限制，暫停新分析。');
+      }
+      _record('已讀取伺服器數值及狀態；沒有取相或呼叫模型');
+    } catch (_) {
+      if (!_disposed) _record('未能讀取伺服器測試狀態；沒有取相或呼叫模型');
+    } finally {
+      _checkingStatus = false;
+      _notify();
+    }
   }
+
+  SceneTrialLimits? serverLimits;
+  String? get _knownStopReason {
+    final limits = serverLimits;
+    if (limits == null) return null;
+    if (limits.count >= limits.maxRequests) return 'trial-count';
+    if (limits.expiresAtMs > 0 &&
+        _clock().millisecondsSinceEpoch >= limits.expiresAtMs) {
+      return 'window-expired';
+    }
+    if (limits.spentMicroUsd + 2458 > limits.budgetMicroUsd) {
+      return 'budget-reserve';
+    }
+    if (limits.windowRemaining == 0) return 'allowance-stopped';
+    return null;
+  }
+
+  bool get _knownExhausted => _knownStopReason != null;
 
   int noticeSequence = 0;
   String? notice, _noticeKey;
   void _setNotice(String key, String message) {
-    if (!automatic || _noticeKey == key) return;
+    if (!automatic || _noticeKey == key || restricted && key != 'restricted') {
+      return;
+    }
     _noticeKey = key;
     notice = message;
     noticeSequence++;
@@ -263,6 +302,7 @@ class LiveSceneController extends ChangeNotifier {
     '有效描述字數：${text?.length ?? 0}；播音：$speechStatus',
     if (speechEnvironment != null) '語音設定：${speechEnvironment!()}',
     '請求 ID：${lastRequestId ?? '未送出'}',
+    '停止原因：${stopReason ?? _knownStopReason ?? '無'}；格式細項：${rejectionDetail ?? '無'}；狀態讀取：${_checkingStatus ? '進行中' : '完成／未開始'}',
     '作廢原因：$lastInvalidation；拒絕原因：$rejectionDescription；錯誤碼：${failure.isEmpty ? '無' : failure}',
     '作廢時數值：$invalidationDetails',
     '穩定：${stable ? '是' : '否'}（需 ${stableFor.inMilliseconds} ms）；畫面年齡：${_received == null ? '未知' : '${_clock().difference(_received!).inMilliseconds} ms'}',
@@ -276,6 +316,8 @@ class LiveSceneController extends ChangeNotifier {
     '最近一次估算：US\$${metrics?.estimatedUsd?.toStringAsFixed(6) ?? '未知'}；本次已知累計：US\$${estimatedUsd.toStringAsFixed(6)}${usageUnknown ? '（另有未知用量）' : ''}；不是帳單硬上限',
     '最近事件（只保留本機數值及狀態，不含照片或描述）：',
     ..._trace,
+    if (_remoteReports.isNotEmpty) '伺服器最近結果（最多三次；只有數值及狀態，重入可讀）：',
+    ..._remoteReports,
   ].join('\n');
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -291,6 +333,7 @@ class LiveSceneController extends ChangeNotifier {
   bool get canRequest =>
       available &&
       !busy &&
+      !_checkingStatus &&
       !restricted &&
       !_knownExhausted &&
       !_speechProbe &&
@@ -318,9 +361,13 @@ class LiveSceneController extends ChangeNotifier {
       _stableSince = _received = null;
       _freshness?.cancel();
       invalidate(reason: '辨識暫停／來源停止');
-      status = '場景分析已暫停；繼續辨識後可手動啟動。';
+      status = restricted
+          ? sceneStopMessage(stopReason ?? _knownStopReason, serverLimits)
+          : '場景分析已暫停；繼續辨識後可手動啟動。';
     } else {
-      status = '保持手機穩定，準備場景分析。';
+      status = restricted
+          ? sceneStopMessage(stopReason ?? _knownStopReason, serverLimits)
+          : '保持手機穩定，準備場景分析。';
     }
     _notify();
   }
@@ -329,12 +376,14 @@ class LiveSceneController extends ChangeNotifier {
     setAvailable(false, preserveMode: true);
     _setNotice('source-wait', '場景暫時未能更新，等候相機重新接通。');
     preparationCode = code;
-    status = switch (code) {
-      'not_running' || 'not_ready' => '場景取相尚未接上辨識相機，請按「重試場景準備」。',
-      'missing_plugin' => '場景相機介面尚未接通，請按「重試場景準備」。',
-      'timeout' => '場景準備逾時，請按「重試場景準備」。',
-      _ => '場景準備未完成，請按「重試場景準備」。',
-    };
+    if (!restricted) {
+      status = switch (code) {
+        'not_running' || 'not_ready' => '場景取相尚未接上辨識相機，請按「重試場景準備」。',
+        'missing_plugin' => '場景相機介面尚未接通，請按「重試場景準備」。',
+        'timeout' => '場景準備逾時，請按「重試場景準備」。',
+        _ => '場景準備未完成，請按「重試場景準備」。',
+      };
+    }
     _notify();
   }
 
@@ -354,7 +403,11 @@ class LiveSceneController extends ChangeNotifier {
       _baseline = null;
       _clearContext();
     }
-    status = automatic ? '已開啟自動場景分析，環境有重要變化且穩定後才取相。' : '自動場景分析已關閉。';
+    status = restricted
+        ? sceneStopMessage(stopReason ?? _knownStopReason, serverLimits)
+        : automatic
+        ? '已開啟自動場景分析，環境有重要變化且穩定後才取相。'
+        : '自動場景分析已關閉。';
     _notify();
   }
 
@@ -382,7 +435,7 @@ class LiveSceneController extends ChangeNotifier {
     text = null;
     _evidence = null;
     status = restricted
-        ? '場景模式受限，舊描述已撤回；需要核對後再分析。'
+        ? sceneStopMessage(stopReason ?? _knownStopReason, serverLimits)
         : automatic
         ? '舊描述已作廢；自動模式仍開啟，等新畫面穩定及冷卻完成後再分析。'
         : '舊描述已作廢；自動模式關閉，不會自行再分析。';
@@ -405,12 +458,14 @@ class LiveSceneController extends ChangeNotifier {
       }
       invalidate(reason: sourceIssue ?? '畫面／轉向訊號無效');
       _setNotice('source-wait', '場景暫時未能更新，等候有效畫面。');
-      status = switch (sourceIssue) {
-        'waiting-motion' => '正在等候手機轉向感測資料，未有取相或雲端請求。',
-        'motion-stale' => '手機轉向資料已過期，等候新資料後再分析。',
-        'motion-unavailable' => '手機暫未提供轉向感測，未有取相或雲端請求。',
-        _ => '未取得可靠的新畫面或轉向資訊，場景分析暫停。',
-      };
+      if (!restricted) {
+        status = switch (sourceIssue) {
+          'waiting-motion' => '正在等候手機轉向感測資料，未有取相或雲端請求。',
+          'motion-stale' => '手機轉向資料已過期，等候新資料後再分析。',
+          'motion-unavailable' => '手機暫未提供轉向感測，未有取相或雲端請求。',
+          _ => '未取得可靠的新畫面或轉向資訊，場景分析暫停。',
+        };
+      }
       _notify();
       return;
     }
@@ -431,7 +486,7 @@ class LiveSceneController extends ChangeNotifier {
         return;
       }
       invalidate(reason: '畫面超過一秒未更新');
-      status = '畫面已過期，場景描述已作廢。';
+      if (!restricted) status = '畫面已過期，場景描述已作廢。';
       _setNotice('source-wait', '場景暫時未能更新，等候有效畫面。');
       _notify();
     });
@@ -468,7 +523,7 @@ class LiveSceneController extends ChangeNotifier {
     }
     if (moving) {
       _stableSince = null;
-      if (!busy && text == null && failure.isEmpty) {
+      if (!restricted && !busy && text == null && failure.isEmpty) {
         status = automatic
             ? '等畫面稍為穩定後再分析；自動模式仍然開啟。'
             : '畫面移動中；自動模式關閉。可按「描述前方」等穩定後取相。';
@@ -477,7 +532,8 @@ class LiveSceneController extends ChangeNotifier {
     if (automatic && _knownExhausted && !busy && !speaking) {
       restricted = true;
       phase = '受限待處理';
-      status = '許可、次數或估算費用已達限制，暫停新分析。';
+      stopReason = _knownStopReason;
+      status = sceneStopMessage(stopReason, serverLimits);
       _setNotice('restricted', '場景試驗已到限制，暫停新分析。');
     }
     if (automatic && canDescribe && _changed) {
@@ -494,7 +550,7 @@ class LiveSceneController extends ChangeNotifier {
     _lastLocalAttempt = _clock();
     busy = true;
     failure = '';
-    rejectionReason = null;
+    rejectionReason = rejectionDetail = stopReason = null;
     lastRequestId = null;
     metrics = null;
     captureMs = backendMs = null;
@@ -580,8 +636,9 @@ class LiveSceneController extends ChangeNotifier {
         backendMs = _clock().difference(backendStarted).inMilliseconds;
         backendStatus = reply.text == null ? '拒絕' : '成功';
         rejectionReason = reply.rejectionReason;
+        rejectionDetail = reply.rejectionDetail;
         _record(
-          '後端：$backendStatus${rejectionReason == null ? '' : '／$rejectionReason'}',
+          '後端：$backendStatus${rejectionReason == null ? '' : '／$rejectionReason'}${rejectionDetail == null ? '' : '／$rejectionDetail'}',
         );
         metrics = reply.metrics;
         serverLimits = reply.limits ?? serverLimits;
@@ -693,6 +750,10 @@ class LiveSceneController extends ChangeNotifier {
           backendMs = _clock().difference(backendStarted!).inMilliseconds;
         }
         failure = error is SceneFailure ? error.code : 'unavailable';
+        if (error is SceneFailure) {
+          stopReason = error.stopReason;
+          serverLimits = error.limits ?? serverLimits;
+        }
         _record('失敗：$failure');
       }
       if (!_disposed && awaitingResult && !safe) {
@@ -724,7 +785,7 @@ class LiveSceneController extends ChangeNotifier {
       text = null;
       status = switch (failure) {
         'not-stable' => '畫面仍在移動，今次未取相或上傳；稍為穩定後可再按。',
-        'resource-exhausted' => '場景模式受限，額度或許可需核對；暫停新分析。',
+        'resource-exhausted' => sceneStopMessage(stopReason, serverLimits),
         'app-check-unavailable' ||
         'unauthenticated' ||
         'not-configured' => '場景分析登入或手機驗證未完成；物件辨識繼續。',

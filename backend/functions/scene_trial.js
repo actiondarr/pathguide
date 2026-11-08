@@ -4,7 +4,7 @@ const {createHash} = require('node:crypto');
 // Micro-USD arithmetic avoids floating point overspend in the local estimate.
 const INPUT_BOUND = 8192, OUTPUT_BOUND = 512;
 class TrialFailure extends Error {
-  constructor(code) { super(code); this.code=code; }
+  constructor(code, stopReason, limits) { super(code); this.code=code; if(stopReason) this.stopReason=stopReason; if(limits) this.limits=limits; }
 }
 const fail=code=>{throw new TrialFailure(code);};
 function configure(env) {
@@ -12,13 +12,13 @@ function configure(env) {
   const maxRequests=Number(env.SCENE_TRIAL_MAX_REQUESTS), budgetMicroUsd=Number(env.SCENE_TRIAL_BUDGET_MICRO_USD);
   if (!/^[a-z0-9-]{1,80}$/.test(id||'') || typeof uid!=='string' || !uid || uid.length>128 || uid.includes('/') ||
       !Number.isInteger(maxRequests) || maxRequests<1 || maxRequests>50 ||
-      !Number.isInteger(budgetMicroUsd) || budgetMicroUsd<1 || budgetMicroUsd>10000 ||
+      !Number.isInteger(budgetMicroUsd) || budgetMicroUsd<1 || budgetMicroUsd>500000 ||
       Number(env.QWEN_INPUT_USD_PER_MILLION)!==0.2 || Number(env.QWEN_OUTPUT_USD_PER_MILLION)!==1.6) fail('failed-precondition');
   const config={id,uid,maxRequests,budgetMicroUsd,reserveMicroUsd:Math.ceil((INPUT_BOUND*2+OUTPUT_BOUND*16)/10)};
   return {...config,fingerprint:createHash('sha256').update(JSON.stringify(config)).digest('hex')};
 }
-function allocate(old, requestId, config, now=Date.now()) {
-  if (old && old.fingerprint!==config.fingerprint) fail('failed-precondition');
+function assess(old, requestId, config, now=Date.now()) {
+  if (old && old.fingerprint!==config.fingerprint) throw new TrialFailure('failed-precondition','configuration-mismatch');
   const state=old||{fingerprint:config.fingerprint,count:0,spentMicroUsd:0,ids:[],inFlight:null,halted:false};
   if (!Number.isInteger(state.count) || state.count<0 || !Number.isInteger(state.spentMicroUsd) || state.spentMicroUsd<0 || !Array.isArray(state.ids) || state.ids.length!==state.count || new Set(state.ids).size!==state.ids.length) fail('failed-precondition');
   const recovery=state.recovery;
@@ -37,8 +37,30 @@ function allocate(old, requestId, config, now=Date.now()) {
     window.maxCount>window.baseCount && window.maxCount<=config.maxRequests && state.count<window.maxCount &&
     Number.isSafeInteger(window.expiresAtMs) && window.expiresAtMs>now && window.expiresAtMs<=now+86400000 &&
     state.lastStatus!=='usage-unknown';
-  if ((state.halted && !recover && !windowAllowed) || state.inFlight || state.count>=config.maxRequests || state.ids.includes(requestId) ||
-      state.spentMicroUsd+config.reserveMicroUsd>config.budgetMicroUsd) fail('resource-exhausted');
+  const block=reason=>{throw new TrialFailure('resource-exhausted',reason,publicLimits(state,config));};
+  if(state.inFlight) block('in-flight');
+  if(state.count>=config.maxRequests) block('trial-count');
+  if(requestId && state.ids.includes(requestId)) block('duplicate-request');
+  if(state.halted && !recover && !windowAllowed) {
+    if(state.lastStatus==='usage-unknown') block('usage-unknown');
+    if(window && Number.isSafeInteger(window.expiresAtMs) && window.expiresAtMs<=now) block('window-expired');
+    block('allowance-stopped');
+  }
+  if(state.spentMicroUsd+config.reserveMicroUsd>config.budgetMicroUsd) block('budget-reserve');
+  return {state,recover,windowAllowed};
+}
+function publicLimits(state,config) {
+  return {count:state.count,maxRequests:config.maxRequests,spentMicroUsd:state.spentMicroUsd,budgetMicroUsd:config.budgetMicroUsd,
+    windowRemaining:state.window?.status==='ready'?Math.max(0,state.window.maxCount-state.count):state.recovery?.status==='ready'?1:state.halted?0:Math.max(0,config.maxRequests-state.count),
+    expiresAtMs:state.window?.expiresAtMs||state.recovery?.expiresAtMs||0};
+}
+function inspect(old,config,now=Date.now()) {
+  try {const {state}=assess(old,null,config,now);return {limits:publicLimits(state,config),stopReason:null};}
+  catch(error) {if(!(error instanceof TrialFailure)) throw error;return {stopReason:error.stopReason||'configuration-mismatch',...(error.limits?{limits:error.limits}:{})};}
+}
+function allocate(old, requestId, config, now=Date.now()) {
+  const {state,recover,windowAllowed}=assess(old,requestId,config,now);
+  const recovery=state.recovery,window=state.window;
   return {...state,...(recover?{recovery:{...recovery,status:'consumed',requestId,consumedAtMs:now}}:{}),
     ...(windowAllowed?{window:{...window,lastRequestId:requestId}}:{}),
     count:state.count+1,ids:[...state.ids,requestId],inFlight:requestId,
@@ -61,4 +83,4 @@ async function settle(db, config, requestId, result) {
       lastStatus:known?result.status:'usage-unknown',notBillingCap:true});
   });
 }
-module.exports={TrialFailure,configure,allocate,settle,INPUT_BOUND,OUTPUT_BOUND};
+module.exports={TrialFailure,configure,allocate,settle,inspect,publicLimits,INPUT_BOUND,OUTPUT_BOUND};

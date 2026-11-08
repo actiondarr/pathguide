@@ -64,8 +64,18 @@ class ModeBackend implements SceneModeBackend {
   }
 }
 
+class StatusBackend extends ModeBackend implements SceneStatusBackend {
+  final status = Completer<SceneAccountStatus>();
+  int reads = 0;
+  @override
+  Future<SceneAccountStatus> readStatus() {
+    reads++;
+    return status.future;
+  }
+}
+
 class H {
-  H(this.tester) {
+  H(this.tester, {ModeBackend? backend}) : b = backend ?? ModeBackend() {
     c = LiveSceneController(
       capture: () async {
         captures++;
@@ -78,7 +88,7 @@ class H {
     c.setAvailable(true);
   }
   final WidgetTester tester;
-  final b = ModeBackend();
+  final ModeBackend b;
   final v = legacy.Voice();
   late LiveSceneController c;
   DateTime now = DateTime(2026, 11, 8);
@@ -126,6 +136,173 @@ class H {
 }
 
 void main() {
+  test(
+    'structured quota details keep only allowlisted reasons and valid limits',
+    () {
+      final error = SceneFailure.fromBackend('resource-exhausted', {
+        'beforeProvider': true,
+        'stopReason': 'budget-reserve',
+        'limits': {
+          'count': 16,
+          'maxRequests': 50,
+          'spentMicroUsd': 7861,
+          'budgetMicroUsd': 10000,
+          'windowRemaining': 34,
+          'expiresAtMs': 0,
+        },
+        'private': 'not rendered',
+      });
+      expect(error.beforeProvider, isTrue);
+      expect(error.stopReason, 'budget-reserve');
+      final message = sceneStopMessage(error.stopReason, error.limits);
+      expect(message, contains('0.002139'));
+      expect(message, contains('0.002458'));
+      expect(message, isNot(contains('許可需核對')));
+      final larger = SceneFailure.fromBackend('resource-exhausted', {
+        'limits': {
+          'count': 16,
+          'maxRequests': 50,
+          'spentMicroUsd': 7861,
+          'budgetMicroUsd': 500000,
+          'windowRemaining': 34,
+          'expiresAtMs': 0,
+        },
+      });
+      expect(larger.limits!.budgetMicroUsd, 500000);
+      expect(
+        SceneFailure.fromBackend('resource-exhausted', {
+          'limits': {
+            'count': 16,
+            'maxRequests': 50,
+            'spentMicroUsd': 7861,
+            'budgetMicroUsd': 500001,
+            'windowRemaining': 34,
+            'expiresAtMs': 0,
+          },
+        }).limits,
+        isNull,
+      );
+      expect(
+        SceneFailure.fromBackend('resource-exhausted', {
+          'stopReason': 'private text',
+        }).stopReason,
+        isNull,
+      );
+    },
+  );
+  testWidgets(
+    'restart reads budget stop and safe recent history without capturing or spending',
+    (tester) async {
+      final b = StatusBackend();
+      final h = H(tester, backend: b);
+      final c = h.c;
+      addTearDown(c.dispose);
+      c.setAvailable(true);
+      final reading = c.refreshStatus();
+      expect(c.canRequest, isFalse);
+      b.status.complete(
+        SceneAccountStatus.fromMap({
+          'stopReason': 'budget-reserve',
+          'limits': {
+            'count': 16,
+            'maxRequests': 50,
+            'spentMicroUsd': 7861,
+            'budgetMicroUsd': 10000,
+            'windowRemaining': 34,
+            'expiresAtMs': 0,
+          },
+          'recentResults': [
+            {
+              'requestId': 'a' * 32,
+              'status': 'rejected',
+              'rejectionReason': 'answer-format',
+              'rejectionDetail': 'observation-category',
+              'text': 'private description',
+              'observations': ['private'],
+              'metrics': {
+                'modelMs': 1500,
+                'usage': {
+                  'prompt_tokens': 400,
+                  'completion_tokens': 100,
+                  'total_tokens': 500,
+                },
+                'estimate': {'usd': 0.00024, 'notBillingCap': true},
+              },
+            },
+            {'requestId': 'private description', 'status': 'private'},
+          ],
+        }),
+      );
+      await reading;
+      expect(b.reads, 1);
+      expect(b.modes, isEmpty);
+      expect(c.attempts, 0);
+      expect(c.restricted, isTrue);
+      expect(c.status, contains('0.002139'));
+      expect(c.stopReason, 'budget-reserve');
+      expect(c.diagnostics, contains('observation-category'));
+      expect(c.diagnostics, isNot(contains('private')));
+      expect(c.serverLimits!.count, 16);
+      expect(c.canRequest, isFalse);
+      await h.frames(2, rate: 2.0);
+      expect(c.status, contains('0.002139'));
+      c.observe(null, sourceIssue: 'motion-stale');
+      expect(c.status, contains('0.002139'));
+      await tester.pump(const Duration(seconds: 2));
+      expect(c.status, contains('0.002139'));
+      c.setAutomatic(false);
+      expect(c.status, contains('0.002139'));
+      c.preparationFailed('timeout');
+      expect(c.status, contains('0.002139'));
+    },
+  );
+  testWidgets(
+    'quota failure delivers exact budget reason instead of unknown paid outcome',
+    (tester) async {
+      final h = H(tester);
+      addTearDown(h.c.dispose);
+      h.c.setAutomatic(true);
+      await h.frames(5);
+      h.b.pending.last.completeError(
+        SceneFailure.fromBackend('resource-exhausted', {
+          'beforeProvider': true,
+          'stopReason': 'budget-reserve',
+          'limits': {
+            'count': 16,
+            'maxRequests': 50,
+            'spentMicroUsd': 7861,
+            'budgetMicroUsd': 10000,
+            'windowRemaining': 34,
+            'expiresAtMs': 0,
+          },
+        }),
+      );
+      await tester.pump();
+      expect(h.c.usageUnknown, isFalse);
+      expect(h.c.modeState, SceneModeState.restricted);
+      expect(h.c.status, contains('0.002139'));
+      expect(h.c.diagnostics, contains('停止原因：budget-reserve'));
+      await h.frames(40);
+      expect(h.b.modes.length, 1);
+      h.c.dispose();
+    },
+  );
+  testWidgets(
+    'read-only status failure never becomes an unknown paid request',
+    (tester) async {
+      final b = StatusBackend(), h = H(tester, backend: b);
+      addTearDown(h.c.dispose);
+      final reading = h.c.refreshStatus();
+      b.status.completeError(StateError('private transport detail'));
+      await reading;
+      expect(h.c.usageUnknown, isFalse);
+      expect(h.c.attempts, 0);
+      expect(h.c.diagnostics, isNot(contains('private')));
+      expect(b.modes, isEmpty);
+      h.c.dispose();
+    },
+  );
+
   testWidgets(
     'known quota ceiling blocks new photos while the last valid sentence finishes',
     (tester) async {

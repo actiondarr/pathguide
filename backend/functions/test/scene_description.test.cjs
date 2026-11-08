@@ -85,7 +85,8 @@ test('rejections expose only a fixed reason, retain usage, and never retry or re
     assert.equal(calls,1);
     assert.equal(result.status,'rejected');
     assert.equal(result.rejectionReason,reason);
-    assert.deepEqual(Object.keys(result).sort(),['metrics','rejectionReason','requestId','status']);
+    assert.deepEqual(Object.keys(result).sort(),['metrics',...(result.rejectionDetail?['rejectionDetail']:[]),'rejectionReason','requestId','status']);
+    if(result.rejectionDetail) assert.ok(['text-content','text-length','sentence-count','provider-truncated'].includes(result.rejectionDetail));
     if (p.usage) assert.deepEqual(result.metrics.usage,usage);
     assert.ok(!JSON.stringify(result).includes('private content'));
   }
@@ -171,7 +172,7 @@ test('callable stores only latest safe metrics and cannot resurrect a deleted ac
   const db=fakeDb();
   const result=await handle(r,{db,enabled:true,key:()=> 'fake',fetcher:async()=>response(payload())});
   assert.equal(result.text,good);
-  assert.deepEqual(db.value.lastResult,{requestId:id,status:'complete',metrics:result.metrics});
+  const {receivedAtMs,...safe}=db.value.lastResult;assert.ok(Number.isSafeInteger(receivedAtMs));assert.deepEqual(safe,{requestId:id,status:'complete',metrics:result.metrics});
   assert.ok(!JSON.stringify(db.value).includes(good)); assert.ok(!JSON.stringify(db.value).includes('base64'));
   const db2=fakeDb();
   await handle(r,{db:db2,enabled:true,key:()=> 'fake',fetcher:async()=>{db2.deactivate();return response(payload());}});
@@ -184,7 +185,7 @@ test('callable retains a rejection category with numerical usage, never the reje
   const privateAnswer='前方可以安全通行。請向左行。';
   const result=await handle(r,{db,enabled:true,key:()=> 'fake',fetcher:async()=>response(payload(privateAnswer))});
   assert.equal(result.rejectionReason,'disallowed-content');
-  assert.deepEqual(db.value.lastResult,{requestId:id,status:'rejected',metrics:result.metrics,rejectionReason:'disallowed-content'});
+  const {receivedAtMs,...safe}=db.value.lastResult;assert.ok(Number.isSafeInteger(receivedAtMs));assert.deepEqual(safe,{requestId:id,status:'rejected',metrics:result.metrics,rejectionReason:'disallowed-content',rejectionDetail:'text-content'});
   assert.ok(!JSON.stringify(db.value).includes(privateAnswer));
   assert.ok(!JSON.stringify(db.value).includes('base64'));
 });

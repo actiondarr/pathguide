@@ -104,7 +104,7 @@ test('pre-provider quota errors are explicitly identifiable without secrets or i
   state.window.status='consumed';
   const callable=require('../scene_function').createSceneFunction(database(state),{});
   await assert.rejects(callable.run({app:{appId:'test'},auth:{uid:'uid',token:{firebase:{sign_in_provider:'google.com'}}},data:await data()}),e=>{
-    assert.equal(e.code,'resource-exhausted');assert.deepEqual(e.details,{beforeProvider:true});return true;
+    assert.equal(e.code,'resource-exhausted');assert.equal(e.details.beforeProvider,true);assert.equal(e.details.stopReason,'window-expired');assert.equal(e.details.limits.count,7);return true;
   });
 });
 test('successful mode response returns numerical quota and never stores scene content',async()=>{
@@ -125,4 +125,67 @@ test('post-provider settlement failure is never labelled safe to resend',async()
     return response(['左邊見到木枱。']);
   }}),error=>{assert.equal(error.code,'failed-precondition');assert.notEqual(error.beforeProvider,true);return true;});
   assert.equal(calls,1);assert.equal(db.docs.get('scene_description_trials/room-test').inFlight,id(30));
+});
+
+test('budget reserve stop is distinguishable from expiry/count/in-flight with no state reset',()=>{
+  const config=trial.configure(env),base={...stopped(config),count:16,ids:Array.from({length:16},(_,i)=>id(i)),spentMicroUsd:7861,window:{...stopped(config).window,maxCount:50}};
+  const original=structuredClone(base);
+  const status=trial.inspect(base,config,1000);
+  assert.equal(status.stopReason,'budget-reserve');assert.equal(status.limits.count,16);assert.equal(status.limits.spentMicroUsd,7861);assert.equal(status.limits.windowRemaining,34);
+  assert.deepEqual(base,original);
+  for(const [changes,reason] of [[{window:{...base.window,expiresAtMs:999}},'window-expired'],[{inFlight:id(99)},'in-flight'],[{lastStatus:'usage-unknown'},'usage-unknown'],[{count:50,ids:Array.from({length:50},(_,i)=>id(i))},'trial-count']]) {
+    assert.equal(trial.inspect({...base,...changes},config,1000).stopReason,reason);
+  }
+});
+test('read-only status survives restart with account checks and never reserves, captures or reads provider key',async()=>{
+  const config=trial.configure(env),base={...stopped(config,Date.now()),spentMicroUsd:7861},db=database(base);
+  db.docs.set('users/uid/private/sceneDescriptionLimit',{lastResult:{requestId:id(29),status:'rejected',metrics:reply.metrics,rejectionReason:'answer-format',rejectionDetail:'observation-category',text:'private discarded text',observations:[observation]}});
+  const before=structuredClone([...db.docs]);
+  const request={app:{appId:'test'},auth:{uid:'uid',token:{firebase:{sign_in_provider:'google.com'}}},data:{operation:'status',expectedUid:'uid'}};
+  const options={db,trial:config,enabled:true,key:()=>assert.fail('provider key read'),fetcher:()=>assert.fail('paid request')};
+  const result=await scene.handle(request,options);
+  assert.equal(result.stopReason,'budget-reserve');assert.equal(result.recentResults[0].rejectionDetail,'observation-category');
+  assert.ok(!JSON.stringify(result).includes('private'));assert.ok(!JSON.stringify(result).includes('observations'));
+  assert.deepEqual([...db.docs],before);
+  await assert.rejects(scene.handle({...request,auth:{uid:'other',token:{firebase:{sign_in_provider:'google.com'}}},data:{operation:'status',expectedUid:'other'}},options),{code:'permission-denied'});
+  db.docs.set('account_deletions/uid',{status:'pending'});
+  await assert.rejects(scene.handle(request,options),{code:'permission-denied'});
+});
+test('recent numeric results survive subsequent reservation and retain at most three, without photo/text',async()=>{
+  const config=trial.configure(env),base=stopped(config,Date.now());base.window.maxCount=50;
+  const db=database(base);
+  for(let i=0;i<4;i++) {
+    const current=await data();current.requestId=id(40+i);
+    const request={app:{appId:'test'},auth:{uid:'uid',token:{firebase:{sign_in_provider:'google.com'}}},data:current};
+    // Advance only mock rate guard; real trial totals/costs remain monotonic.
+    const counter=db.docs.get('users/uid/private/sceneDescriptionLimit');if(counter)counter.blockedUntil=0;
+    await scene.handle(request,{db,enabled:true,trial:config,key:()=> 'mock',rates:{input:0.2,output:1.6},fetcher:async()=>i===0?response(['右邊見到門。'],[{...observation,category:'cupboard'}]):response(['左邊見到木枱。'])});
+  }
+  const counter=db.docs.get('users/uid/private/sceneDescriptionLimit');
+  assert.equal(counter.recentResults.length,3);assert.deepEqual(counter.recentResults.map(v=>v.requestId),[id(41),id(42),id(43)]);
+  assert.equal(db.docs.get('scene_description_trials/room-test').count,11);
+  assert.ok(!JSON.stringify([...db.docs]).includes('木枱'));assert.ok(!JSON.stringify(counter).includes('base64'));
+});
+test('format failures expose only allowlisted structural reason and examples remain server-owned',async()=>{
+  const cases=[
+    [[{...observation,category:'cupboard'}],'observation-category'],
+    [[{...observation,position:'front'}],'observation-position'],
+    [[{...observation,detail:'木枱。'}],'observation-detail'],
+    [[observation,observation],'observation-duplicate'],
+    [[{...observation,detail:'可以安全通行'}],'observation-content'],
+  ];
+  for(const [observations,detail] of cases) {
+    const result=await scene.describe(await data(),{key:'fake',fetcher:async(_,options)=>{
+      const body=JSON.parse(options.body);assert.match(body.messages[0].content,/格式例子/);assert.match(body.messages[0].content,/最多三項/);
+      return response(['左邊見到木枱。'],observations);
+    }});
+    assert.equal(result.status,'rejected');assert.equal(result.rejectionDetail,detail);assert.ok(!('text' in result));assert.ok(!('observations' in result));
+  }
+});
+test('higher supported budget does not amend a live allowance or bypass its fingerprint',()=>{
+  const oldConfig=trial.configure(env),higher=trial.configure({...env,SCENE_TRIAL_BUDGET_MICRO_USD:'500000'}),old=stopped(oldConfig);
+  assert.equal(oldConfig.budgetMicroUsd,10000);assert.equal(higher.budgetMicroUsd,500000);
+  assert.notEqual(higher.fingerprint,oldConfig.fingerprint);
+  assert.throws(()=>trial.allocate(old,id(40),higher,1000),{code:'failed-precondition'});
+  assert.equal(old.fingerprint,oldConfig.fingerprint);assert.equal(old.spentMicroUsd,3483);
 });

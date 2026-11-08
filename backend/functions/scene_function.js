@@ -29,7 +29,7 @@ return onCall({...options,timeoutSeconds:40,secrets:[qwenKey]}, async request =>
     }
     const code = error instanceof scene.SceneFailure || error instanceof sceneTrial.TrialFailure ? error.code : 'unavailable';
     throw new HttpsError(code,'場景描述未完成；沒有自動重試。取消後上游仍可能計費。',
-      error.beforeProvider === true ? {beforeProvider:true} : undefined);
+      error.beforeProvider === true ? {beforeProvider:true,...(error.stopReason?{stopReason:error.stopReason}:{}),...(error.limits?{limits:error.limits}:{})} : undefined);
   }
 });
 
