@@ -203,5 +203,134 @@
     "currentLedgerBudgetMicroUsd": 500000,
     "ledgerAwaitingAuditedBudgetAmendment": false
   },
-  "phoneInstall": "Pending source/tag/prerelease checkpoint"
+  "phoneInstall": {
+    "bundleIdentifier": "hk.pathguide.pathguide",
+    "version": "1.10.2",
+    "bundleVersion": "26",
+    "independentInventoryVerified": true,
+    "installedInPlace": true,
+    "dataCleared": false,
+    "normalLaunchSucceeded": true
+  },
+  "release": {
+    "tag": "v1.10.2+26",
+    "sourceCommit": "50981ed40202f594136f381b091fa73eef7b5f92",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.10.2%2B26",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  },
+  "readOnlyAllowanceAfter": {
+    "state": "ACTIVE",
+    "entryPoint": "describeScene",
+    "timeoutSeconds": 40,
+    "maxInstances": 2,
+    "checkedAtUtc": "2026-11-08T19:16:30.274Z",
+    "deploymentUpdateTime": "2026-11-08T19:12:43.226358058Z",
+    "region": "asia-east2",
+    "secretVersion": "2",
+    "providerRegion": "Singapore",
+    "selectedAccountVerified": true,
+    "maxRequests": 50,
+    "budgetMicroUsd": 500000,
+    "paidInferenceRequestsByAgent": 0,
+    "trialCount": 32,
+    "spentMicroUsd": 13331,
+    "halted": true,
+    "inFlight": false,
+    "lastStatus": "complete",
+    "recoveryStatus": "consumed",
+    "windowStatus": "ready",
+    "windowExpiresAtMs": 1794197185443,
+    "windowExpired": false,
+    "windowMaxCount": 50,
+    "nominalRemaining": 18,
+    "nextRequestReserveMicroUsd": 2458,
+    "nextRequestFitsBudget": true,
+    "configuredFingerprintMatches": true,
+    "stopReason": null,
+    "lastResult": {
+      "status": "complete",
+      "requestId": "505957433004eb4d5e0a24dd9150c746",
+      "rejectionDetail": "text-content",
+      "receivedAtMs": 1794164471409,
+      "metrics": {
+        "estimate": {
+          "inputUsdPerMillion": 0.2,
+          "notBillingCap": true,
+          "usd": 0.00021620000000000002,
+          "outputUsdPerMillion": 1.6
+        },
+        "usage": {
+          "prompt_tokens": 457,
+          "completion_tokens": 78,
+          "total_tokens": 535
+        },
+        "modelMs": 2403
+      },
+      "rejectionReason": "disallowed-content"
+    },
+    "recentResults": [
+      {
+        "requestId": "2a46f977a7d21c24a876e14a42d20872",
+        "status": "complete",
+        "receivedAtMs": 1794164454243,
+        "metrics": {
+          "modelMs": 2268,
+          "usage": {
+            "prompt_tokens": 457,
+            "completion_tokens": 89,
+            "total_tokens": 546
+          },
+          "estimate": {
+            "usd": 0.00023380000000000002,
+            "inputUsdPerMillion": 0.2,
+            "outputUsdPerMillion": 1.6,
+            "notBillingCap": true
+          }
+        }
+      },
+      {
+        "requestId": "0d502b62f6ed97e1007b2f22488ea4e5",
+        "status": "complete",
+        "receivedAtMs": 1794164463871,
+        "metrics": {
+          "modelMs": 2510,
+          "usage": {
+            "prompt_tokens": 457,
+            "completion_tokens": 82,
+            "total_tokens": 539
+          },
+          "estimate": {
+            "usd": 0.00022260000000000002,
+            "inputUsdPerMillion": 0.2,
+            "outputUsdPerMillion": 1.6,
+            "notBillingCap": true
+          }
+        }
+      },
+      {
+        "requestId": "505957433004eb4d5e0a24dd9150c746",
+        "status": "complete",
+        "receivedAtMs": 1794164471409,
+        "metrics": {
+          "modelMs": 2403,
+          "usage": {
+            "prompt_tokens": 457,
+            "completion_tokens": 78,
+            "total_tokens": 535
+          },
+          "estimate": {
+            "usd": 0.00021620000000000002,
+            "inputUsdPerMillion": 0.2,
+            "outputUsdPerMillion": 1.6,
+            "notBillingCap": true
+          }
+        }
+      }
+    ],
+    "rateGuardRemainingMs": 0,
+    "dailyCount": 30
+  },
+  "ledgerUnchangedDuringWork": true,
+  "humanAcceptance": "Pending room/kitchen/bathroom content, exact rejection detail, related audible onset, stale/repeated/missing narration and VoiceOver."
 }
