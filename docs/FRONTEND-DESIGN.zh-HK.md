@@ -1,6 +1,6 @@
 # Frontend：PathGuide 整體流程、規格與裝置端
 
-2026-11-09內容拒絕診斷1.10.4+28：使用者提供第33／34次均disallowed-content／text-content，兩次均未交播音，後者另有快速轉向；原名詞修補未通過真人複驗。新增固定number／distance／floor／destination／safety／navigation／advice／simplified分類，text與observation前綴分開；只在原完整禁限guard拒絕後分類，多規則只取首項，不回原文、命中字或位置。手機allowlist同步，舊text-content相容。50項後端、flag-on相關103項Flutter、analyze、私人Profile／簽章及四模型SHA通過，部署核SHA；發佈裝機待完成。沒有改prompt、放寬guard、付費重播、帳本或許可；舊兩次具體類別不能追溯，診斷改善仍待真人新結果。見[診斷證據](../verification/scene-content-detail-20261109.json)。
+2026-11-09內容拒絕診斷1.10.4+28：使用者提供第33／34次均disallowed-content／text-content，兩次均未交播音，後者另有快速轉向；原名詞修補未通過真人複驗。新增固定number／distance／floor／destination／safety／navigation／advice／simplified分類，text與observation前綴分開；只在原完整禁限guard拒絕後分類，多規則只取首項，不回原文、命中字或位置。手機allowlist同步，舊text-content相容。50項後端、flag-on相關103項Flutter、analyze、私人Profile／簽章及四模型SHA通過，部署核SHA；來源dddbcc6／不可變tag及prerelease核遠端後已原位裝機，首次連線中斷後重試成功，獨立核1.10.4／28及正常啟動，未清資料。沒有改prompt、放寬guard、付費重播、帳本或許可；舊兩次具體類別不能追溯，診斷改善仍待真人新結果。見[診斷證據](../verification/scene-content-detail-20261109.json)。
 
 2026-11-09使用者批准累計100次／五天：1.10.3+27將後端累計上限、手機安全limits讀取及本次模式上限同步至100，連續窗口上界由一天改五天；一次recovery仍一天。總預算US$0.50不變，原count／cost／IDs／未知歷史不得重設；費用、在途、重複、到期及新未知用量停止保留。49項後端、flag-on相關102項Flutter、analyze、私人Profile／簽章與四模型SHA通過，Swift未改。僅describeScene已部署核SHA；來源40fab8b／不可變tag及prerelease核遠端後原位裝機，獨立核1.10.3／27及正常啟動。審計CAS已生效，原32次／13331 microUSD及IDs／未知歷史保留，尚餘68次，香港時間2026-11-14 03:22:40到期，讀回無停止原因。見[許可證據](../verification/scene-100-five-days-20261109.json)。
 
@@ -576,7 +576,7 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
-目前場景描述狀態（2026-11-09）：1.10.3+27來源40fab8b／不可變tag及prerelease核遠端後原位更新，獨立讀回1.10.3／27及正常啟動。依使用者新增批准，以updateTime CAS只改fingerprint、maxRequests、window及追加allowanceHistory；逐欄核對原count／花費／IDs／未知歷史及其他欄位保留。累計100次，現32次、尚餘68次，估算花費13331／500000 microUSD，總預算US$0.50不變；由修訂時起五天，香港時間2026-11-14 03:22:40到期。讀回無停止原因，不新增付費推理。1.10.2修補的結果map替換及正常名詞例外保留，兩張舊截圖實際拒絕詞／欄位仍未知；房間／廚廁內容、相關起音與VoiceOver仍待真人複驗。見[許可證據](../verification/scene-100-five-days-20261109.json)。 第33／34次內容拒絕真人複驗未過；1.10.4+28固定內容分類已通過離線／建置及部署核SHA，待裝機，舊text-content無法還原具體類別。
+目前場景描述狀態（2026-11-09）：手機1.10.4+28已原位更新、獨立核版本及正常啟動；來源dddbcc6／不可變tag／prerelease先核遠端。第33／34次均disallowed-content／text-content，兩次未交播音，後者另有快速轉向；連續拒絕受限，並非額度不足。新增八類固定text／observation內容診斷，原guard逐字相同，不保存命中字、原文或位置；舊兩次不能還原細分類，下一真人新結果再定位，未宣稱拒絕根因或品質已修好。本輪只讀部署核對34／100、14211／500000 microUSD，原香港時間2026-11-14 03:22:40到期不變，沒有帳本修改或付費推理；內容／起音／VoiceOver仍待驗收。見[診斷證據](../verification/scene-content-detail-20261109.json)。
 
 2026-11-08真人首次取相失敗：1.8.2+17的Auth及App Check均有效，但第一個callable約1.635秒返回503，沒有成功描述／讀音；之後429為用量未知後試驗停止，並非一直in-flight，也不是等45秒便可解除。帳本1次、halted=true、inFlight=false，保守預留US$0.002458並非實際帳單。沒有重設帳本或自動付費重試；須先核對供應商用量及錯誤。
 
@@ -635,7 +635,7 @@ SceneController同時最多一個操作，不排隊。取消、退出、背景�
 
 **2026-11-07硬件分級已確認、待實作驗收：** 同一App自動辨識硬件能力，不另建LiDAR／非LiDAR兩個產品。普通相機基本能力為路線導航、錄路／路標重認、本機已知物件名稱／畫面方位及需網絡的Qwen描述；各功能仍依其實際交付／品質狀態，不因分級而宣稱已完成。LiDAR增強能力先獨立驗證有效深度測距與未知障礙候選；有硬件不代表當下資料有效，深度失效撤回舊距離，降級為名稱／方位，不把未知當零距離或無障礙。普通相機未知障礙方案另評估，不宣稱與LiDAR同等；兩種裝置分開驗收。
 
-目前手機試驗版：**[1.10.3+27 累計100次／五天許可](https://github.com/actiondarr/pathguide/releases/tag/v1.10.3%2B27)**，來源40fab8b／不可變tag／prerelease核遠端後原位更新，獨立核1.10.3／27及正常啟動；私人App Check包不公開。原32次／13331 microUSD保留、尚餘68次、總預算US$0.50不變，香港時間2026-11-14 03:22:40到期。廚廁品質／起音／VoiceOver仍待真人複驗，見[交付收據](../verification/release-receipts/app-1.10.3+27.json)。
+目前手機試驗版：**[1.10.4+28 內容拒絕分類](https://github.com/actiondarr/pathguide/releases/tag/v1.10.4%2B28)**，來源／不可變tag／prerelease先核遠端後原位裝機，獨立核1.10.4／28及正常啟動；私人App Check包不公開。100次／US$0.50及原五天到期保留，診斷分類及內容品質仍待真人新結果，見[交付收據](../verification/release-receipts/app-1.10.4+28.json)。
 
 上一版手機試驗版：**[1.8.0+15 自動錄路／樓層確認工程版](https://github.com/actiondarr/pathguide/releases/tag/v1.8.0%2B15)**。開始後自動選候選，不逐張填表；可明確選目前樓層建立確認點，之後只沿用本段上下文。未知／轉層／OCR矛盾／暫停／背景撤回目前上下文，繼續保留未確認草稿；轉層分入口／出口，站定後可核實同層一段，不能自動確認未知段或設備。結束命名保存固定在底部。516項Flutter、54項原生、analyze及兩軸覆核通過，簽署／簽章／四模型與App程式雜湊已核；分支及不可變tag／prerelease遠端核對後，重連iPhone更新安裝／正常啟動成功，未卸載或清空資料，見[交付收據](../verification/release-receipts/app-1.8.0+15.json)。schema3保留樓層來源，舊App拒讀新來源格式；schema1／2及原有版本保留。真人錄路／樓層／VoiceOver及場地品質仍待回報，#16整體與P4語音／障礙、模型比較／VLM及非LiDAR裝置未完成。
 
@@ -910,7 +910,7 @@ S5的圖示訓練可與S2、S4並行準備；私人訓練必須先有S0品質基
 | F21 電梯樓層資訊／S5–S7 | 新候選，未實作 | 主動拍攝顯示器／按鈕，分開定位區域、OCR數字／字母與亮燈狀態；用多幀保留穩定結果、允許未知。讀到樓層文字不自動更改全局樓層定位 | Dataset D13；測B1／G／數字、反光、LED抽樣／閃爍與相鄰按鈕，不把牌上數字當目前樓層 |
 | F22 耳機頭部手勢／S7 | 選填候選，未實作 | 先加入NSMotionUsageDescription與權限說明、做能力檢查，再由CMHeadphoneMotionManager取得頭部運動，校準中立姿態、短動作門檻與冷卻，用於開始／停止場景查詢等可取消操作；保留按鈕／VoiceOver替代 | Dataset D14；轉頭聽路況不能誤觸重要操作，耳機斷線／不支援即停用；不因本機手勢而收集動作資料 |
 | F23 鎖屏語音導航／S7 | 新候選；現版只前景 | 先獨立設計導航的背景定位／音訊session與暫停／恢復、權限說明及耗電驗收；鎖屏時鏡頭感知停止或不可用要明示，不沿用畫面仍在看路的假狀態 | Backend B12／Dataset D14；原功能在背景停止的現行行為不在本輪改動，先驗證服務與平台限制再排開發 |
-| F24 場景描述／S1 | 房間1.10.1+25真人有聲；廚廁仍待複驗。1.10.2+26名詞及結果一致性修補通過離線／建置，來源／tag／prerelease核遠端後已原位裝機啟動；1.10.4+28固定內容拒絕診斷待裝機 | 同一相機→當前JPEG→首次2–3句／更新1句→完整驗證→手機比較及最新語音；與後端共用合成fixture，指定米／層名詞例外，其餘禁限保留；100次／五天許可已裝機及CAS核對，餘68次，2026-11-14 03:22:40香港時間到期 | B17；原32次／13331 microUSD及50／US$0.50、今日12:06:25到期不變；截圖實際拒絕欄位未知；房間／廚廁內容、起音及VoiceOver待真人驗收，正式單開關暫緩 |
+| F24 場景描述／S1 | 房間1.10.1+25真人有聲；廚廁仍待複驗。1.10.2+26名詞及結果一致性修補通過離線／建置，來源／tag／prerelease核遠端後已原位裝機啟動；1.10.4+28固定內容拒絕診斷已裝機啟動 | 同一相機→當前JPEG→首次2–3句／更新1句→完整驗證→手機比較及最新語音；與後端共用合成fixture，指定米／層名詞例外，其餘禁限保留；100次／五天許可已裝機及CAS核對，餘68次，2026-11-14 03:22:40香港時間到期 | B17；原32次／13331 microUSD及50／US$0.50、今日12:06:25到期不變；截圖實際拒絕欄位未知；房間／廚廁內容、起音及VoiceOver待真人驗收，正式單開關暫緩 |
 
 #### 共用接口與任務資源（新增部分待實作）
 

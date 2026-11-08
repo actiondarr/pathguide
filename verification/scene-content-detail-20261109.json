@@ -46,5 +46,22 @@
     "ledgerAwaitingAuditedBudgetAmendment": false
   },
   "ledgerAmendment": "No ledger mutations; original 100 attempts, budget and expiry preserved",
-  "paidInferenceRequestsByAgent": 0
+  "paidInferenceRequestsByAgent": 0,
+  "phoneInstall": {
+    "version": "1.10.4",
+    "bundleVersion": "28",
+    "independentInventoryVerified": true,
+    "normalLaunchSucceeded": true,
+    "installedInPlace": true,
+    "dataCleared": false
+  },
+  "release": {
+    "tag": "v1.10.4+28",
+    "sourceCommit": "dddbcc68636c1c9af3a51318f4e9311836761cff",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.10.4%2B28",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  },
+  "humanAcceptance": "Pending new fixed rejection class, content, audible onset and VoiceOver; old text-content cannot be recovered",
+  "guardUnchangedSha256": "9b4ef22757d85d5e63fbfbb20d4d154b4a33587cfca815f3ae1ac3f259295794"
 }

@@ -15,6 +15,22 @@
     "Frameworks/App.framework/App": "344b23a7ab1b8d65ddfa86b5f970bbf05e96d4dbfaacd1f7d0ac4fe9f49eb123"
   },
   "privateBinaryUploaded": false,
-  "phoneInstall": "Pending immutable tag/prerelease verification",
-  "phoneDataCleared": false
+  "phoneInstall": {
+    "version": "1.10.4",
+    "bundleVersion": "28",
+    "independentInventoryVerified": true,
+    "normalLaunchSucceeded": true,
+    "installedInPlace": true,
+    "dataCleared": false
+  },
+  "phoneDataCleared": false,
+  "release": {
+    "tag": "v1.10.4+28",
+    "sourceCommit": "dddbcc68636c1c9af3a51318f4e9311836761cff",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.10.4%2B28",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  },
+  "humanAcceptance": "Pending new fixed rejection class, content, audible onset and VoiceOver; old text-content cannot be recovered",
+  "guardUnchangedSha256": "9b4ef22757d85d5e63fbfbb20d4d154b4a33587cfca815f3ae1ac3f259295794"
 }
