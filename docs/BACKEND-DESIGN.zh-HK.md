@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-08修補版已裝機：1.9.1+19來源696a2ce、不可變tag及GitHub prerelease先推送核對，47項相關Flutter、58原生Simulator、analyze、簽署／codesign與四模型SHA通過。首次更新遇iOS鎖屏拒絕，使用者再次解鎖後覆蓋更新安裝成功；獨立清單核對1.9.1／build19及正常啟動，沒有移除App／清資料。帳本讀回仍2次／2593 microUSD，原一次性許可ready、無inFlight；沒有新增代理推理或重設。已請使用者重入即時辨識、必要時按一次不拍照的「重試場景準備」，若仍灰色取安全初始化碼，若可用再驗自動文字／廣東話及本機辨識並行。整合版真人結果仍等待，不能稱根因或功能已修復。
+
 2026-11-08即時辨識整合真人未通過／1.9.1+19修補候選：使用者回報1.9.0+18一直未觸發，截圖可見即時辨識相機運行、描述按鈕及自動開關皆灰色，場景狀態籠統為已暫停；帳本仍2次／2593 microUSD，單次recovery為ready，沒有新增推理。核對程式發現setSceneObservation例外被catch後隱藏，且沒有場景準備重試／確認native已啟用；具體首次平台例外尚未取得，不能斷言是手震或Motion權限。1.9.1+19改為原生status回讀sceneObservationEnabled，缺確認／逾時／尚未ready均明確失敗；保留本機辨識，新增「重試場景準備」及可展開安全錯誤碼，重試只重接現有相機，不拍照、不發Qwen、不清次數或費用。47項相關Flutter與58原生Simulator通過（含模擬第一次準備失敗後重試、不重開相機／不取相、owned lease enable/status/release核對）；修補不能冒稱已解決原手機根因，更新裝機及真人複測另記。
 
 2026-11-08即時辨識整合已裝機：使用者解鎖並接好USB後，初次仍遇CoreDevice連線重設；device info重新連線後更新安裝成功，獨立裝置清單核對1.9.0／build18，正常啟動成功。沒有移除App或清除資料。來源fb57220及不可變v1.9.0+18 tag／GitHub prerelease已於安裝前核遠端，562項Flutter（另1項flag關閉時略過）、flag-on 46項、analyze、57原生、簽署與四模型SHA核對保留。以updateTime CAS保存前次recovery到history後，放行即時辨識整合的一次受控測試，沿用原20次／10000 microUSD額度；count=2、spent=2593、IDs、halted與其餘欄位不變，沒有新增代理付費推理。已請使用者在即時辨識明示開啟自動模式，站定房間枱／椅／門，回報自動文字／廣東話及本機辨識是否繼續；整合版真人／轉向門檻／VoiceOver驗收仍未完成，不以裝機或舊獨立入口成功代替。

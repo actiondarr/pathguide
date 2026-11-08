@@ -13,8 +13,15 @@
     "detector-hk9.json": "020c57899aeb91c8fedc0421f76a73c39c7aa79e1a90de6e353d69f98c1367bf"
   },
   "modelsUnchanged": true,
-  "phoneInstall": "pending",
-  "phoneAcceptance": "pending preparation retry and integrated automatic description; 1.9.0+18 failed grey controls",
+  "phoneInstall": "updated existing app after user unlocked; device inventory independently verified 1.9.1 build19; normal launch succeeded",
+  "phoneAcceptance": "pending user retry/initialization status and integrated automatic description",
   "privateBinaryUploaded": false,
-  "phoneDataCleared": false
+  "phoneDataCleared": false,
+  "release": {
+    "tag": "v1.9.1+19",
+    "sourceCommit": "696a2ce81e033b468e4da815214ceeb43d85d699",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.9.1%2B19",
+    "remoteTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  }
 }
