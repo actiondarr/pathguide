@@ -45,6 +45,33 @@
     "currentLedgerBudgetMicroUsd": 500000,
     "ledgerAwaitingAuditedBudgetAmendment": true
   },
-  "ledgerAmendment": "Pending verified release and phone update; preserve all historical usage and unknown outcomes",
-  "paidInferenceRequestsByAgent": 0
+  "ledgerAmendment": {
+    "checkedAtUtc": "2026-11-08T19:22:40.869Z",
+    "maxRequests": 100,
+    "budgetMicroUsd": 500000,
+    "trialCount": 32,
+    "spentMicroUsd": 13331,
+    "remaining": 68,
+    "expiresAtUtc": "2026-11-13T19:22:40.869Z",
+    "expiresAtHongKong": "2026-11-14 03:22:40",
+    "paidInferenceRequestsByAgent": 0,
+    "applied": true,
+    "originalCountCostIdsUnknownHistoryPreserved": true
+  },
+  "paidInferenceRequestsByAgent": 0,
+  "release": {
+    "tag": "v1.10.3+27",
+    "sourceCommit": "40fab8be36e02ec871d7338d762e3ab83e495e43",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.10.3%2B27",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  },
+  "phoneInstall": {
+    "version": "1.10.3",
+    "bundleVersion": "27",
+    "independentInventoryVerified": true,
+    "normalLaunchSucceeded": true,
+    "installedInPlace": true,
+    "dataCleared": false
+  }
 }
