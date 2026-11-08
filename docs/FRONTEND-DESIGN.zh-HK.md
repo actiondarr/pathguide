@@ -1,5 +1,7 @@
 # Frontend：PathGuide 整體流程、規格與裝置端
 
+2026-11-09複雜場景真人回報／交接：使用者確認房間能順利播音，但廚房／廁所截圖分別顯示answer-format（25／50，連續拒絕受限）及disallowed-content（26／50，等候新環境），沒有拒絕細項。最新只讀核對已32／50、13331／500000 microUSD，名義餘18，窗口至今日12:06:25、fingerprint相符、無inFlight、預留足夠、stopReason為null；非當前額度不足。最近三結果均complete，已覆蓋舊失敗；raw lastResult成功仍夾舊拒絕鍵，需優先核對Firestore巢狀merge殘留，不能據此歸因新成功或兩圖。category覆蓋及「米／層」禁字誤擋僅待驗候選。依使用者要求整理[下一工作視窗交接](../SCENE-MODE-HANDOFF.zh-HK.md)，私人截圖未上Git，本輪未修補、部署、裝機、改額或付費推理，未重跑測試。見[只讀證據](../verification/scene-complex-handoff-20261109.json)。
+
 2026-11-09場景診斷／US$0.50已交付：1.10.1+25來源7525a48，不可變tag／GitHub prerelease先核遠端，再原位更新、獨立清單核1.10.1／build25及正常啟動，未卸載或清資料。依使用者「總預算$0.5」（前文美元並已回覆確認）以updateTime CAS只改fingerprint、budgetMicroUsd及追加allowanceHistory；逐欄核對原16次／7861 microUSD、IDs、未知歷史、consumed recovery、halted、無inFlight與原window完全保留。總額10000→500000 microUSD、累計仍50；讀回fingerprint相符、下一次2458預留足夠、無停止原因，窗口ready，名義餘34次，香港時間2026-11-09 12:06:25到期不變。代理沒有付費推理。停止原因／重入安全歷史可在新版複驗；較早格式拒絕已無原紀錄，例子／精簡觀察未獲真人證明根治，3–5秒／內容／VoiceOver仍待驗收。見[交付及額度證據](../verification/scene-rejection-budget-20261109.json)及[版本收據](../verification/release-receipts/app-1.10.1+25.json)。
 
 2026-11-09格式拒絕與預算停止修補候選1.10.1+25：使用者回報1.10.0+24頭幾個轉換場景成功播音，但間歇格式受限；刷新後舊本機紀錄已失，後端只餘最後一次complete，不能還原較早格式細項。實讀帳本16次／7861 microUSD，無inFlight、窗口未到期、次數未到50；7861＋下一次保守預留2458＞原10000，重入停止確定為預算預留不足，不是重新入App令許可消失。最後一個模型9106ms，不能當3–5秒達標。新版分開預算、次數、到期、在途等停止原因；進頁只讀安全狀態、不取相／扣試驗／呼叫模型，轉動／過期／重接不蓋過預算提示。後端保留最近三個安全結果並跨下一次reserve保留，回傳固定格式細項，不留照片／描述／觀察原文；prompt加首次／更新JSON例子並要求最多三項重點，原最多六項、句數與內容驗證保留，拒絕率改善尚未證明。使用者明確改總額為US$0.50，累計仍50、到期不變；後端500000 microUSD設定及來源SHA已核，舊16次／7861及10000帳本先保留，待版本核對及裝機後審計CAS。591項Flutter／7項flag-off略過、flag-on相關98、後端44、analyze、私人Profile／deep strict簽章與四模型SHA通過，Swift未改；真人品質、格式複現及VoiceOver待驗。見[本輪證據](../verification/scene-rejection-budget-20261109.json)。
@@ -564,7 +566,7 @@ flutter test
 <a id="current-state"></a>
 ## 5. 現況、限制與交付證據
 
-目前場景描述狀態（2026-11-09）：1.10.1+25已在來源7525a48／不可變tag及prerelease核對後原位裝機，獨立讀回1.10.1／25並正常啟動，後端核SHA。進頁只讀限制與最近三次安全結果，不取相／呼叫模型／扣試驗；預算預留不足、次數、到期等原因分開，轉動或來源失效不蓋過已知預算提示。使用者批准總額US$0.50；CAS已保留16次／7861 microUSD、IDs及未知歷史，帳本與設定fingerprint一致，累計50、名義餘34，香港時間2026-11-09 12:06:25到期，下一次預留足夠。1.10.0+24曾幾景真人有聲，但間歇格式拒絕原因舊紀錄已失，1.10.1的例子／精簡觀察效果、房間內容、3–5秒及VoiceOver待真人複驗；正式單開關、Android及導航內入口未新增。詳見[本輪證據](../verification/scene-rejection-budget-20261109.json)。
+目前場景描述狀態（2026-11-09）：1.10.1+25房間已獲真人確認順利有聲；廚廁較複雜場景仍有answer-format及disallowed-content，未修好／未完成全場景驗收。最新只讀32／50、13331／500000 microUSD、名義餘18、無在途、預留足夠、窗口至今日12:06:25，非當前預算停止。舊拒絕已被最近三個成功結果覆蓋；raw lastResult有成功與舊拒絕鍵混存，需修資料一致性並重新取拒絕細項。使用者要求下一工作視窗接手，本輪只交接，未改程式／部署／許可或付費推理；詳見[交接](../SCENE-MODE-HANDOFF.zh-HK.md)及[最新證據](../verification/scene-complex-handoff-20261109.json)。
 
 2026-11-08真人首次取相失敗：1.8.2+17的Auth及App Check均有效，但第一個callable約1.635秒返回503，沒有成功描述／讀音；之後429為用量未知後試驗停止，並非一直in-flight，也不是等45秒便可解除。帳本1次、halted=true、inFlight=false，保守預留US$0.002458並非實際帳單。沒有重設帳本或自動付費重試；須先核對供應商用量及錯誤。
 
