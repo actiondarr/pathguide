@@ -126,6 +126,56 @@ class Harness {
 
 void main() {
   testWidgets(
+    'previous successful request diagnostics survive a later quota failure without retaining text',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      await h.stable();
+      final first = h.controller.describe();
+      await tester.pump();
+      final successfulId = h.backend.ids.single;
+      h.backend.finish();
+      await first;
+      await h.stable(frames: 240);
+      final second = h.controller.describe();
+      await tester.pump();
+      h.backend.pending.last.completeError(
+        const SceneFailure('resource-exhausted'),
+      );
+      await second;
+      expect(h.controller.backendStatus, '失敗');
+      final data = h.controller.diagnostics;
+      expect(data, contains(successfulId));
+      expect(data, contains(h.backend.ids.last));
+      expect(data, contains('後端結果：成功'));
+      expect(data, contains('resource-exhausted'));
+      expect(data, isNot(contains(full)));
+      h.controller.dispose();
+    },
+  );
+  testWidgets(
+    'local speech probe uses no capture/backend attempt and survives camera freshness expiry',
+    (tester) async {
+      final h = Harness(tester);
+      addTearDown(h.controller.dispose);
+      h.voice.hold = true;
+      await h.stable();
+      final probe = h.controller.testSpeech();
+      await tester.pump();
+      expect(h.voice.said, ['呢段係本機廣東話語音測試，唔係環境描述。']);
+      expect(h.controller.canRequest, isFalse);
+      await tester.pump(const Duration(seconds: 2));
+      expect(h.voice.wait!.isCompleted, isFalse);
+      expect(h.controller.canDeliverSpeech, isTrue);
+      h.voice.wait!.complete();
+      await probe;
+      expect(h.captures, 0);
+      expect(h.backend.calls, 0);
+      expect(h.controller.attempts, 0);
+      h.controller.dispose();
+    },
+  );
+  testWidgets(
     'a rejected late reply keeps separate backend and invalidation evidence without answer content',
     (tester) async {
       final h = Harness(tester);

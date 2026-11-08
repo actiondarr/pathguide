@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../tts/announcer.dart';
+import '../tts/speech_coordinator.dart';
 import 'scene_backend.dart';
 import 'live_scene_signal.dart';
 
@@ -17,13 +18,45 @@ class LiveSceneController extends ChangeNotifier {
     this.cooldown = const Duration(seconds: 45),
     this.stableFor = const Duration(milliseconds: 700),
     this.maxSessionAttempts = 3,
-  }) : _clock = clock ?? DateTime.now;
+    this.speechEnvironment,
+  }) : _clock = clock ?? DateTime.now {
+    _historyScope = backend is FirebaseSceneBackend
+        ? (backend as FirebaseSceneBackend).diagnosticScope
+        : null;
+    if (_historyScope != _savedScope) {
+      _savedReports.clear();
+      _savedScope = _historyScope;
+    }
+    if (_historyScope != null) _reports.addAll(_savedReports);
+  }
   final Future<Uint8List?> Function() capture;
   final SceneBackend backend;
   final Speaker speaker;
   final DateTime Function() _clock;
   final Duration cooldown, stableFor;
   final int maxSessionAttempts;
+  final String Function()? speechEnvironment;
+  static String? _savedScope;
+  static final Map<String, String> _savedReports = {};
+  String? _historyScope;
+  final Map<String, String> _reports = {};
+  void _archive() {
+    if (lastRequestId == null) return;
+    _reports.remove(lastRequestId);
+    _reports[lastRequestId!] = _currentDiagnostics;
+    while (_reports.length > 3) {
+      _reports.remove(_reports.keys.first);
+    }
+    if (_historyScope != null &&
+        backend is FirebaseSceneBackend &&
+        _savedScope == _historyScope &&
+        (backend as FirebaseSceneBackend).diagnosticScope == _historyScope) {
+      _savedReports
+        ..clear()
+        ..addAll(_reports);
+    }
+  }
+
   bool available = false,
       automatic = false,
       busy = false,
@@ -45,6 +78,82 @@ class LiveSceneController extends ChangeNotifier {
   String? rejectionReason, lastRequestId;
   int? captureMs, backendMs;
   final List<String> _trace = [];
+  String speechStatus = '未交予播音';
+  bool _speechSubmitted = false;
+  bool get speechOutputSubmitted => _speechSubmitted;
+  bool _speechProbe = false;
+  bool get canTestSpeech => available && !busy && !speaking && !_disposed;
+  bool get canDeliverSpeech =>
+      !_disposed &&
+      available &&
+      speaking &&
+      (_speechProbe || (text != null && _fresh));
+  void speechEvent(SceneSpeechEvent event) {
+    if (_disposed) return;
+    _speechSubmitted = event == SceneSpeechEvent.submitted;
+    speechStatus = switch (event) {
+      SceneSpeechEvent.waiting => '等候物件提示完成（最多三秒）',
+      SceneSpeechEvent.submitted => '已交予輸出路由，未確認發聲',
+      SceneSpeechEvent.finished => '輸出路由已結束（不代表已聽到）',
+      SceneSpeechEvent.cancelled => '未播：已取消或畫面不再有效',
+      SceneSpeechEvent.interrupted => '已被較高優先語音／停止操作中斷',
+      SceneSpeechEvent.priorityTimeout => '未播：等候物件提示逾時',
+      SceneSpeechEvent.navigationBlocked => '未播：導航語音優先',
+      SceneSpeechEvent.failed => '輸出路由失敗',
+    };
+    _record('播音：$speechStatus');
+    _notify();
+  }
+
+  void playbackEvent(String code) {
+    if (_disposed) return;
+    const names = {
+      'started': '原生 TTS 已開始',
+      'completed': '原生 TTS 已完成',
+      'cancelled': '原生 TTS 已取消',
+      'failed': '原生 TTS 錯誤',
+      'voiceover': '已提交 VoiceOver 公告（無發聲確認）',
+    };
+    final name = names[code];
+    if (name == null) return;
+    _record(name);
+    _notify();
+  }
+
+  Future<void> testSpeech() async {
+    if (!canTestSpeech) return;
+    _archive();
+    automatic = false;
+    ++_generation;
+    _expiry?.cancel();
+    _evidence = null;
+    text = null;
+    _speechProbe = speaking = true;
+    speechStatus = '本機測試準備中';
+    _record('開始本機語音測試；不取相、不上傳、不呼叫後端');
+    _notify();
+    try {
+      await speaker.stop();
+      if (!canDeliverSpeech) return;
+      await speaker
+          .speak('呢段係本機廣東話語音測試，唔係環境描述。')
+          .timeout(
+            const Duration(seconds: 8),
+            onTimeout: () async {
+              await speaker.stop();
+              speechStatus = '本機語音測試逾時，已停止';
+              _record(speechStatus);
+            },
+          );
+    } catch (_) {
+      speechStatus = '本機語音測試失敗';
+      _record(speechStatus);
+    } finally {
+      _speechProbe = speaking = false;
+      _notify();
+    }
+  }
+
   String get rejectionDescription => switch (rejectionReason) {
     'sentence-count' => '句數／句末格式不符（sentence-count）',
     'answer-format' => '回覆格式不符（answer-format）',
@@ -66,9 +175,20 @@ class LiveSceneController extends ChangeNotifier {
     return ms <= 0 ? 0 : (ms / 1000).ceil();
   }
 
-  String get diagnostics => [
+  String get diagnostics =>
+      backend is FirebaseSceneBackend &&
+          (backend as FirebaseSceneBackend).diagnosticScope != _historyScope
+      ? '帳戶已變更，不顯示上一帳戶測試資料。'
+      : [
+          _currentDiagnostics,
+          if (_reports.isNotEmpty) '先前請求（最多三次；只含數值及狀態）：',
+          ..._reports.values,
+        ].join('\n\n');
+  String get _currentDiagnostics => [
     '模式：${automatic ? '自動開啟' : '自動關閉（手動單次）'}；相機來源：${available ? '可用' : '未準備'}',
     '階段：$phase；後端結果：$backendStatus',
+    '有效描述字數：${text?.length ?? 0}；播音：$speechStatus',
+    if (speechEnvironment != null) '語音設定：${speechEnvironment!()}',
     '請求 ID：${lastRequestId ?? '未送出'}',
     '作廢原因：$lastInvalidation；拒絕原因：$rejectionDescription；錯誤碼：${failure.isEmpty ? '無' : failure}',
     '作廢時數值：$invalidationDetails',
@@ -96,6 +216,7 @@ class LiveSceneController extends ChangeNotifier {
   bool get canRequest =>
       available &&
       !busy &&
+      !_speechProbe &&
       attempts < maxSessionAttempts &&
       (_lastAttempt == null || _clock().difference(_lastAttempt!) >= cooldown);
   bool get canDescribe => canRequest && stable;
@@ -161,6 +282,8 @@ class LiveSceneController extends ChangeNotifier {
     lastInvalidation = reason;
     invalidationDetails = details;
     phase = '已作廢／已取消';
+    _speechProbe = false;
+    _speechSubmitted = false;
     _record('作廢：$reason${details == '無' ? '' : '；$details'}');
     if (text != null || busy || speaking) {
       unawaited(speaker.stop().catchError((Object _) {}));
@@ -179,6 +302,10 @@ class LiveSceneController extends ChangeNotifier {
         (_latest != null && signal.sequence <= _latest!.sequence)) {
       _stable = null;
       _stableSince = null;
+      if (_speechProbe) {
+        _notify();
+        return;
+      }
       if (failure.isNotEmpty && !busy && text == null) {
         _notify();
         return;
@@ -201,6 +328,10 @@ class LiveSceneController extends ChangeNotifier {
       if (_disposed) return;
       _stable = null;
       _stableSince = null;
+      if (_speechProbe) {
+        _notify();
+        return;
+      }
       if (failure.isNotEmpty && !busy && text == null) {
         _notify();
         return;
@@ -246,6 +377,7 @@ class LiveSceneController extends ChangeNotifier {
 
   Future<void> describe({bool manual = true}) async {
     if (!(manual ? canRequest : canDescribe) || (!manual && !automatic)) return;
+    _archive();
     busy = true;
     failure = '';
     rejectionReason = null;
@@ -253,6 +385,7 @@ class LiveSceneController extends ChangeNotifier {
     metrics = null;
     captureMs = backendMs = null;
     backendStatus = '未送出';
+    speechStatus = '未交予播音';
     lastInvalidation = '無';
     invalidationDetails = '無';
     phase = '等候穩定';
@@ -289,7 +422,10 @@ class LiveSceneController extends ChangeNotifier {
       final captureStarted = _clock();
       final jpeg = await capture();
       captureMs = _clock().difference(captureStarted).inMilliseconds;
-      if (!current()) return;
+      if (!current()) {
+        _record('取相後已作廢，未交後端');
+        return;
+      }
       if (jpeg == null || jpeg.isEmpty || jpeg.length > 524288) {
         throw const SceneFailure('no-frame');
       }
@@ -349,7 +485,11 @@ class LiveSceneController extends ChangeNotifier {
         }
         return;
       }
-      if (!current()) return;
+      if (!current()) {
+        speechStatus = '未交予播音：回覆到達時畫面已作廢';
+        _record(speechStatus);
+        return;
+      }
       final full = validateSceneText(reply.text);
       final previous = _previousFullText;
       _previousFullText = full;
@@ -365,8 +505,9 @@ class LiveSceneController extends ChangeNotifier {
         return;
       }
       text = spoken;
-      phase = '文字已顯示／交予播音';
-      _record('有效文字已顯示，交予語音協調器');
+      phase = '有效文字已備妥／交予播音';
+      speechStatus = '等候語音協調器';
+      _record('有效文字已備妥，交予語音協調器');
       status = '場景描述完成。';
       speaking = true;
       _notify();
@@ -376,6 +517,7 @@ class LiveSceneController extends ChangeNotifier {
         if (current()) {
           failure = 'speech-unavailable';
           automatic = false;
+          speechStatus = '未能啟動廣東話播音';
           _record('廣東話播音未能開始');
           status = '廣東話播音未能開始，可閱讀場景文字。';
         }
@@ -422,6 +564,7 @@ class LiveSceneController extends ChangeNotifier {
   @override
   void dispose() {
     if (_disposed) return;
+    _archive();
     invalidate();
     _disposed = true;
     _freshness?.cancel();

@@ -16,7 +16,7 @@
   },
   "modelsUnchanged": true,
   "phoneInstall": "Updated in place; independent devicectl inventory verified 1.9.4 / build 22, normal launch succeeded; no uninstall/data clear. Phone functional acceptance pending.",
-  "phoneAcceptance": "pending; current test controls retained; no functional success claim",
+  "phoneAcceptance": "FAILED: backend complete, user reports no visible description or audible speech. Subsequent quota request overwrote the local trace; followup live-scene-speech-20261108.json.",
   "privateBinaryUploaded": false,
   "phoneDataCleared": false,
   "release": {

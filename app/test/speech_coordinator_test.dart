@@ -32,6 +32,106 @@ class Output implements Speaker {
 Future<void> tick() => Future<void>.delayed(Duration.zero);
 void main() {
   test(
+    'fresh scene waits for a local alert and submits once after it finishes',
+    () async {
+      final out = Output();
+      final voice = SpeechCoordinator(out);
+      final events = <SceneSpeechEvent>[];
+      final alert = voice.channel(SpeechChannel.environment).speak('物件提示');
+      await tick();
+      final scene = voice.speakScene(
+        '場景描述',
+        isCurrent: () => true,
+        onEvent: events.add,
+      );
+      await tick();
+      expect(out.words, ['物件提示']);
+      expect(events, [SceneSpeechEvent.waiting]);
+      out.finish();
+      await alert;
+      await tick();
+      expect(out.words, ['物件提示', '場景描述']);
+      out.finish();
+      await scene;
+      expect(events, [
+        SceneSpeechEvent.waiting,
+        SceneSpeechEvent.submitted,
+        SceneSpeechEvent.finished,
+      ]);
+    },
+  );
+  test(
+    'scene cancellation withdraws its wait without stopping the local alert',
+    () async {
+      final out = Output();
+      final voice = SpeechCoordinator(out);
+      final events = <SceneSpeechEvent>[];
+      final alert = voice.channel(SpeechChannel.environment).speak('物件提示');
+      await tick();
+      final scene = voice.speakScene(
+        '舊場景',
+        isCurrent: () => true,
+        onEvent: events.add,
+      );
+      await tick();
+      await voice.channel(SpeechChannel.scene).stop();
+      await scene;
+      expect(events.last, SceneSpeechEvent.cancelled);
+      expect(out.speaking!.isCompleted, isFalse);
+      out.finish();
+      await alert;
+      expect(out.words, ['物件提示']);
+    },
+  );
+  test('waiting scene expires explicitly and navigation never releases stale queued speech', () async {
+    final out = Output();
+    final voice = SpeechCoordinator(out);
+    final events = <SceneSpeechEvent>[];
+    final alert = voice.channel(SpeechChannel.environment).speak('物件提示');
+    await tick();
+    await voice.speakScene(
+      '過期場景',
+      isCurrent: () => true,
+      onEvent: events.add,
+      waitLimit: const Duration(milliseconds: 5),
+    );
+    expect(events.last, SceneSpeechEvent.priorityTimeout);
+    final scene = voice.speakScene(
+      '舊場景',
+      isCurrent: () => true,
+      onEvent: events.add,
+    );
+    await tick();
+    final route = voice.channel(SpeechChannel.navigation).speak('導航');
+    await scene;
+    await tick();
+    await alert;
+    expect(events.last, SceneSpeechEvent.navigationBlocked);
+    out.finish();
+    await route;
+    expect(out.words, ['物件提示', '導航']);
+  });
+  test(
+    'scene waiting behind a slow native stop revalidates before any output',
+    () async {
+      final out = Output()..stopping = Completer<void>();
+      final voice = SpeechCoordinator(out);
+      var current = true;
+      final events = <SceneSpeechEvent>[];
+      final scene = voice.speakScene(
+        '舊場景',
+        isCurrent: () => current,
+        onEvent: events.add,
+      );
+      await tick();
+      current = false;
+      out.stopping!.complete();
+      await scene;
+      expect(out.words, isEmpty);
+      expect(events, [SceneSpeechEvent.cancelled]);
+    },
+  );
+  test(
     'navigation preempts recognition, which cannot stop or queue behind it',
     () async {
       final out = Output();

@@ -114,6 +114,10 @@ abstract interface class SceneBackend {
 }
 
 class FirebaseSceneBackend implements SceneBackend {
+  // Only used to isolate in-memory numerical diagnostics across page re-entry.
+  // The scope itself is never included in a diagnostic report.
+  String? get diagnosticScope =>
+      Firebase.apps.isEmpty ? null : FirebaseAuth.instance.currentUser?.uid;
   // Across page/controller replacement: cancellation never starts a second call.
   static bool _inFlight = false;
   @override

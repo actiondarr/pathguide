@@ -337,6 +337,12 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     _speaker = FlutterTtsSpeaker(
       speechRate: widget.settings.speechSpeed.rate,
       language: widget.settings.language,
+      onPlaybackEvent: (event) {
+        if (_voice.owner == SpeechChannel.scene &&
+            _scene.speechOutputSubmitted) {
+          _scene.playbackEvent(event.name);
+        }
+      },
     );
     _environmentSpeaker = EnvironmentSpeaker(
       tts: _speaker,
@@ -349,9 +355,13 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       capture: _captureScene,
       backend: FirebaseSceneBackend(),
       speaker: _CantoneseSceneSpeaker(
-        _voice.channel(SpeechChannel.scene),
+        _voice,
         () => _speakEnabled && (_screenReader || _speaker.isCantonese),
+        () => _scene.canDeliverSpeech,
+        (event) => _scene.speechEvent(event),
       ),
+      speechEnvironment: () =>
+          '播報${_speakEnabled ? '開' : '關'}；路由${_screenReader ? 'VoiceOver' : 'TTS'}；語言${_speaker.resolvedLanguage ?? '未準備'}',
     );
     _scene.addListener(_sceneChanged);
     _announcer = Announcer(
@@ -382,6 +392,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   Future<void> _announceWithScreenReader(String text) async {
     if (!mounted || !_active || !_requestedRunning || _controlsOpen) return;
+    if (_voice.owner == SpeechChannel.scene) _scene.playbackEvent('voiceover');
     if (MediaQuery.supportsAnnounceOf(context)) {
       await SemanticsService.sendAnnouncement(
         View.of(context),
@@ -1059,10 +1070,23 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                           '後端：${_scene.backendStatus}；拒絕原因：${_scene.rejectionDescription}',
                           key: const ValueKey('live-scene-outcome'),
                         ),
+                        if (_scene.text != null)
+                          Text(
+                            _scene.text!,
+                            key: const ValueKey('live-scene-result'),
+                          ),
+                        Text('播音：${_scene.speechStatus}'),
                         ExpansionTile(
                           key: const ValueKey('live-scene-diagnostics'),
                           title: const Text('場景測試資料'),
                           children: [
+                            TextButton(
+                              key: const ValueKey('live-scene-test-speech'),
+                              onPressed: _scene.canTestSpeech
+                                  ? _scene.testSpeech
+                                  : null,
+                              child: const Text('本機語音測試（不取相／不上傳）'),
+                            ),
                             TextButton.icon(
                               key: const ValueKey(
                                 'live-scene-copy-diagnostics',
@@ -1083,11 +1107,6 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                           ExpansionTile(
                             title: const Text('場景準備資料'),
                             children: [Text('初始化狀態：${_scene.preparationCode}')],
-                          ),
-                        if (_scene.text != null)
-                          Text(
-                            _scene.text!,
-                            key: const ValueKey('live-scene-result'),
                           ),
                         if (_scene.attempts > 0)
                           Text(
@@ -2314,17 +2333,24 @@ class _GridPainter extends CustomPainter {
 }
 
 class _CantoneseSceneSpeaker implements Speaker {
-  _CantoneseSceneSpeaker(this.output, this.available);
-  final Speaker output;
+  _CantoneseSceneSpeaker(
+    this.coordinator,
+    this.available,
+    this.isCurrent,
+    this.onEvent,
+  );
+  final SpeechCoordinator coordinator;
   final bool Function() available;
+  final bool Function() isCurrent;
+  final void Function(SceneSpeechEvent) onEvent;
   @override
   Future<void> speak(String text) async {
     if (!available()) throw const SceneFailure('speech-unavailable');
-    await output.speak(text);
+    await coordinator.speakScene(text, isCurrent: isCurrent, onEvent: onEvent);
   }
 
   @override
-  Future<void> stop() => output.stop();
+  Future<void> stop() => coordinator.channel(SpeechChannel.scene).stop();
   @override
-  Future<List<String>> languages() => output.languages();
+  Future<List<String>> languages() => coordinator.output.languages();
 }

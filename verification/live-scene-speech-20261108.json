@@ -1,0 +1,51 @@
+{
+  "dateHongKong": "2026-11-08",
+  "version": "1.9.5+23",
+  "phoneReport": {
+    "previousVersion": "1.9.4+22",
+    "backendComplete": true,
+    "visibleDescription": false,
+    "audibleSpeech": false,
+    "laterCopiedReport": "different request: resource-exhausted, 389ms, no model metrics; original local trace overwritten",
+    "rootCauseOnPhone": "not established; later turn delta is not evidence of the earlier successful request"
+  },
+  "serverReadback": {
+    "trialCount": 6,
+    "spentMicroUsd": 3296,
+    "halted": true,
+    "inFlight": false,
+    "lastStatus": "complete",
+    "recoveryStatus": "consumed",
+    "latest": {
+      "modelMs": 1548,
+      "promptTokens": 367,
+      "completionTokens": 61,
+      "totalTokens": 428,
+      "estimatedMicroUsd": 171
+    }
+  },
+  "confirmedCodeDefect": "Existing scene channel returned without speech whenever an environment utterance owned output; not claimed as the proven phone cause.",
+  "change": [
+    "Bounded three-second wait for local alert, current/generation revalidation, no waiting behind navigation or paid retry.",
+    "Eight-second bounded local synthetic Cantonese speech probe, no capture/backend calls, same scene output pipeline.",
+    "Native playback callbacks and explicit suppression/interruption/route diagnostics; callbacks are not acoustic proof.",
+    "Three previous numerical diagnostic reports in UID-isolated process memory; no photos, description text or credentials retained; no disk persistence.",
+    "Description precedes diagnostic expansion; existing test controls remain."
+  ],
+  "checks": {
+    "flutterPassed": 576,
+    "flagOffSkipped": 5,
+    "flagOnScopedPassed": 94,
+    "analyze": "pass",
+    "native": "unchanged; baseline not rerun",
+    "portraitVisual": "390x844 local probe screenshot inspected; copy and pause accessible; synthetic native start/completion events verified in integration test",
+    "signedProfileBuild": "pass",
+    "codesign": "deep strict pass",
+    "fourModelsUnchanged": true
+  },
+  "backendChange": false,
+  "newPaidGrant": false,
+  "paidInferenceRequestsByAgent": 0,
+  "phoneAcceptance": "pending local synthetic speech test; original live integration still not accepted",
+  "review": "Implementing-agent review, no independent agent. Checked priority ownership, cancellation, validity after native stop, bounded timeouts, identity-scoped memory and no content retained in reports."
+}

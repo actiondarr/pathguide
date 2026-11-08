@@ -50,7 +50,7 @@
     "downloadedDeployedSourceMatchesLocal": true
   },
   "paidInferenceRequestsByAgent": 0,
-  "phoneAcceptance": "pending 1.9.4+22 controlled phone test and copied diagnostic report; no functional success claim",
+  "phoneAcceptance": "FAILED: sixth backend request complete, user reports neither visible description nor audible speech; later quota-failure report overwrote original local trace. See live-scene-speech-20261108.json.",
   "review": "Implementing-agent review, no independent agent: strict output parser, bounded diagnostics/no raw content, cancellation generation, late reply accounting, no fee/identity guard relaxation, scoped tests and signed build checks.",
   "release": {
     "tag": "v1.9.4+22",

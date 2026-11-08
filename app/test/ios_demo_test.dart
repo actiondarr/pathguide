@@ -64,6 +64,14 @@ void main() {
               .handlePlatformMessage(
                 'flutter_tts',
                 const StandardMethodCodec().encodeMethodCall(
+                  const MethodCall('speak.onStart'),
+                ),
+                (_) {},
+              );
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .handlePlatformMessage(
+                'flutter_tts',
+                const StandardMethodCodec().encodeMethodCall(
                   const MethodCall('speak.onComplete'),
                 ),
                 (_) {},
@@ -290,6 +298,38 @@ void main() {
       expect(visionCalls, isNot(contains('startPreview')));
       await close(tester);
     },
+  );
+
+  testWidgets(
+    'local scene voice test reaches native TTS and copies playback events without capture or cloud work',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await start(tester, initialSection: AppSection.explore);
+      speechCalls.clear();
+      final panel = find.byKey(const ValueKey('live-scene-diagnostics'));
+      await tester.ensureVisible(panel);
+      await tester.tap(panel);
+      await tester.pumpAndSettle();
+      final button = find.byKey(const ValueKey('live-scene-test-speech'));
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(
+        speechCalls.where((c) => c.method == 'speak').single.arguments,
+        '呢段係本機廣東話語音測試，唔係環境描述。',
+      );
+      expect(visionCalls.where((c) => c == 'captureSceneFrame'), isEmpty);
+      expect(find.textContaining('原生 TTS 已開始'), findsOneWidget);
+      expect(find.textContaining('原生 TTS 已完成'), findsOneWidget);
+      expect(find.textContaining('請求 ID：未送出'), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-scene-describe')), findsOneWidget);
+      await capture(tester, 'scene-local-voice');
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
   );
 
   testWidgets(

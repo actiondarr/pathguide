@@ -80,9 +80,11 @@ void main() {
     () async {
       completeSpeech = false;
       var starts = 0;
+      final playback = <TtsPlaybackEvent>[];
       final speaker = FlutterTtsSpeaker(
         cantoneseOnly: true,
         onStarted: () => starts++,
+        onPlaybackEvent: playback.add,
       );
       final pending = speaker.speak('前方有門。');
       await Future<void>.delayed(Duration.zero);
@@ -101,10 +103,12 @@ void main() {
 
       await event();
       expect(starts, 1);
+      expect(playback, [TtsPlaybackEvent.started]);
       await speaker.stop();
       await pending;
       await event();
       expect(starts, 1);
+      expect(playback, [TtsPlaybackEvent.started, TtsPlaybackEvent.cancelled]);
     },
   );
   test(
