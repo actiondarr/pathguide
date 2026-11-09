@@ -25,5 +25,6 @@
   "testsRerun": false,
   "phoneOperations": 0,
   "paidInferenceRequests": 0,
-  "humanAcceptance": "Pending"
+  "humanAcceptance": "Pending",
+  "userButtonFeedbackClarification": "Activating stairs marking gives audible stairs feedback; distinguish acknowledgement from capture success; single audio route, no duplicate TTS"
 }
