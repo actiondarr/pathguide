@@ -1,7 +1,14 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val pathguideLocalProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
 }
 
 android {
@@ -10,15 +17,17 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
     defaultConfig {
         applicationId = "hk.pathguide.pathguide"
+        manifestPlaceholders["pathguideMapsApiKey"] = System.getenv("PATHGUIDE_MAPS_API_KEY") ?: pathguideLocalProperties.getProperty("MAPS_API_KEY", "")
         // CameraX 1.6 需要 API 21+；LiteRT 2.2 需要 API 21+。
         // 直接用 flutter.minSdkVersion，若低于 21 再显式提高。
-        minSdk = maxOf(flutter.minSdkVersion, 21)
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -28,6 +37,7 @@ android {
         release {
             // TODO: 正式发布前换成自己的签名配置。
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
@@ -47,6 +57,10 @@ kotlin {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation("com.google.android.gms:play-services-maps:19.2.0")
+    implementation("com.google.android.libraries.places:places:5.1.1")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     // CameraX：预览 + 图像分析共用同一个相机会话。
     // 版本已在 Google Maven 上确认为稳定版（1.6.2）。
     val cameraxVersion = "1.6.2"

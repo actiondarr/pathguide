@@ -6,7 +6,7 @@ import 'package:pathguide/tts/announcer.dart';
 import 'package:pathguide/vision/detection.dart';
 import 'package:pathguide/vision/labels.dart';
 
-/// 播报调度：两级冷却 + 优先级插队。
+/// Latest-frame summaries with class deduplication and repeat cooldown.
 ///
 /// 这块逻辑在真机上极难验证——你不可能一边举着手机一边数「刚才那句话该不该说」。
 /// 所以时钟做成可注入的，用测试把取舍全钉死。
@@ -101,7 +101,7 @@ void main() {
     clock.advance(const Duration(seconds: 1));
     final a = await announce(<Detection>[_det(_binP0Id)]);
     expect(a, isNull);
-    expect(speaker.spoken, hasLength(1), reason: '1 秒 < 2 秒同類冷卻');
+    expect(speaker.spoken, hasLength(1), reason: '1 秒 < 5 秒同類冷卻');
   });
 
   test('同類冷卻過後可以再播', () async {
@@ -112,12 +112,12 @@ void main() {
     expect(speaker.spoken, hasLength(2));
   });
 
-  test('全局冷卻會压掉不同類的播報', () async {
+  test('新類別不會被全局冷卻阻擋', () async {
     await announce(<Detection>[_det(_binP0Id)]);
     clock.advance(const Duration(seconds: 3)); // 越过同类冷却，未越全局冷却
     final a = await announce(<Detection>[_det(_otherAnnouncedId)]);
-    expect(a, isNull, reason: '3 秒 < 5 秒全局冷卻');
-    expect(speaker.spoken, hasLength(1));
+    expect(a, isNotNull);
+    expect(speaker.spoken, hasLength(2));
   });
 
   test('force 可以绕過冷卻', () async {
@@ -227,6 +227,36 @@ void main() {
     final a = await announce(<Detection>[_det(_binP0Id)]);
     expect(a, isNotNull, reason: '决策仍然产生，只是不发聲');
     expect(speaker.spoken, isEmpty);
+  });
+
+  test('每句最多三類，下一幀只選最新而不補讀過期結果', () async {
+    await announce([_det(6), _det(7), _det(8), _det(9)]);
+    expect(speaker.spoken.single.split('、'), hasLength(3));
+    await announce([_det(11)]);
+    expect(speaker.spoken.last, kLabels[11].nameZh);
+    expect(speaker.spoken.last, isNot(contains(kLabels[9].nameZh)));
+  });
+
+  test('同類五秒內不重播，五秒後可以重播', () async {
+    await announce([_det(7)]);
+    clock.advance(const Duration(seconds: 4));
+    expect(await announce([_det(7)]), isNull);
+    clock.advance(const Duration(seconds: 1));
+    expect(await announce([_det(7)]), isNotNull);
+  });
+
+  test('播報未完成時不打斷也不排隊', () async {
+    final delayed = _DelayedStopSpeaker();
+    final busy = Announcer(speaker: delayed);
+    busy.onFrame([_det(7)]);
+    final speech = busy.lastSpeech;
+    expect(busy.onFrame([_det(8)]), isNull);
+    delayed.pendingStop.complete();
+    await speech;
+    expect(delayed.spoken, [kLabels[7].nameZh]);
+    busy.onFrame([_det(9)]);
+    await busy.lastSpeech;
+    expect(delayed.spoken.last, kLabels[9].nameZh);
   });
 
   test('播報文本就是類別中文名，不加修饰語', () {

@@ -1,9 +1,11 @@
-# 領路通：iPhone 無障礙導航與環境辨識 Demo
+# 領路通 PathGuide
 
-請先閱讀 docs/IOS-DEMO.md，然後在 Mac 的 app/ 資料夾執行 Flutter 檢查及建置。
+專案只維護以下三份最新文件，直接在原檔更新，不再另開交接、對照、階段或Word版本。
 
-App 以導航首頁啟動，提供「搜尋目的地」、「我的路線」和「錄製新路線」的未來功能介面；底部「探索」頁已支援 iOS／Android 真實相機、香港九類裝置端 TFLite 辨識、三類模擬資料及粵語播報。最低 iOS 15。
+| 文件 | 內容 |
+|---|---|
+| [Frontend](docs/FRONTEND-DESIGN.zh-HK.md) | App背景、各階段進度、逐功能實現方法、操作與真機驗收 |
+| [Backend](docs/BACKEND-DESIGN.zh-HK.md) | 各階段進度、逐服務實現方法、帳號／照片／訓練、部署與回退 |
+| [Dataset Review](docs/DATASET-REVIEW.zh-HK.md) | 各階段進度、逐資料／模型任務做法、訓練狀態、品質與來源署名 |
 
-未來導航功能會清楚標示「開發中」，目前不會建立真實路線或記錄 GPS。
-
-PathGuide: Flutter accessibility navigation and on-device object recognition app.
+每次功能、接口、模型或驗收狀態改動，必須在同一提交同步更新對應文件。每個完成的App／共用模型版本先備份GitHub並核對，再安裝或交付；舊版可由Git歷史／Release恢復。

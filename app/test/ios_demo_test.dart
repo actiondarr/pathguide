@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:flutter/rendering.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,14 +12,20 @@ import 'package:pathguide/main.dart';
 import 'package:pathguide/overlay/box_painter.dart';
 import 'package:pathguide/settings/app_settings.dart';
 import 'package:pathguide/ui/app_shell.dart';
+import 'package:pathguide/ui/app_theme.dart';
 import 'package:pathguide/ui/demo_page.dart';
 import 'package:pathguide/vision/vision_preview.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final testerBinding = TestWidgetsFlutterBinding.ensureInitialized();
   final visionCalls = <String>[];
+  final loadedModels = <Map<Object?, Object?>>[];
   final speechCalls = <MethodCall>[];
   var failSpeechSetup = false;
+  var denyCamera = false;
+  var scenePreparationFailures = 0;
+  var sceneObservationEnabled = false;
+  Completer<Object?>? pendingCamera;
   var speechLanguages = <String>['zh-HK', 'yue-HK'];
   Completer<Object?>? speechSetup;
   Completer<Object?>? speechStop;
@@ -23,8 +33,15 @@ void main() {
   setUp(() {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     visionCalls.clear();
+    loadedModels.clear();
     speechCalls.clear();
     failSpeechSetup = false;
+    denyCamera = false;
+    scenePreparationFailures = 0;
+    sceneObservationEnabled = false;
+    pendingCamera = null;
+    rootBundle.evict('assets/models/detector.json');
+    rootBundle.evict('assets/models/detector.tflite');
     speechLanguages = <String>['zh-HK', 'yue-HK'];
     speechSetup = null;
     speechStop = null;
@@ -41,6 +58,26 @@ void main() {
         if (failSpeechSetup) throw PlatformException(code: 'voice_unavailable');
         if (speechSetup != null) return speechSetup!.future;
       }
+      if (call.method == 'speak') {
+        scheduleMicrotask(() {
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .handlePlatformMessage(
+                'flutter_tts',
+                const StandardMethodCodec().encodeMethodCall(
+                  const MethodCall('speak.onStart'),
+                ),
+                (_) {},
+              );
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .handlePlatformMessage(
+                'flutter_tts',
+                const StandardMethodCodec().encodeMethodCall(
+                  const MethodCall('speak.onComplete'),
+                ),
+                (_) {},
+              );
+        });
+      }
       if (call.method == 'getLanguages') return speechLanguages;
       return 1;
     });
@@ -48,16 +85,44 @@ void main() {
       const MethodChannel('hk.pathguide/vision'),
       (call) async {
         visionCalls.add(call.method);
+        if (call.method == 'loadModel') {
+          loadedModels.add(Map<Object?, Object?>.from(call.arguments as Map));
+        }
+        if (call.method == 'setSceneObservation') {
+          if (scenePreparationFailures > 0) {
+            scenePreparationFailures--;
+            throw PlatformException(code: 'not_running');
+          }
+          sceneObservationEnabled = (call.arguments as Map)['enabled'] == true;
+          return {
+            'enabled': sceneObservationEnabled,
+            'epoch': 1,
+            'motionAvailable': true,
+          };
+        }
+        if (call.method == 'startPreview') {
+          if (denyCamera) throw PlatformException(code: 'camera_denied');
+          if (pendingCamera != null) return pendingCamera!.future;
+        }
         return switch (call.method) {
           'startPreview' => <String, Object>{'started': true},
           'modelDir' => '/models',
           'fileSize' => -1,
           'loadModel' => <String, Object>{
             'loaded': true,
-            'classes': 9,
+            'classes':
+                (call.arguments as Map)['model'].toString().contains(
+                  'detector-hk9',
+                )
+                ? 9
+                : 10,
             'inputSize': 640,
           },
-          'status' => <String, Object>{'ready': true},
+          'status' => <String, Object>{
+            'ready': true,
+            'sceneObservationEnabled': sceneObservationEnabled,
+          },
+          'captureSceneFrame' => Uint8List.fromList([1]),
           _ => null,
         };
       },
@@ -66,16 +131,22 @@ void main() {
       const MethodChannel('hk.pathguide/vision/frame'),
       (_) async => null,
     );
+    messenger.setMockMethodCallHandler(
+      const MethodChannel('hk.pathguide/vision/scene'),
+      (_) async => null,
+    );
   });
 
   tearDown(() {
     debugDefaultTargetPlatformOverride = null;
+    testerBinding.platformDispatcher.clearAccessibilityFeaturesTestValue();
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     for (final name in [
       'flutter_tts',
       'hk.pathguide/vision',
       'hk.pathguide/vision/frame',
+      'hk.pathguide/vision/scene',
     ]) {
       messenger.setMockMethodCallHandler(MethodChannel(name), null);
     }
@@ -95,8 +166,9 @@ void main() {
   Future<void> start(
     WidgetTester tester, {
     SourceMode initialMode = SourceMode.camera,
-    AppSection initialSection = AppSection.explore,
+    AppSection initialSection = AppSection.visionDiagnostics,
     AppSettings? settings,
+    bool automatic = true,
   }) async {
     addTearDown(() async {
       await tester.pumpWidget(const SizedBox());
@@ -104,32 +176,83 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     });
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    const screenshotDirectory = String.fromEnvironment('PATHGUIDE_SCREENSHOTS');
+    if (screenshotDirectory.isNotEmpty && Platform.isMacOS) {
+      await tester.runAsync(() async {
+        final loader = FontLoader('PathGuidePreview')
+          ..addFont(
+            File('/System/Library/Fonts/STHeiti Light.ttc')
+                .readAsBytes()
+                .then((bytes) => ByteData.sublistView(bytes)),
+          );
+        await loader.load();
+        final icons = FontLoader('MaterialIcons')
+          ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
+        await icons.load();
+      });
+    }
     await tester.pumpWidget(
-      PathGuideApp(
-        initialMode: initialMode,
-        initialSection: initialSection,
-        settings: settings,
+      RepaintBoundary(
+        key: const ValueKey('test-preview'),
+        child: PathGuideApp(
+          initialMode: initialMode,
+          initialSection: initialSection,
+          settings: settings,
+          theme: screenshotDirectory.isEmpty
+              ? null
+              : buildAppTheme().copyWith(
+                  textTheme: buildAppTheme().textTheme.apply(
+                    fontFamily: 'PathGuidePreview',
+                  ),
+                  primaryTextTheme: buildAppTheme().primaryTextTheme.apply(
+                    fontFamily: 'PathGuidePreview',
+                  ),
+                  segmentedButtonTheme: SegmentedButtonThemeData(
+                    style: buildAppTheme().segmentedButtonTheme.style?.copyWith(
+                      textStyle: const WidgetStatePropertyAll(
+                        TextStyle(
+                          fontFamily: 'PathGuidePreview',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+        ),
       ),
     );
     await tester.pump();
     await flushAsync(tester);
     await tester.pump(const Duration(milliseconds: 240));
+    if (!automatic &&
+        (initialSection == AppSection.explore ||
+            initialSection == AppSection.visionDiagnostics)) {
+      await tester.tap(find.byKey(const ValueKey('vision-settings-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.ensureVisible(find.byTooltip('關閉播報'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('關閉播報'));
+      await tester.tap(find.byTooltip('關閉更多操作'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      speechCalls.clear();
+    }
   }
 
   Future<void> openControls(WidgetTester tester) async {
-    await tester.tap(
-      find.byKey(const ValueKey<String>('vision-settings-button')),
-    );
+    await tester.tap(find.byKey(const ValueKey('vision-settings-button')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('辨識控制'), findsOneWidget);
+    expect(find.text('重播目前結果'), findsOneWidget);
   }
 
   Future<void> closeControls(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('關閉辨識設定'));
+    await tester.tap(find.byTooltip('關閉更多操作'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('辨識控制'), findsNothing);
+    expect(find.text('重播目前結果'), findsNothing);
   }
 
   DetectionBoxPainter painter(WidgetTester tester) => tester
@@ -148,44 +271,390 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   }
 
-  testWidgets(
-    'app opens on the future navigation hub before requesting camera access',
-    (tester) async {
-      await start(tester, initialSection: AppSection.navigation);
-      expect(find.text('想去哪裡？'), findsOneWidget);
-      expect(find.text('搜尋目的地'), findsOneWidget);
-      expect(find.text('我的路線'), findsOneWidget);
-      expect(find.text('錄製新路線'), findsOneWidget);
-      expect(find.text('開發中'), findsOneWidget);
-      expect(visionCalls, isNot(contains('startPreview')));
+  Future<void> capture(WidgetTester tester, String name) async {
+    const dir = String.fromEnvironment('PATHGUIDE_SCREENSHOTS');
+    if (dir.isEmpty) return;
+    await tester.pump();
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(const ValueKey('test-preview')),
+    );
+    await tester.runAsync(() async {
+      final image = await boundary.toImage(pixelRatio: 1);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      await Directory(dir).create(recursive: true);
+      await File('$dir/$name.png').writeAsBytes(bytes!.buffer.asUint8List());
+      image.dispose();
+    });
+  }
 
-      await tester.tap(find.text('搜尋目的地'));
-      await tester.pumpAndSettle();
-      expect(find.text('先使用即時辨識'), findsOneWidget);
-      await tester.tap(find.text('先使用即時辨識'));
-      await tester.pump();
-      await flushAsync(tester);
-      expect(find.byType(VisionPreview), findsOneWidget);
-      expect(visionCalls, contains('startPreview'));
+  testWidgets(
+    'navigation entry exposes search without starting camera or location',
+    (tester) async {
+      await start(tester, initialSection: AppSection.outdoor);
+      expect(find.text('路線導航'), findsOneWidget);
+      expect(find.text('搜尋目的地'), findsOneWidget);
+      expect(find.text('此手機收藏'), findsOneWidget);
+      expect(find.text('最近使用'), findsOneWidget);
+      expect(visionCalls, isNot(contains('startPreview')));
       await close(tester);
     },
   );
 
-  testWidgets('bottom navigation leaves camera view and opens settings', (
+  testWidgets(
+    'scene mode suppresses routine object names while detector rendering continues',
+    (tester) async {
+      await start(tester, initialSection: AppSection.explore);
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('同意並開始'));
+      await tester.pumpAndSettle();
+      speechCalls.clear();
+      Future<void> frame() async {
+        await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              'hk.pathguide/vision/frame',
+              const StandardMethodCodec().encodeSuccessEnvelope({
+                'detections': [
+                  {'id': 7, 'score': .95, 'cx': .5, 'cy': .5, 'w': .2, 'h': .2},
+                ],
+                'frameWidth': 1280,
+                'frameHeight': 720,
+              }),
+              (_) {},
+            );
+        await tester.pump();
+        await flushAsync(tester);
+      }
+
+      await frame();
+      expect(painter(tester).mapped, hasLength(1));
+      expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
+      expect(visionCalls.where((c) => c == 'captureSceneFrame'), isEmpty);
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
+      await tester.pumpAndSettle();
+      await frame();
+      expect(speechCalls.where((c) => c.method == 'speak'), isNotEmpty);
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+  testWidgets(
+    'scene preparation retries are bounded and borrow the same camera without paid work',
+    (tester) async {
+      scenePreparationFailures = 10;
+      await start(tester, initialSection: AppSection.explore);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(seconds: 2));
+        await flushAsync(tester);
+      }
+      expect(
+        visionCalls.where((c) => c == 'setSceneObservation'),
+        hasLength(3),
+      );
+      expect(visionCalls.where((c) => c == 'startPreview'), hasLength(1));
+      expect(visionCalls.where((c) => c == 'captureSceneFrame'), isEmpty);
+      scenePreparationFailures = 0;
+      final retry = find.byKey(const ValueKey('live-scene-prepare'));
+      await tester.ensureVisible(retry);
+      await tester.tap(retry);
+      await flushAsync(tester);
+      expect(
+        visionCalls.where((c) => c == 'setSceneObservation'),
+        hasLength(4),
+      );
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+  testWidgets(
+    'local scene voice test reaches native TTS and copies playback events without capture or cloud work',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await start(tester, initialSection: AppSection.explore);
+      speechCalls.clear();
+      final panel = find.byKey(const ValueKey('live-scene-diagnostics'));
+      await tester.ensureVisible(panel);
+      await tester.tap(panel);
+      await tester.pumpAndSettle();
+      final button = find.byKey(const ValueKey('live-scene-test-speech'));
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(
+        speechCalls.where((c) => c.method == 'speak').single.arguments,
+        '呢段係本機廣東話語音測試，唔係環境描述。',
+      );
+      expect(visionCalls.where((c) => c == 'captureSceneFrame'), isEmpty);
+      expect(find.textContaining('原生 TTS 已開始'), findsOneWidget);
+      expect(find.textContaining('原生 TTS 已完成'), findsOneWidget);
+      expect(find.textContaining('請求 ID：未送出'), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-scene-describe')), findsNothing);
+      expect(find.byKey(const ValueKey('live-scene-cancel')), findsNothing);
+      await capture(tester, 'scene-local-voice');
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+
+  testWidgets(
+    'scene diagnostics can be opened and copied without capturing or changing test controls',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await start(tester, initialSection: AppSection.explore);
+      String? copied;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      final panel = find.byKey(const ValueKey('live-scene-diagnostics'));
+      await tester.ensureVisible(panel);
+      await tester.tap(panel);
+      await tester.pumpAndSettle();
+      final copy = find.byKey(const ValueKey('live-scene-copy-diagnostics'));
+      await tester.ensureVisible(copy);
+      await tester.tap(copy);
+      await tester.pump();
+      expect(copied, contains('請求 ID：未送出'));
+      expect(copied, contains('模型：未知'));
+      expect(copied, contains('自動關閉'));
+      await capture(tester, 'scene-diagnostics');
+      expect(visionCalls.where((v) => v == 'captureSceneFrame'), isEmpty);
+      expect(find.byKey(const ValueKey('live-scene-describe')), findsNothing);
+      expect(find.byKey(const ValueKey('live-scene-cancel')), findsNothing);
+      expect(find.byKey(const ValueKey('live-scene-auto')), findsOneWidget);
+      expect(find.text('場景模式'), findsOneWidget);
+      expect(find.text('暫停辨識'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+
+  testWidgets(
+    'scene preparation failure is actionable; retry connects existing camera without photo or paid request',
+    (tester) async {
+      scenePreparationFailures = 1;
+      await start(tester, initialSection: AppSection.explore);
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .onChanged,
+        isNull,
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('live-scene-prepare')),
+      );
+      await tester.tap(find.byKey(const ValueKey('live-scene-prepare')));
+      await flushAsync(tester);
+      await tester.pumpAndSettle();
+      expect(
+        visionCalls.where((v) => v == 'setSceneObservation'),
+        hasLength(2),
+      );
+      expect(visionCalls.where((v) => v == 'startPreview'), hasLength(1));
+      expect(visionCalls.where((v) => v == 'captureSceneFrame'), isEmpty);
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .onChanged,
+        isNotNull,
+      );
+      expect(find.byKey(const ValueKey('live-scene-prepare')), findsNothing);
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+
+  testWidgets(
+    'independent scene stream survives stale detector and triggers without any model frame',
+    (tester) async {
+      await start(tester, initialSection: AppSection.explore);
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('同意並開始'));
+      await tester.pumpAndSettle();
+      var sequence = 0;
+      Future<void> scene(double rate) async {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 200)),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+        await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              'hk.pathguide/vision/scene',
+              const StandardMethodCodec().encodeSuccessEnvelope({
+                'epoch': 1,
+                'sequence': ++sequence,
+                'luma': List.filled(64, 40),
+                'attitude': [0.0, 0.0, 0.0, 1.0],
+                'rotationRate': rate,
+                'motionFresh': true,
+                'issue': 'none',
+              }),
+              (_) {},
+            );
+        await tester.pump();
+      }
+
+      for (var i = 0; i < 18; i++) {
+        await scene(1.0);
+      }
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .value,
+        isTrue,
+      );
+      expect(visionCalls.where((v) => v == 'captureSceneFrame'), isEmpty);
+      for (var i = 0; i < 6; i++) {
+        await scene(0.0);
+      }
+      expect(visionCalls.where((v) => v == 'captureSceneFrame'), hasLength(1));
+      expect(visionCalls.where((v) => v == 'startPreview'), hasLength(1));
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+
+  testWidgets(
+    'live scene consent borrows camera; failure stops automatic analysis without stopping recognition',
+    (tester) async {
+      await start(tester, initialSection: AppSection.explore);
+      expect(visionCalls, contains('setSceneObservation'));
+      var sequence = 0;
+      Future<void> frame() async {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 200)),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+        await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              'hk.pathguide/vision/frame',
+              const StandardMethodCodec().encodeSuccessEnvelope({
+                'detections': [],
+                'inferenceMs': 10.0,
+                'frameWidth': 1280,
+                'frameHeight': 720,
+                'sceneSignal': {
+                  'sequence': ++sequence,
+                  'luma': List.filled(64, 40),
+                  'attitude': [0.0, 0.0, 0.0, 1.0],
+                  'rotationRate': 0.0,
+                  'motionFresh': true,
+                },
+              }),
+              (_) {},
+            );
+        await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              'hk.pathguide/vision/scene',
+              const StandardMethodCodec().encodeSuccessEnvelope({
+                'epoch': 1,
+                'sequence': sequence,
+                'luma': List.filled(64, 40),
+                'attitude': [0.0, 0.0, 0.0, 1.0],
+                'rotationRate': 0.0,
+                'motionFresh': true,
+                'issue': 'none',
+              }),
+              (_) {},
+            );
+        await tester.pump();
+      }
+
+      for (var i = 0; i < 9; i++) {
+        await frame();
+      }
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .onChanged,
+        isNotNull,
+      );
+      expect(visionCalls.where((x) => x == 'captureSceneFrame'), isEmpty);
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
+      await tester.pumpAndSettle();
+      expect(find.text('開啟場景模式？'), findsOneWidget);
+      expect(visionCalls.where((x) => x == 'captureSceneFrame'), isEmpty);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .value,
+        isFalse,
+      );
+      for (var i = 0; i < 9; i++) {
+        await frame();
+      }
+      await tester.tap(find.byKey(const ValueKey('live-scene-auto')));
+      await tester.pumpAndSettle();
+      expect(find.text('開啟場景模式？'), findsOneWidget);
+      await tester.tap(find.text('同意並開始'));
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 9; i++) {
+        await frame();
+      }
+      expect(visionCalls.where((x) => x == 'captureSceneFrame'), hasLength(1));
+      expect(visionCalls.where((x) => x == 'startPreview'), hasLength(1));
+      expect(find.text('暫停辨識'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('recognition-start-pause')));
+      await tester.pump();
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const ValueKey('live-scene-auto')),
+            )
+            .value,
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
+      await close(tester);
+    },
+    skip: !const bool.fromEnvironment('SCENE_DESCRIPTION_ENABLED'),
+  );
+
+  testWidgets('returning home disposes camera before choosing another task', (
     tester,
   ) async {
-    await start(tester);
+    await start(tester, initialSection: AppSection.explore);
     expect(visionCalls, contains('startPreview'));
-
-    await tester.tap(find.text('導航'));
+    await tester.tap(find.byTooltip('返回首頁'));
     await tester.pumpAndSettle();
-    expect(find.text('想去哪裡？'), findsOneWidget);
     expect(find.byType(VisionPreview), findsNothing);
-
-    await tester.tap(find.text('設定'));
+    await tester.tap(find.text('路線導航'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('略過說明'));
+    await tester.pumpAndSettle();
+    expect(find.text('搜尋目的地'), findsOneWidget);
+    await tester.tap(find.byTooltip('返回首頁'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('設定與使用教學'));
     await tester.pumpAndSettle();
     expect(find.text('播報速度'), findsOneWidget);
-    expect(find.text('1 倍速'), findsOneWidget);
     await close(tester);
   });
 
@@ -213,7 +682,11 @@ void main() {
     expect(settings.speechSpeed, SpeechSpeed.slow);
     expect(find.text('0.8 倍速'), findsOneWidget);
 
-    await tester.tap(find.text('即時辨識設定'));
+    await tester.tap(find.byTooltip('返回首頁'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('即時辨識'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('略過說明'));
     await tester.pump();
     await flushAsync(tester);
     expect(
@@ -226,26 +699,112 @@ void main() {
     await close(tester);
   });
 
-  testWidgets(
-    'future settings only explain requirements without starting a service',
-    (tester) async {
-      await start(tester, initialSection: AppSection.settings);
-      expect(find.text('懸空障礙物偵測'), findsOneWidget);
+  testWidgets('developer model details load without opening camera', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await start(tester, initialSection: AppSection.developer);
+    await capture(tester, 'developer-testing');
+    await tester.scrollUntilVisible(find.text('模型資料'), 180);
+    await tester.tap(find.text('模型資料'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('10 類 · 10.70 MB'), findsOneWidget);
+    expect(visionCalls, isNot(contains('startPreview')));
+    await tester.scrollUntilVisible(find.text('返回設定'), -180);
+    await tester.tap(find.text('返回設定'));
+    await tester.pumpAndSettle();
+    await capture(tester, 'settings');
+    await close(tester);
+  });
 
-      await tester.tap(find.text('懸空障礙物偵測'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('不會要求新的系統權限'), findsOneWidget);
-      expect(visionCalls, isNot(contains('startPreview')));
-      await tester.tap(find.text('知道了'));
-      await tester.pumpAndSettle();
+  testWidgets('daily recognition hides model and diagnostic controls', (
+    tester,
+  ) async {
+    await start(tester, initialSection: AppSection.explore);
+    await openControls(tester);
+    expect(find.text('辨識模型'), findsNothing);
+    expect(find.text('模擬資料'), findsNothing);
+    expect(find.text('技術資料'), findsNothing);
+    expect(find.byKey(const ValueKey('speech-threshold')), findsNothing);
+    expect(find.byKey(const ValueKey('detection-threshold')), findsNothing);
+    expect(find.text('自動播報'), findsOneWidget);
+    await close(tester);
+  });
 
-      await tester.scrollUntilVisible(find.text('即時物件辨識模型'), 180);
-      await tester.pump();
-      expect(find.text('已安裝 · 2.87 MB'), findsOneWidget);
-      expect(find.text('未提供'), findsOneWidget);
-      await close(tester);
-    },
-  );
+  testWidgets('cancelling first-use help does not start camera', (
+    tester,
+  ) async {
+    await start(tester, initialSection: AppSection.home);
+    await tester.tap(find.text('即時辨識'));
+    await tester.pumpAndSettle();
+    expect(find.text('開始前'), findsOneWidget);
+    expect(visionCalls, isEmpty);
+    await tester.tap(find.text('返回'));
+    await tester.pumpAndSettle();
+    expect(visionCalls, isEmpty);
+    await tester.tap(find.text('即時辨識'));
+    await tester.pumpAndSettle();
+    expect(find.text('開始前'), findsOneWidget);
+    await close(tester);
+  });
+
+  testWidgets('model selector reloads matching model and class mapping', (
+    tester,
+  ) async {
+    await start(tester);
+    expect(loadedModels.last['classIds'], <int>[
+      6,
+      11,
+      7,
+      8,
+      9,
+      24,
+      1,
+      49,
+      26,
+      18,
+    ]);
+    await openControls(tester);
+    await tester.ensureVisible(find.text('原版九類'));
+    await tester.tap(find.text('原版九類'));
+    await tester.pump();
+    await flushAsync(tester);
+    expect(
+      loadedModels.last['model'].toString(),
+      endsWith('detector-hk9.tflite'),
+    );
+    expect(loadedModels.last['classIds'], <int>[
+      11,
+      7,
+      8,
+      50,
+      49,
+      6,
+      9,
+      51,
+      24,
+    ]);
+    await tester.tap(find.text('新版十類'));
+    await tester.pump();
+    await flushAsync(tester);
+    expect(loadedModels.last['model'].toString(), endsWith('/detector.tflite'));
+    expect(loadedModels.last['classIds'], <int>[
+      6,
+      11,
+      7,
+      8,
+      9,
+      24,
+      1,
+      49,
+      26,
+      18,
+    ]);
+    await close(tester);
+  });
 
   testWidgets('technical diagnostics stay collapsed until requested', (
     tester,
@@ -293,9 +852,9 @@ void main() {
       );
       expect(settingsSize.width, greaterThanOrEqualTo(56));
       expect(settingsSize.height, greaterThanOrEqualTo(56));
-      final previewHeight = tester.getSize(find.byType(VisionPreview)).height;
-      final pageHeight = tester.getSize(find.byType(DemoPage)).height;
-      expect(previewHeight, greaterThan(pageHeight * 0.90));
+      expect(find.text('暫停辨識'), findsOneWidget);
+      expect(find.byKey(const ValueKey('read-current-result')), findsNothing);
+      expect(find.text('更多操作'), findsOneWidget);
 
       await openControls(tester);
       expect(find.text('更新 FPS'), findsOneWidget);
@@ -364,6 +923,7 @@ void main() {
     expect(painter(tester).mapped, hasLength(3));
     expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
     tester.widget<Slider>(slider).onChanged!(0.30);
+    await closeControls(tester);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 240));
     expect(speechCalls.where((c) => c.method == 'speak'), isNotEmpty);
@@ -388,7 +948,7 @@ void main() {
   });
 
   testWidgets(
-    'background stops mock updates and speech; foreground restarts demo',
+    'background stops recognition and foreground automatically resumes',
     (tester) async {
       await start(tester, initialMode: SourceMode.mock);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
@@ -396,7 +956,7 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       tester.binding.scheduleForcedFrame();
       await tester.pump();
-      expect(find.text('已暫停'), findsOneWidget);
+      expect(find.textContaining('已暫停'), findsWidgets);
       expect(speechCalls.where((c) => c.method == 'stop'), isNotEmpty);
       speechCalls.clear();
       await tester.pump(const Duration(seconds: 6));
@@ -406,6 +966,8 @@ void main() {
       await tester.pump();
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 240));
+      await flushAsync(tester);
       await tester.pump(const Duration(milliseconds: 240));
       expect(painter(tester).mapped, hasLength(3));
       await close(tester);
@@ -419,7 +981,7 @@ void main() {
       await start(tester, initialMode: SourceMode.mock);
       expect(painter(tester).mapped, hasLength(3));
       await openControls(tester);
-      expect(find.textContaining('語音初始化失敗'), findsOneWidget);
+      expect(find.textContaining('語音初始化失敗'), findsWidgets);
       expect(tester.takeException(), isNull);
       await close(tester);
     },
@@ -431,7 +993,7 @@ void main() {
       speechLanguages = <String>['zh-TW'];
       await start(tester, initialMode: SourceMode.mock);
       await openControls(tester);
-      expect(find.textContaining('目前使用 zh-TW，並非粵語'), findsOneWidget);
+      expect(find.textContaining('目前使用 zh-TW，並非粵語'), findsWidgets);
       expect(painter(tester).mapped, hasLength(3));
       await close(tester);
     },
@@ -453,7 +1015,7 @@ void main() {
       tester.binding.scheduleForcedFrame();
       await tester.pump(const Duration(milliseconds: 240));
       expect(painter(tester).mapped, isEmpty);
-      expect(find.text('已暫停'), findsOneWidget);
+      expect(find.textContaining('已暫停'), findsWidgets);
       await close(tester);
     },
   );
@@ -484,6 +1046,7 @@ void main() {
       expect(tester.takeException(), isNull);
       await openControls(tester);
       await tester.ensureVisible(find.byTooltip('關閉播報'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('關閉播報'));
       await tester.pump();
       expect(find.byTooltip('開啟播報'), findsOneWidget);
@@ -506,9 +1069,393 @@ void main() {
 
       await start(tester, initialSection: AppSection.settings);
       expect(find.text('播報速度'), findsOneWidget);
-      await tester.scrollUntilVisible(find.text('即時物件辨識模型'), 180);
-      expect(find.text('已安裝 · 2.87 MB'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('開發測試'), 180);
+      expect(find.text('未來功能'), findsNothing);
       expect(tester.takeException(), isNull);
+      await close(tester);
+    },
+  );
+
+  testWidgets('task home is accessible and never starts camera', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final semantics = tester.ensureSemantics();
+
+    await start(tester, initialSection: AppSection.home);
+    expect(find.text('即時辨識'), findsOneWidget);
+    expect(find.text('路線導航'), findsOneWidget);
+    expect(find.text('菜單閱讀與語音搜尋'), findsOneWidget);
+    expect(visionCalls, isEmpty);
+    await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    semantics.dispose();
+    await capture(tester, 'task-home');
+    await tester.tap(find.text('菜單閱讀與語音搜尋'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('略過說明'));
+    await tester.pumpAndSettle();
+    expect(find.text('菜單閱讀'), findsOneWidget);
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(visionCalls, isEmpty);
+    await close(tester);
+  });
+
+  testWidgets(
+    'silent camera withdraws old boxes and replay never reads the old object',
+    (tester) async {
+      await start(tester);
+      Future<void> frame() async {
+        ServicesBinding.instance.channelBuffers.push(
+          'hk.pathguide/vision/frame',
+          const StandardMethodCodec().encodeSuccessEnvelope({
+            'detections': [
+              {'id': 7, 'score': .95, 'cx': .5, 'cy': .5, 'w': .2, 'h': .2},
+            ],
+            'frameWidth': 1280,
+            'frameHeight': 720,
+          }),
+          (_) {},
+        );
+        await tester.pump();
+        await flushAsync(tester);
+      }
+
+      await frame();
+      expect(painter(tester).mapped, hasLength(1));
+      await tester.pump(const Duration(seconds: 3));
+      expect(painter(tester).mapped, isEmpty);
+      expect(find.textContaining('結果已過期'), findsOneWidget);
+      speechCalls.clear();
+      await openControls(tester);
+      await tester.tap(find.text('重播目前結果'));
+      await flushAsync(tester);
+      expect(
+        speechCalls.where(
+          (c) => c.method == 'speak' && c.arguments.toString().contains('垃圾桶'),
+        ),
+        isEmpty,
+      );
+      await frame();
+      expect(painter(tester).mapped, hasLength(1));
+      await close(tester);
+    },
+  );
+
+  testWidgets('automatic entry stays compact and replay is optional', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await start(tester, initialMode: SourceMode.mock);
+    expect(painter(tester).mapped, hasLength(3));
+    expect(speechCalls.where((c) => c.method == 'speak'), isNotEmpty);
+    expect(find.byKey(const ValueKey('read-current-result')), findsNothing);
+    expect(
+      speechCalls.where(
+        (c) => c.method == 'speak' && c.arguments.toString().contains('行人'),
+      ),
+      isNotEmpty,
+    );
+    expect(find.text('辨識信心門檻'), findsNothing);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('recognition-preview'))).height,
+      greaterThan(400),
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey('current-result')),
+              matching: find.byType(Text),
+            ),
+          )
+          .data,
+      startsWith('模擬結果：辨識到：'),
+    );
+    await capture(tester, 'recognition');
+    await openControls(tester);
+    await capture(tester, 'recognition-more');
+    speechCalls.clear();
+    await tester.tap(find.text('重播目前結果'));
+    await flushAsync(tester);
+    expect(
+      speechCalls.lastWhere((c) => c.method == 'speak').arguments,
+      startsWith('模擬結果：辨識到：'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('重播目前結果'), findsNothing);
+    await tester.tap(find.text('暫停辨識'));
+    await flushAsync(tester);
+    expect(painter(tester).mapped, isEmpty);
+    await openControls(tester);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('read-current-result')),
+          )
+          .onPressed,
+      isNull,
+    );
+    await closeControls(tester);
+    speechCalls.clear();
+    await tester.pump(const Duration(seconds: 6));
+    expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
+    await close(tester);
+  });
+
+  testWidgets('screen reader reads requested results without duplicate TTS', (
+    tester,
+  ) async {
+    final messages = <Object?>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockDecodedMessageHandler(SystemChannels.accessibility, (
+      message,
+    ) async {
+      messages.add(message);
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockDecodedMessageHandler(
+        SystemChannels.accessibility,
+        null,
+      ),
+    );
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(
+          accessibleNavigation: true,
+          supportsAnnounce: true,
+        );
+    await start(tester, initialMode: SourceMode.mock, automatic: false);
+    await tester.pump(const Duration(seconds: 6));
+    expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
+    messages.clear();
+    await openControls(tester);
+    await tester.tap(find.text('重播目前結果'));
+    await flushAsync(tester);
+    final announcements = messages.whereType<Map>().where(
+      (m) => m['type'] == 'announce',
+    );
+    expect(announcements, hasLength(1));
+    expect(
+      (announcements.single['data'] as Map)['message'],
+      startsWith('模擬結果：'),
+    );
+    expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
+    await close(tester);
+  });
+
+  testWidgets('screen reader automatically announces objects without TTS', (
+    tester,
+  ) async {
+    final messages = <Object?>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockDecodedMessageHandler(SystemChannels.accessibility, (
+      message,
+    ) async {
+      messages.add(message);
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockDecodedMessageHandler(
+        SystemChannels.accessibility,
+        null,
+      ),
+    );
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(
+          accessibleNavigation: true,
+          supportsAnnounce: true,
+        );
+    await start(tester, initialMode: SourceMode.mock);
+    expect(
+      messages.whereType<Map>().where(
+        (m) =>
+            m['type'] == 'announce' &&
+            (m['data'] as Map)['message'].toString().contains('行人'),
+      ),
+      isNotEmpty,
+    );
+    expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
+    await close(tester);
+  });
+
+  testWidgets('enabling screen reader keeps automatic announcements enabled', (
+    tester,
+  ) async {
+    await start(tester, initialMode: SourceMode.mock);
+    expect(speechCalls.where((c) => c.method == 'speak'), isNotEmpty);
+    speechCalls.clear();
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(
+          accessibleNavigation: true,
+          supportsAnnounce: true,
+        );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 6));
+    expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
+    await openControls(tester);
+    expect(find.byTooltip('關閉播報'), findsOneWidget);
+    await close(tester);
+  });
+
+  testWidgets('settings modal suspends automatic environment speech', (
+    tester,
+  ) async {
+    await start(tester, initialMode: SourceMode.mock);
+    await openControls(tester);
+    speechCalls.clear();
+    await tester.pump(const Duration(seconds: 6));
+    expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
+    await closeControls(tester);
+    await tester.pump(const Duration(milliseconds: 240));
+    expect(speechCalls.where((c) => c.method == 'speak'), isNotEmpty);
+    await close(tester);
+  });
+
+  testWidgets('camera permission failure exposes explicit retry', (
+    tester,
+  ) async {
+    denyCamera = true;
+    await start(tester);
+    expect(visionCalls.where((c) => c == 'startPreview'), hasLength(1));
+    expect(find.text('重新嘗試'), findsOneWidget);
+    expect(find.byType(VisionPreview), findsNothing);
+    denyCamera = false;
+    await tester.tap(find.text('重新嘗試'));
+    await flushAsync(tester);
+    expect(visionCalls.where((c) => c == 'startPreview'), hasLength(2));
+    expect(find.text('暫停辨識'), findsOneWidget);
+    await close(tester);
+  });
+
+  testWidgets('pausing during native startup discards the delayed result', (
+    tester,
+  ) async {
+    pendingCamera = Completer<Object?>();
+    await start(tester);
+    await tester.tap(find.text('暫停辨識'));
+    pendingCamera!.complete(<String, Object>{'started': true});
+    await flushAsync(tester);
+    await flushAsync(tester);
+    expect(find.text('繼續辨識'), findsOneWidget);
+    expect(find.byType(VisionPreview), findsNothing);
+    expect(visionCalls, contains('release'));
+    expect(speechCalls.where((c) => c.method == 'speak'), isEmpty);
+    await close(tester);
+  });
+
+  testWidgets('manual pause remains paused after interruption', (tester) async {
+    await start(tester, initialMode: SourceMode.mock);
+    await tester.tap(find.text('暫停辨識'));
+    await flushAsync(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await flushAsync(tester);
+    await tester.pump(const Duration(seconds: 6));
+    expect(painter(tester).mapped, isEmpty);
+    expect(find.text('繼續辨識'), findsOneWidget);
+    await tester.tap(find.text('繼續辨識'));
+    await flushAsync(tester);
+    await tester.pump(const Duration(milliseconds: 240));
+    expect(painter(tester).mapped, hasLength(3));
+    await close(tester);
+  });
+
+  testWidgets('permission dialog returns to the same pending startup', (
+    tester,
+  ) async {
+    pendingCamera = Completer<Object?>();
+    await start(tester);
+    expect(visionCalls.where((c) => c == 'startPreview'), hasLength(1));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    pendingCamera!.complete(<String, Object>{'started': true});
+    await flushAsync(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await flushAsync(tester);
+    expect(visionCalls.where((c) => c == 'startPreview'), hasLength(1));
+    expect(find.text('暫停辨識'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await close(tester);
+  });
+
+  testWidgets('recognition controls have labels and minimum touch targets', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final semantics = tester.ensureSemantics();
+    await start(tester, initialMode: SourceMode.mock);
+    await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    await openControls(tester);
+    expect(find.byTooltip('關閉更多操作'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('read-current-result'))).height,
+      greaterThanOrEqualTo(56),
+    );
+    semantics.dispose();
+    await close(tester);
+  });
+
+  testWidgets(
+    'two times text retains fixed task controls and scrollable teaching',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 568);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+      });
+      await start(
+        tester,
+        initialMode: SourceMode.mock,
+        initialSection: AppSection.explore,
+      );
+      for (final key in ['recognition-start-pause', 'vision-settings-button']) {
+        final size = tester.getSize(find.byKey(ValueKey(key)));
+        expect(size.width, greaterThanOrEqualTo(56));
+        expect(size.height, greaterThanOrEqualTo(56));
+      }
+      await capture(tester, 'recognition-large-text');
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('返回首頁'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('設定與使用教學'), 120);
+      await tester.ensureVisible(
+        find.widgetWithText(OutlinedButton, '設定與使用教學'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('設定與使用教學'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('使用教學'));
+      await tester.pumpAndSettle();
+      expect(find.text('關閉教學'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await capture(tester, 'usage-guide-large-text');
+      await tester.tap(find.text('關閉教學'));
+      await tester.pumpAndSettle();
       await close(tester);
     },
   );
