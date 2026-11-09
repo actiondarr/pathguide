@@ -5,14 +5,18 @@
     "Q1 background samples plus manual important-point marks",
     "Q2 one press delegates capture; generated type/index name, successful audible feedback, undo, optional later rename",
     "Q3 six primary landmark types; other facilities/audio/text under More",
-    "Q4 direction keys record a location-bound replay action relative to recording direction; not instant localization"
+    "Q4 direction keys record a location-bound replay action relative to recording direction; not instant localization",
+    "Q5 fixed left/right/straight keys each capture a junction plus direction in one action",
+    "Q6 failed capture gives short failure feedback and retains failure record; never backfill from a later location",
+    "Q7 undo only the latest manual mark and its direction; preserve other marks and automatic samples"
   ],
   "notAcceptedYet": [
-    "capture failure and undo scope",
-    "direction key placement, timing and reverse replay",
+    "floor interaction boundaries",
+    "reverse replay handling",
     "audio/text annotation semantics",
     "accessibility and trigger placement",
-    "association and deduplication with background samples"
+    "association and deduplication with background samples",
+    "busy press and save/reopen behavior"
   ],
   "implementationChanged": false,
   "privateImageCopiedOrUploaded": false,
