@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-10錄路標記核心1.11.0+29待裝機：使用者明確要求先安裝。以已通過599項Flutter／7項flag-off略過、錄路相關53項及analyze的來源建置私人Profile，deep strict簽章及四模型SHA核對通過。包含六類／三方向標記、免打字草稿保存／復原、schema4，以及先前單開關場景介面候選；來源／不可變tag及prerelease先核遠端後才原位安裝，不清資料。備註／錄音、重行方向播報、完整失敗歷史及焦點／VoiceOver真人驗收未完成；截圖全頁卡住未定位，不宣稱已修。沒有後端部署、帳本修改或付費推理。見[版本收據](../verification/release-receipts/app-1.11.0+29.json)。
+
 2026-11-10錄路標記核心來源候選：依使用者開始實作指示，接通六類標記及左轉／右轉／直行一按取相、自動命名、操作名稱／成功失敗回饋、成功觸覺、復原最近手動標記及免打字結束保存草稿。固定底部可捲操作區，保留暫停／結束可達；旁白走公告、非讀屏走TTS，背景撤回App後續語音。captured schema4保存markType／markDirection，schema1–3仍讀，舊schema帶標記欄位拒讀；復原保留背景節點，重接路段撤確認及清除未引用媒體。全App599通過／7項flag-off略過；錄路／媒體／樓層53項及錄路頁旁白公告測試已過，analyze見本輪證據。只保存來源，不升版本／裝機／部署或付費推理。更多標記／文字錄音備註、重行方向播報、完整失敗歷史與無障礙焦點及真機驗收尚未完成，不能稱Q1–Q13全交付；系統截圖卡死另案未定位。見[核心證據](../verification/route-mark-core-20261110.json)。
 
 2026-11-09內容拒絕診斷1.10.4+28：使用者提供第33／34次均disallowed-content／text-content，兩次均未交播音，後者另有快速轉向；原名詞修補未通過真人複驗。新增固定number／distance／floor／destination／safety／navigation／advice／simplified分類，text與observation前綴分開；只在原完整禁限guard拒絕後分類，多規則只取首項，不回原文、命中字或位置。手機allowlist同步，舊text-content相容。50項後端、flag-on相關103項Flutter、analyze、私人Profile／簽章及四模型SHA通過，部署核SHA；來源dddbcc6／不可變tag及prerelease核遠端後已原位裝機，首次連線中斷後重試成功，獨立核1.10.4／28及正常啟動，未清資料。沒有改prompt、放寬guard、付費重播、帳本或許可；舊兩次具體類別不能追溯，診斷改善仍待真人新結果。見[診斷證據](../verification/scene-content-detail-20261109.json)。
