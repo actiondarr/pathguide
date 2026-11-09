@@ -8,15 +8,15 @@
     "Q4 direction keys record a location-bound replay action relative to recording direction; not instant localization",
     "Q5 fixed left/right/straight keys each capture a junction plus direction in one action",
     "Q6 failed capture gives short failure feedback and retains failure record; never backfill from a later location",
-    "Q7 undo only the latest manual mark and its direction; preserve other marks and automatic samples"
+    "Q7 undo only the latest manual mark and its direction; preserve other marks and automatic samples",
+    "Q8 minimal floor confirmation at start and actual floor changes; unknown can keep recording/saving a draft",
+    "Q9 first version replays in recorded direction; reverse needs separate recording or verification",
+    "Q10 optional local audio/text notes bound to a mark, heard on request after position confirmation; not cloud transcription or commands"
   ],
   "notAcceptedYet": [
-    "floor interaction boundaries",
-    "reverse replay handling",
-    "audio/text annotation semantics",
-    "accessibility and trigger placement",
     "association and deduplication with background samples",
-    "busy press and save/reopen behavior"
+    "busy press behavior",
+    "nonvisual operation and finish/save flow"
   ],
   "implementationChanged": false,
   "privateImageCopiedOrUploaded": false,
