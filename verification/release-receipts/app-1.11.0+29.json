@@ -22,7 +22,15 @@
     "nativeSwiftChanged": false
   },
   "privateBinaryUploaded": false,
-  "phoneInstall": "Pending immutable source tag/prerelease verification",
+  "phoneInstall": {
+    "version": "1.11.0",
+    "bundleVersion": "29",
+    "bundleIdentifier": "hk.pathguide.pathguide",
+    "independentInventoryVerified": true,
+    "normalLaunchSucceeded": true,
+    "installedInPlace": true,
+    "dataCleared": false
+  },
   "phoneDataCleared": false,
   "paidInferenceRequestsByAgent": 0,
   "ledgerMutations": 0,
@@ -36,5 +44,13 @@
     "Full failed-mark history and accessibility focus/real VoiceOver acceptance remain pending",
     "System screenshot full-page unresponsiveness remains unlocated; this build is not a confirmed fix",
     "Captured schema4 stores marks/directions; old apps reject new schema4 routes; original schema1-3 remains readable"
-  ]
+  ],
+  "release": {
+    "tag": "v1.11.0+29",
+    "sourceCommit": "f2e13e31feab5ac32c0577a8f799fa83145d288f",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.11.0%2B29",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  },
+  "humanAcceptance": "Pending real route capture/save/reopen/undo, VO audible feedback and focus. Not full Q1-Q13 acceptance."
 }

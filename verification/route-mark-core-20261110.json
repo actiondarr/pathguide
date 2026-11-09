@@ -24,8 +24,24 @@
     "full accessibility focus handling and real VoiceOver/Screen Curtain tests",
     "phone build/release/install and field acceptance"
   ],
-  "phoneVersionUnchanged": "1.10.4+28",
+  "phoneVersionUnchanged": null,
   "paidInferenceRequests": 0,
   "backendDeployed": false,
-  "phoneInstalled": false
+  "phoneInstalled": true,
+  "phoneInstall": {
+    "version": "1.11.0",
+    "bundleVersion": "29",
+    "bundleIdentifier": "hk.pathguide.pathguide",
+    "independentInventoryVerified": true,
+    "normalLaunchSucceeded": true,
+    "installedInPlace": true,
+    "dataCleared": false
+  },
+  "release": {
+    "tag": "v1.11.0+29",
+    "sourceCommit": "f2e13e31feab5ac32c0577a8f799fa83145d288f",
+    "url": "https://github.com/actiondarr/pathguide/releases/tag/v1.11.0%2B29",
+    "remotePeeledTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  }
 }
