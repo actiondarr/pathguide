@@ -134,6 +134,30 @@ void main() {
   testWidgets(
     'automatic entry needs no point form, finish names and reopens a real draft',
     (t) async {
+      t.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(
+            accessibleNavigation: true,
+            supportsAnnounce: true,
+          );
+      addTearDown(t.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      final spoken = <String>[];
+      final accessMessenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      accessMessenger.setMockDecodedMessageHandler(
+        SystemChannels.accessibility,
+        (message) async {
+          if (message is Map && message['type'] == 'announce') {
+            spoken.add((message['data'] as Map)['message'] as String);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => accessMessenger.setMockDecodedMessageHandler(
+          SystemChannels.accessibility,
+          null,
+        ),
+      );
       final root = (await t.runAsync(
         () => Directory.systemTemp.createTemp('automatic-ui-'),
       ))!;
@@ -215,7 +239,21 @@ void main() {
       expect(c.nodes.length, 1);
       expect(c.nodes.first.floor, isNull);
       expect(find.text('記錄路標'), findsNothing);
-      final finish = find.text('結束錄路並命名保存');
+      final mark = find.byKey(const ValueKey('mark-stairs'));
+      await t.ensureVisible(mark);
+      await t.tap(mark);
+      await progress(() => !c.busy && c.nodes.length == 2);
+      expect(c.nodes.last.markType, 'stairs');
+      await t.pump();
+      expect(spoken.where((v) => v == '樓梯'), hasLength(1));
+      expect(spoken.where((v) => v == '樓梯，已記錄'), hasLength(1));
+      final undo = find.byKey(const ValueKey('undo-mark'));
+      await t.ensureVisible(undo);
+      await t.tap(undo);
+      await t.pump();
+      expect(c.nodes.length, 1);
+
+      final finish = find.text('結束並保存');
       await t.scrollUntilVisible(
         finish,
         100,
@@ -223,12 +261,6 @@ void main() {
       );
       await t.ensureVisible(finish);
       await t.tap(finish);
-      await progress(() => find.text('結束並保存草稿').evaluate().isNotEmpty);
-      await t.pumpAndSettle();
-      await t.enterText(find.byType(TextField), '屋企到大堂');
-      final save = find.widgetWithText(FilledButton, '保存草稿');
-      await t.ensureVisible(save);
-      await t.tap(save);
       await progress(() => c.notice == 'saved');
       expect(c.notice, 'saved');
       var reopened = false;
@@ -238,7 +270,7 @@ void main() {
           .then((_) => reopened = true);
       await progress(() => reopened);
       expect(reopened, isTrue);
-      expect(c.name, '屋企到大堂');
+      expect(c.name, '路線 1');
       expect(c.nodes.length, 1);
       expect(c.document!.complete, isFalse);
       await t.pumpWidget(const SizedBox());

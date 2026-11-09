@@ -1,6 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
+
+import '../tts/flutter_tts_speaker.dart';
 
 import '../settings/app_settings.dart';
 import 'cross_floor_contract.dart';
@@ -35,6 +39,14 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       _direction = false,
       _leaving = false;
   bool _allowPop = false;
+  bool _markBusy = false;
+  late final _feedbackTts = FlutterTtsSpeaker(
+    cantoneseOnly: true,
+    language: widget.settings.language,
+    speechRate: widget.settings.speechSpeed.rate,
+  );
+  bool _feedbackActive = true;
+  int _feedbackEpoch = 0;
   String? _target;
   ({
     String name,
@@ -92,10 +104,16 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Inactive also includes system input/permission surfaces. Native camera
     // interruption events still revoke the session; real background never resumes.
-    if (state == AppLifecycleState.resumed) c?.setForeground(true);
+    if (state == AppLifecycleState.resumed) {
+      _feedbackActive = true;
+      c?.setForeground(true);
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
+      _feedbackActive = false;
+      _feedbackEpoch++;
+      unawaited(_feedbackTts.stop());
       c?.setForeground(false);
     }
   }
@@ -106,10 +124,106 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     _expiry?.cancel();
     c?.removeListener(_changed);
     c?.dispose();
+    _feedbackEpoch++;
+    unawaited(_feedbackTts.stop());
     _name.dispose();
     _actualFloor.dispose();
     super.dispose();
   }
+
+  Future<void> _feedback(String text) async {
+    if (!mounted || !_feedbackActive) return;
+    final ticket = ++_feedbackEpoch;
+    try {
+      if (MediaQuery.accessibleNavigationOf(context)) {
+        if (MediaQuery.supportsAnnounceOf(context)) {
+          await SemanticsService.sendAnnouncement(
+            View.of(context),
+            text,
+            Directionality.of(context),
+          );
+        }
+      } else {
+        await _feedbackTts.initialize();
+        if (mounted && ticket == _feedbackEpoch) await _feedbackTts.speak(text);
+      }
+    } catch (_) {
+      /* The persistent accessible status remains available. */
+    }
+  }
+
+  Future<void> _mark(String type, String label, {String? direction}) async {
+    if (_markBusy || c!.busy) {
+      unawaited(_feedback(t('記錄中', 'Recording')));
+      return;
+    }
+    if (!c!.canCapture) return;
+    setState(() => _markBusy = true);
+    unawaited(_feedback(label));
+    final ok = await c!.mark(type, label, direction: direction);
+    if (!mounted) return;
+    setState(() => _markBusy = false);
+    unawaited(
+      _feedback(
+        ok
+            ? t('$label，已記錄', '$label recorded')
+            : t('未能記錄，請再試', 'Not recorded. Try again'),
+      ),
+    );
+    if (ok) unawaited(HapticFeedback.selectionClick());
+  }
+
+  Widget _markPanel() => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      for (final item in const [
+        ('landmark', '一般路標', 'Landmark'),
+        ('junction', '路口', 'Junction'),
+        ('door', '門口', 'Door'),
+        ('stairs', '樓梯', 'Stairs'),
+        ('lift', '升降機', 'Lift'),
+        ('toilet', '廁所', 'Toilet'),
+      ])
+        SizedBox(
+          width: 120,
+          child: FilledButton(
+            key: ValueKey('mark-${item.$1}'),
+            onPressed: c!.running
+                ? () => _mark(item.$1, t(item.$2, item.$3))
+                : null,
+            style: FilledButton.styleFrom(minimumSize: const Size(56, 56)),
+            child: Text(t(item.$2, item.$3)),
+          ),
+        ),
+      for (final item in const [
+        ('left', '左轉', 'Turn left'),
+        ('right', '右轉', 'Turn right'),
+        ('straight', '直行', 'Straight'),
+      ])
+        SizedBox(
+          width: 120,
+          child: OutlinedButton(
+            key: ValueKey('mark-${item.$1}'),
+            onPressed: c!.running
+                ? () =>
+                      _mark('junction', t(item.$2, item.$3), direction: item.$1)
+                : null,
+            style: OutlinedButton.styleFrom(minimumSize: const Size(56, 56)),
+            child: Text(t(item.$2, item.$3)),
+          ),
+        ),
+      OutlinedButton(
+        key: const ValueKey('undo-mark'),
+        onPressed: c!.canUndoMark
+            ? () {
+                if (c!.undoLastMark()) unawaited(_feedback(t('已復原', 'Undone')));
+              }
+            : null,
+        child: Text(t('復原上次標記', 'Undo last mark')),
+      ),
+    ],
+  );
 
   Future<bool> _confirm(String title, String message) async =>
       await showDialog<bool>(
@@ -249,6 +363,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         '此路標已有這張照片；請換個角度再拍。',
         'This view already exists. Try another angle.',
       ),
+      'markUndone': ('已復原上次標記。', 'Last mark undone.'),
       'saved': ('已在此裝置加密保存。', 'Saved encrypted on this device.'),
       'draft': (
         '這是草稿；補齊樓層及路段確認後才可重行。',
@@ -364,7 +479,16 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       );
     }
     return Semantics(
-      liveRegion: true,
+      liveRegion:
+          !_markBusy &&
+          ![
+            'capturing',
+            'captured',
+            'markUndone',
+            'saved',
+            'automaticDuplicate',
+            'automaticLowDetail',
+          ].contains(c!.notice),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Text(t(message.$1, message.$2)),
@@ -811,42 +935,15 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   Future<void> _finishAutomaticDraft() async {
     await c!.pause();
     if (!mounted || c!.notice == 'stopUnconfirmed') return;
-    _name.text = c!.name;
-    final save = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        scrollable: true,
-        title: Text(t('結束並保存草稿', 'Finish and save draft')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              t(
-                '未知樓層及未確認路段保留草稿，尚未可重行。',
-                'Unknown floors and unconfirmed connections remain a draft, unavailable for replay.',
-              ),
-            ),
-            TextField(
-              controller: _name,
-              maxLength: 120,
-              decoration: InputDecoration(labelText: t('整條路線名稱', 'Route name')),
-            ),
-          ],
+    await c!.save(activate: false, name: c!.name);
+    if (mounted) {
+      unawaited(
+        _feedback(
+          c!.notice == 'saved'
+              ? t('已保存草稿', 'Draft saved')
+              : t('未能保存', 'Save failed'),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(t('稍後保存', 'Save later')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(t('保存草稿', 'Save draft')),
-          ),
-        ],
-      ),
-    );
-    if (save == true && mounted) {
-      await c!.save(activate: false, name: _name.text);
+      );
     }
   }
 
@@ -976,14 +1073,15 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
           ),
         ),
       ),
-    button(
-      c!.automaticRecording ? '手動補記重要位置' : '記錄下一個路標',
-      c!.automaticRecording
-          ? 'Mark important point manually'
-          : 'Record next landmark',
-      c!.canCapture ? () => _editLandmark() : null,
-      primary: true,
-    ),
+    if (!c!.automaticRecording)
+      button(
+        c!.automaticRecording ? '手動補記重要位置' : '記錄下一個路標',
+        c!.automaticRecording
+            ? 'Mark important point manually'
+            : 'Record next landmark',
+        c!.canCapture ? () => _editLandmark() : null,
+        primary: true,
+      ),
     button(
       '保存草稿',
       'Save draft',
@@ -1138,9 +1236,17 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                   children: [
                     if (c!.mode == RecordedRouteMode.record &&
                         c!.automaticRecording)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.sizeOf(context).height * 0.32,
+                        ),
+                        child: SingleChildScrollView(child: _markPanel()),
+                      ),
+                    if (c!.mode == RecordedRouteMode.record &&
+                        c!.automaticRecording)
                       button(
-                        '結束錄路並命名保存',
-                        'Finish, name and save',
+                        '結束並保存',
+                        'Finish and save',
                         c!.busy || c!.nodes.isEmpty
                             ? null
                             : _finishAutomaticDraft,
@@ -1229,7 +1335,10 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                           ? null
                           : () => c!.startRecording(
                               _name.text.trim().isEmpty
-                                  ? t('未命名路線', 'Untitled route')
+                                  ? t(
+                                      '路線 ${c!.entries.length + 1}',
+                                      'Route ${c!.entries.length + 1}',
+                                    )
                                   : _name.text,
                               automatic: true,
                             ),

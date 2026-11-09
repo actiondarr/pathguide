@@ -1,0 +1,31 @@
+{
+  "dateHongKong": "2026-11-10",
+  "scope": "First source checkpoint for route mark core, not full design delivery",
+  "implemented": [
+    "six manual mark types and left/right/straight capture",
+    "automatic per-type names; no form required for primary mark",
+    "fixed bottom scrollable controls and last-manual-mark undo",
+    "schema4 typed metadata and old-schema fail-closed validation",
+    "preserve interleaved unmarked nodes; joined edge unconfirmed; media reference cleanup",
+    "VO announcement or TTS feedback; background fences; direct draft save without naming dialog"
+  ],
+  "checks": {
+    "fullFlutterPassed": 599,
+    "flagOffSkipped": 7,
+    "routeMediaFloorScoped": 53,
+    "pageVoiceOverMock": "type and success announcements exactly once",
+    "analyze": "No issues found",
+    "nativeSwiftChanged": false
+  },
+  "pending": [
+    "More mark types and text/audio notes",
+    "replay use of stored direction and manual-highlight policy",
+    "persistent failed-mark history",
+    "full accessibility focus handling and real VoiceOver/Screen Curtain tests",
+    "phone build/release/install and field acceptance"
+  ],
+  "phoneVersionUnchanged": "1.10.4+28",
+  "paidInferenceRequests": 0,
+  "backendDeployed": false,
+  "phoneInstalled": false
+}

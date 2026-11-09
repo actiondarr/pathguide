@@ -1,5 +1,7 @@
 # Backend：PathGuide 資料、服務契約與交付
 
+2026-11-10錄路標記核心來源候選：依使用者開始實作指示，接通六類標記及左轉／右轉／直行一按取相、自動命名、操作名稱／成功失敗回饋、成功觸覺、復原最近手動標記及免打字結束保存草稿。固定底部可捲操作區，保留暫停／結束可達；旁白走公告、非讀屏走TTS，背景撤回App後續語音。captured schema4保存markType／markDirection，schema1–3仍讀，舊schema帶標記欄位拒讀；復原保留背景節點，重接路段撤確認及清除未引用媒體。全App599通過／7項flag-off略過；錄路／媒體／樓層53項及錄路頁旁白公告測試已過，analyze見本輪證據。只保存來源，不升版本／裝機／部署或付費推理。更多標記／文字錄音備註、重行方向播報、完整失敗歷史與無障礙焦點及真機驗收尚未完成，不能稱Q1–Q13全交付；系統截圖卡死另案未定位。見[核心證據](../verification/route-mark-core-20261110.json)。
+
 2026-11-09內容拒絕診斷1.10.4+28：使用者提供第33／34次均disallowed-content／text-content，兩次均未交播音，後者另有快速轉向；原名詞修補未通過真人複驗。新增固定number／distance／floor／destination／safety／navigation／advice／simplified分類，text與observation前綴分開；只在原完整禁限guard拒絕後分類，多規則只取首項，不回原文、命中字或位置。手機allowlist同步，舊text-content相容。50項後端、flag-on相關103項Flutter、analyze、私人Profile／簽章及四模型SHA通過，部署核SHA；來源dddbcc6／不可變tag及prerelease核遠端後已原位裝機，首次連線中斷後重試成功，獨立核1.10.4／28及正常啟動，未清資料。沒有改prompt、放寬guard、付費重播、帳本或許可；舊兩次具體類別不能追溯，診斷改善仍待真人新結果。見[診斷證據](../verification/scene-content-detail-20261109.json)。
 
 2026-11-09使用者批准累計100次／五天：1.10.3+27將後端累計上限、手機安全limits讀取及本次模式上限同步至100，連續窗口上界由一天改五天；一次recovery仍一天。總預算US$0.50不變，原count／cost／IDs／未知歷史不得重設；費用、在途、重複、到期及新未知用量停止保留。49項後端、flag-on相關102項Flutter、analyze、私人Profile／簽章與四模型SHA通過，Swift未改。僅describeScene已部署核SHA；來源40fab8b／不可變tag及prerelease核遠端後原位裝機，獨立核1.10.3／27及正常啟動。審計CAS已生效，原32次／13331 microUSD及IDs／未知歷史保留，尚餘68次，香港時間2026-11-14 03:22:40到期，讀回無停止原因。見[許可證據](../verification/scene-100-five-days-20261109.json)。
@@ -210,6 +212,8 @@ N0仍為記憶體mock；P1另立本機加密樣例庫，可保存／重開／回
 2026-11-08自動描述client已有即時辨識內工程候選：變化／明顯轉向後穩定才取相，首次全景、之後重要變化；不固定輪詢，5秒／10秒不是已採用週期。新增本機網格／CoreMotion保守訊號與去重、45秒冷卻、本次最多3次及已知費用／未知用量顯示；不是server額度或新付費授權。後端停止帳本仍生效，整合版實機／自動付費／語音驗收待補；獨立單次入口1.8.2+17已通過真人文字／廣東話。
 
 2026-11-09結果一致性與廚廁名詞修補：完成結果用Firestore set的mergeFields:[lastResult,recentResults]作頂層欄位遮罩，完整取代lastResult子map，避免遞迴merge殘留舊rejectionReason／rejectionDetail或metrics；當日count／ids／blockedUntil、跨日trial及刪除guard維持。假DB現模擬遞迴merge，驗rejected→complete、帶detail→無detail、usage缺失、最近三項、額度歷史及刪除晚回覆；另核實真SDK序列化遮罩而不發網絡。手機／後端只對米缸、米桶、米袋、米飯、玉米、粟米、米白色、層架、層板中的米／層作例外，其他禁限仍檢查完整原文及每項detail；不擴JSON契約或自動修復欄位。未重播私人照片或原回答，兩張截圖的拒絕根因仍未知；原raw殘留只在下次完整結果才覆寫，不用付費請求清理。
+
+錄路本機契約更新（2026-11-10來源候選）：captured schema4在節點保存可選markType（landmark／junction／door／stairs／lift／toilet）及markDirection（left／right／straight，僅junction）；一併保留樓層來源欄位。schema1–3可讀，舊schema帶標記欄位拒絕，舊App拒schema4；不靜默丟棄標記或降級為完整可重行。復原只移除最近手動標記與其未被引用媒體，保留背景取樣、樓層來源及其他節點，重接路段保持未確認。沒有新增雲端API／媒體上傳／模型訓練用途，錄音備註契約與重行方向播報仍待實作。
 
 ### Qwen-VL單張試驗（2026-11-07，離線可驗；使用者回報收到雲端文字）
 

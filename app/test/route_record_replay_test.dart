@@ -35,6 +35,45 @@ void main() {
   const channel = MethodChannel('hk.pathguide/route_landmark');
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  test('typed marks survive encrypted save/reopen and old-schema downgrade rejects', () async {
+    await c.startRecording('Marks');
+    expect(await c.mark('stairs', '樓梯'), isTrue);
+    expect(await c.mark('junction', '左轉', direction: 'left'), isTrue);
+    final doc = c.document!;
+    expect(doc.toMap()['schemaVersion'], 4);
+    expect(RouteDocument.fromMap(doc.toMap()).nodes.last.direction, 'left');
+    expect(
+      () => RouteDocument.fromMap({...doc.toMap(), 'schemaVersion': 2}),
+      throwsA(isA<RouteStoreFailure>()),
+    );
+    await c.save(activate: false);
+    await c.showLibrary();
+    await c.open(c.entries.single, recording: true);
+    expect(c.nodes.last.markType, 'junction');
+    expect(c.nodes.last.direction, 'left');
+  });
+  test('undo manual mark preserves later unmarked frames and invalidates joined connection', () async {
+    await c.startRecording('Undo');
+    await c.recordLandmark('auto before', '');
+    await c.mark('door', '門口');
+    await c.recordLandmark('auto after', '');
+    expect(c.undoLastMark(), isTrue);
+    expect(c.nodes.map((n) => n.nameZh), ['auto before', 'auto after']);
+    expect(c.document!.edges.single.confirmed, isFalse);
+    expect(c.document!.views.length, 2);
+    await c.mark('stairs', '樓梯');
+    expect(c.nodes.map((n) => n.id).toSet().length, 3);
+  });
+  test('busy mark never queues a second capture', () async {
+    await c.startRecording('Busy');
+    analysisGate = Completer<void>();
+    final first = c.mark('stairs', '樓梯');
+    expect(await c.mark('door', '門口'), isFalse);
+    analysisGate!.complete();
+    expect(await first, isTrue);
+    expect(c.nodes.length, 1);
+    expect(c.nodes.single.markType, 'stairs');
+  });
   setUp(() async {
     root = await Directory.systemTemp.createTemp('record-route-');
     native = RouteNativeFixture()..attach();

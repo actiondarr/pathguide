@@ -31,11 +31,22 @@ enum FloorEvidence { unknown, confirmed, inherited, segmentConfirmed }
 
 @immutable
 class RoutePoint {
+  static const markTypes = {
+    'landmark',
+    'junction',
+    'door',
+    'stairs',
+    'lift',
+    'toilet',
+  };
+  static const directions = {'left', 'right', 'straight'};
   const RoutePoint(
     this.id,
     this.nameZh,
     this.nameEn, {
     this.floor,
+    this.markType,
+    this.direction,
     FloorEvidence? floorEvidence,
     this.floorAnchorId,
     this.isFloorContextAnchor = false,
@@ -43,6 +54,7 @@ class RoutePoint {
            floorEvidence ??
            (floor == null ? FloorEvidence.unknown : FloorEvidence.confirmed);
   final String id, nameZh, nameEn;
+  final String? markType, direction;
   final FloorRef? floor;
   final FloorEvidence floorEvidence;
   final String? floorAnchorId;
@@ -131,7 +143,12 @@ class RouteDocument {
       throw const RouteStoreFailure(RouteProblem.invalid);
     }
     for (final n in nodes) {
-      if (!validId(n.id) ||
+      if ((n.markType != null && source != RouteContentSource.captured) ||
+          (n.markType != null && !RoutePoint.markTypes.contains(n.markType)) ||
+          (n.direction != null &&
+              (n.markType != "junction" ||
+                  !RoutePoint.directions.contains(n.direction))) ||
+          !validId(n.id) ||
           n.nameZh.length > 120 ||
           n.nameEn.length > 120 ||
           (n.floor != null &&
@@ -233,6 +250,8 @@ class RouteDocument {
   Map<String, Object?> toMap() => {
     'schemaVersion': source == RouteContentSource.synthetic
         ? 1
+        : nodes.any((n) => n.markType != null)
+        ? 4
         : _hasProvenance
         ? 3
         : 2,
@@ -249,9 +268,15 @@ class RouteDocument {
       for (final n in nodes)
         {
           'id': n.id,
-          if (_hasProvenance) 'floorEvidence': n.floorEvidence.name,
-          if (_hasProvenance) 'floorAnchor': n.floorAnchorId,
-          if (_hasProvenance) 'floorContextAnchor': n.isFloorContextAnchor,
+          if (nodes.any((v) => v.markType != null)) 'markType': n.markType,
+          if (nodes.any((v) => v.markType != null))
+            'markDirection': n.direction,
+          if (_hasProvenance || nodes.any((v) => v.markType != null))
+            'floorEvidence': n.floorEvidence.name,
+          if (_hasProvenance || nodes.any((v) => v.markType != null))
+            'floorAnchor': n.floorAnchorId,
+          if (_hasProvenance || nodes.any((v) => v.markType != null))
+            'floorContextAnchor': n.isFloorContextAnchor,
           'zh': n.nameZh,
           'en': n.nameEn,
           'floor': n.floor == null
@@ -288,11 +313,11 @@ class RouteDocument {
         v['source'] == 'synthetic' &&
         !v.containsKey('views');
     final captured =
-        [2, 3].contains(v['schemaVersion']) && v['source'] == 'captured';
+        [2, 3, 4].contains(v['schemaVersion']) && v['source'] == 'captured';
     if ((!synthetic && !captured) || v['direction'] != 'recorded') {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
-    if (v['schemaVersion'] != 3 &&
+    if (![3, 4].contains(v['schemaVersion']) &&
         (v['nodes'] as List).any(
           (n) =>
               n is Map &&
@@ -301,6 +326,14 @@ class RouteDocument {
                 'floorAnchor',
                 'floorContextAnchor',
               ].any(n.containsKey),
+        )) {
+      throw const RouteStoreFailure(RouteProblem.incompatible);
+    }
+    if (v['schemaVersion'] != 4 &&
+        (v['nodes'] as List).any(
+          (n) =>
+              n is Map &&
+              (n.containsKey('markType') || n.containsKey('markDirection')),
         )) {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
@@ -327,13 +360,17 @@ class RouteDocument {
             n['id'] as String,
             n['zh'] as String,
             n['en'] as String,
-            floorEvidence: v['schemaVersion'] == 3
+            markType: v['schemaVersion'] == 4 ? n['markType'] as String? : null,
+            direction: v['schemaVersion'] == 4
+                ? n['markDirection'] as String?
+                : null,
+            floorEvidence: [3, 4].contains(v['schemaVersion'])
                 ? _decodeFloorEvidence(n['floorEvidence'])
                 : null,
-            isFloorContextAnchor: v['schemaVersion'] == 3
+            isFloorContextAnchor: [3, 4].contains(v['schemaVersion'])
                 ? (n['floorContextAnchor'] as bool? ?? false)
                 : false,
-            floorAnchorId: v['schemaVersion'] == 3
+            floorAnchorId: [3, 4].contains(v['schemaVersion'])
                 ? n['floorAnchor'] as String?
                 : null,
             floor: n['floor'] == null

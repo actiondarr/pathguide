@@ -162,6 +162,8 @@ class RecordedRouteController extends ChangeNotifier {
         n.id,
         n.nameZh,
         n.nameEn,
+        markType: n.markType,
+        direction: n.direction,
         floor: floor,
         floorEvidence: FloorEvidence.segmentConfirmed,
         floorAnchorId: anchorId,
@@ -460,7 +462,15 @@ class RecordedRouteController extends ChangeNotifier {
     bool automatic = false,
     bool inheritContext = false,
     bool connectionConfirmed = true,
+    String? markType,
+    String? direction,
   }) async {
+    if ((markType != null && !RoutePoint.markTypes.contains(markType)) ||
+        (direction != null &&
+            (markType != 'junction' ||
+                !RoutePoint.directions.contains(direction)))) {
+      return false;
+    }
     if (!canCapture || name.trim().isEmpty || name.length > 120) return false;
     final existing = nodeId == null
         ? null
@@ -525,7 +535,11 @@ class RecordedRouteController extends ChangeNotifier {
           }
         }
       }
-      final id = nodeId ?? 'n-${_nodes.length + 1}';
+      var serial = 1;
+      while (_nodes.any((n) => n.id == 'n-$serial')) {
+        serial++;
+      }
+      final id = nodeId ?? 'n-$serial';
       if (_views.any((v) => v.nodeId == id && v.imageSha == value.imageSha)) {
         notice = 'duplicate';
         return false;
@@ -559,6 +573,8 @@ class RecordedRouteController extends ChangeNotifier {
             id,
             name.trim(),
             automatic ? 'Landmark ${_nodes.length + 1}' : name.trim(),
+            markType: markType,
+            direction: direction,
             floor: f,
             floorEvidence: inherited ? FloorEvidence.inherited : null,
             floorAnchorId: inherited ? _recordingAnchor : null,
@@ -607,6 +623,47 @@ class RecordedRouteController extends ChangeNotifier {
     return false;
   }
 
+  Future<bool> mark(String type, String label, {String? direction}) async {
+    if (!canCapture || mode != RecordedRouteMode.record) return false;
+    final count = _nodes.where((n) => n.markType == type).length + 1;
+    return recordLandmark(
+      '$label $count',
+      '',
+      inheritContext: true,
+      markType: type,
+      direction: direction,
+    );
+  }
+
+  bool get canUndoMark =>
+      canEdit &&
+      mode == RecordedRouteMode.record &&
+      _nodes.any((n) => n.markType != null);
+  bool undoLastMark() {
+    if (!canUndoMark) return false;
+    final index = _nodes.lastIndexWhere((n) => n.markType != null);
+    final removed = _nodes.removeAt(index);
+    final oldEdges = List<RouteSegment>.of(_edges);
+    _edges.clear();
+    for (var i = 1; i < _nodes.length; i++) {
+      final matching = oldEdges.where(
+        (e) => e.fromId == _nodes[i - 1].id && e.toId == _nodes[i].id,
+      );
+      _edges.add(
+        matching.isNotEmpty
+            ? matching.first
+            : RouteSegment(_nodes[i - 1].id, _nodes[i].id, ConnectorMode.walk),
+      );
+    }
+    _views.removeWhere((v) => v.nodeId == removed.id);
+    final used = _views.expand((v) => [v.imageSha, v.featureSha]).toSet();
+    _media.removeWhere((key, _) => !used.contains(key));
+    _dirty = true;
+    notice = 'markUndone';
+    _changed();
+    return true;
+  }
+
   void updateNode(
     int index,
     String name,
@@ -636,6 +693,8 @@ class RecordedRouteController extends ChangeNotifier {
         previous.id,
         name.trim(),
         name.trim(),
+        markType: previous.markType,
+        direction: previous.direction,
         floor: f,
         floorEvidence: preserve ? previous.floorEvidence : null,
         floorAnchorId: preserve ? previous.floorAnchorId : null,
@@ -655,7 +714,13 @@ class RecordedRouteController extends ChangeNotifier {
           if (n.floorAnchorId == null) continue;
           final anchor = _nodes.indexWhere((p) => p.id == n.floorAnchorId);
           if (anchor > index) continue;
-          _nodes[j] = RoutePoint(n.id, n.nameZh, n.nameEn);
+          _nodes[j] = RoutePoint(
+            n.id,
+            n.nameZh,
+            n.nameEn,
+            markType: n.markType,
+            direction: n.direction,
+          );
           final e = _edges[j - 1];
           _edges[j - 1] = RouteSegment(
             e.fromId,
