@@ -1,0 +1,19 @@
+{
+  "dateHongKong": "2026-11-10",
+  "phase": "Design interview, partial decisions only",
+  "ownerAccepted": [
+    "Q1 background samples plus manual important-point marks",
+    "Q2 one press delegates capture; generated type/index name, successful audible feedback, undo, optional later rename"
+  ],
+  "notAcceptedYet": [
+    "button taxonomy",
+    "direction semantics",
+    "capture failure and undo scope",
+    "audio/text annotations",
+    "accessibility and trigger placement"
+  ],
+  "implementationChanged": false,
+  "privateImageCopiedOrUploaded": false,
+  "paidInferenceRequests": 0,
+  "newPhoneVersion": false
+}
