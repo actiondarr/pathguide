@@ -3,14 +3,16 @@
   "phase": "Design interview, partial decisions only",
   "ownerAccepted": [
     "Q1 background samples plus manual important-point marks",
-    "Q2 one press delegates capture; generated type/index name, successful audible feedback, undo, optional later rename"
+    "Q2 one press delegates capture; generated type/index name, successful audible feedback, undo, optional later rename",
+    "Q3 six primary landmark types; other facilities/audio/text under More",
+    "Q4 direction keys record a location-bound replay action relative to recording direction; not instant localization"
   ],
   "notAcceptedYet": [
-    "button taxonomy",
-    "direction semantics",
     "capture failure and undo scope",
-    "audio/text annotations",
-    "accessibility and trigger placement"
+    "direction key placement, timing and reverse replay",
+    "audio/text annotation semantics",
+    "accessibility and trigger placement",
+    "association and deduplication with background samples"
   ],
   "implementationChanged": false,
   "privateImageCopiedOrUploaded": false,
