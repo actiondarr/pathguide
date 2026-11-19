@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:pathguide/route_memory/encrypted_route_store.dart';
 import 'package:pathguide/route_memory/recorded_route_controller.dart';
 import 'package:pathguide/route_memory/cross_floor_contract.dart';
+import 'package:pathguide/route_memory/route_localizer.dart';
 import 'package:pathguide/route_memory/route_package.dart';
 import 'package:pathguide/route_memory/route_observation_source.dart';
 
@@ -444,6 +445,120 @@ void main() {
     expect(c.notice, 'wrongNode');
     expect(c.actualFloor, isNull);
   });
+  test(
+    'replay uses fresh manual directions only for confirmed walk segments',
+    () async {
+      await c.startRecording('Directions');
+      for (final direction in ['left', 'right', 'straight', 'left']) {
+        expect(
+          await c.recordLandmark(
+            direction,
+            'G',
+            confirmed: true,
+            markType: 'junction',
+            direction: direction,
+          ),
+          isTrue,
+        );
+      }
+      expect(
+        await c.recordLandmark(
+          'Exit',
+          '3F',
+          confirmed: true,
+          mode: ConnectorMode.elevator,
+        ),
+        isTrue,
+      );
+      expect(
+        await c.recordLandmark('Door', '3F', confirmed: true, markType: 'door'),
+        isTrue,
+      );
+      expect(
+        await c.recordLandmark(
+          'End',
+          '3F',
+          confirmed: true,
+          markType: 'junction',
+          direction: 'right',
+        ),
+        isTrue,
+      );
+      await c.save(activate: true);
+      await c.open((await store.list()).routes.single);
+      await c.resume();
+      expect(c.replayDirection, isNull);
+
+      for (final (index, direction) in ['left', 'right', 'straight'].indexed) {
+        match = index;
+        expect(
+          await c.checkPosition(
+            'n-${index + 1}',
+            'G',
+            directionConfirmed: true,
+          ),
+          isTrue,
+        );
+        expect(c.confirmedReplayMark?.id, 'n-${index + 1}');
+        expect(c.replayDirection, direction);
+      }
+      expect(
+        await c.checkPosition('n-3', '3F', directionConfirmed: true),
+        isFalse,
+      );
+      expect(c.replayDirection, isNull);
+      expect(
+        await c.checkPosition('n-3', 'G', directionConfirmed: false),
+        isFalse,
+      );
+      expect(c.replayDirection, isNull);
+      ambiguous = true;
+      expect(
+        await c.checkPosition('n-3', 'G', directionConfirmed: true),
+        isFalse,
+      );
+      expect(c.replayDirection, isNull);
+      ambiguous = false;
+      expect(
+        await c.checkPosition('n-2', 'G', directionConfirmed: true),
+        isFalse,
+      );
+      expect(c.replayDirection, isNull);
+      await c.checkPosition('n-3', 'G', directionConfirmed: true);
+      expect(c.replayDirection, 'straight');
+      await Future<void>.delayed(RouteLocalizer.validity);
+      expect(c.replayDirection, isNull);
+      expect(c.actualNodeId, isNull);
+      await c.checkPosition('n-3', 'G', directionConfirmed: true);
+      c.clearReplayPosition();
+      expect(c.replayDirection, isNull);
+      expect(c.actualNodeId, isNull);
+      await c.checkPosition('n-3', 'G', directionConfirmed: true);
+      await c.pause();
+      expect(c.replayDirection, isNull);
+      await c.resume();
+      expect(c.replayDirection, isNull);
+
+      match = 3;
+      await c.checkPosition('n-4', 'G', directionConfirmed: true);
+      expect(c.confirmedReplayMark?.markType, 'junction');
+      expect(c.replayDirection, isNull);
+      expect(c.enterConnector(), isTrue);
+      expect(c.confirmedReplayMark, isNull);
+      match = 4;
+      await c.checkPosition('n-5', '3F', directionConfirmed: true);
+      expect(c.actualNodeId, 'n-5');
+      expect(c.confirmedReplayMark, isNull);
+      match = 5;
+      await c.checkPosition('n-6', '3F', directionConfirmed: true);
+      expect(c.confirmedReplayMark?.markType, 'door');
+      expect(c.replayDirection, isNull);
+      match = 6;
+      await c.checkPosition('n-7', '3F', directionConfirmed: true);
+      expect(c.atArrival, isTrue);
+      expect(c.replayDirection, isNull);
+    },
+  );
   test(
     'background during analysis rejects late capture and does not restart',
     () async {

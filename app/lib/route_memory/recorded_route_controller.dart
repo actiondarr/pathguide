@@ -257,6 +257,22 @@ class RecordedRouteController extends ChangeNotifier {
   String? get actualNodeId => _localizer?.actualNodeId;
   FloorRef? get actualFloor => _localizer?.actualFloor;
   FloorRef? get expectedFloor => _localizer?.expectedFloor;
+  RoutePoint? get confirmedReplayMark {
+    final index = _index;
+    if (!canCheck || index == null) return null;
+    final point = _nodes[index];
+    return point.id == actualNodeId && point.markType != null ? point : null;
+  }
+
+  String? get replayDirection {
+    final point = confirmedReplayMark;
+    if (point == null || _index! >= _edges.length) return null;
+    final edge = _edges[_index!];
+    return edge.confirmed && edge.mode == ConnectorMode.walk
+        ? point.direction
+        : null;
+  }
+
   RoutePoint? get nextPoint => _index != null && _index! + 1 < _nodes.length
       ? _nodes[_index! + 1]
       : null;
@@ -908,14 +924,14 @@ class RecordedRouteController extends ChangeNotifier {
     }
   }
 
-  Future<void> checkPosition(
+  Future<bool> checkPosition(
     String nodeId,
     String floor, {
     required bool directionConfirmed,
   }) async {
-    if (!canCheck || _localizer == null) return;
+    if (!canCheck || _localizer == null) return false;
     final candidates = _nodes.where((n) => n.id == nodeId).toList();
-    if (candidates.length != 1) return;
+    if (candidates.length != 1) return false;
     final node = candidates.single;
     _localizer!.pause();
     if (_transition != null) {
@@ -923,7 +939,7 @@ class RecordedRouteController extends ChangeNotifier {
       if (edge.toId != nodeId) {
         notice = 'wrongNode';
         _changed();
-        return;
+        return false;
       }
       _localizer!.expectFloor(
         node.floor,
@@ -938,7 +954,7 @@ class RecordedRouteController extends ChangeNotifier {
         !directionConfirmed) {
       notice = !directionConfirmed ? 'wrongDirection' : 'wrongFloor';
       _changed();
-      return;
+      return false;
     }
     final op = _epoch, watch = Stopwatch()..start();
     _busy = true;
@@ -953,7 +969,7 @@ class RecordedRouteController extends ChangeNotifier {
           _media[v.featureSha] ??
               (throw const RouteStoreFailure(RouteProblem.corrupt)),
       ]);
-      if (!_current(op) || !_running) return;
+      if (!_current(op) || !_running) return false;
       final ticket = _localizer!.beginObservation(
         frameAge:
             Duration(milliseconds: (frame.observation['ageMs'] as num).ceil()) +
@@ -975,18 +991,19 @@ class RecordedRouteController extends ChangeNotifier {
       );
       if (_localizer!.result != RouteMatchState.candidate) {
         notice = _localizer!.result.name;
-        return;
+        return false;
       }
       _localizer!.confirmFloor(node.floor!);
       _localizer!.confirmExit(directionConfirmed: true);
       if (_localizer!.actualNodeId != nodeId) {
         _localizer!.pause();
         notice = 'wrongNode';
-        return;
+        return false;
       }
       _index = _nodes.indexOf(node);
       _transition = null;
       notice = atArrival ? 'arrival' : 'confirmed';
+      return true;
     } catch (e) {
       if (_current(op)) {
         _localizer?.pause();
@@ -998,6 +1015,7 @@ class RecordedRouteController extends ChangeNotifier {
         _changed();
       }
     }
+    return false;
   }
 
   bool enterConnector() {
@@ -1020,6 +1038,13 @@ class RecordedRouteController extends ChangeNotifier {
     notice = 'transitioning';
     _changed();
     return true;
+  }
+
+  void clearReplayPosition() {
+    if (!canCheck || actualNodeId == null) return;
+    _localizer!.pause();
+    notice = 'ready';
+    _changed();
   }
 
   Future<void> confirmArrival() async {

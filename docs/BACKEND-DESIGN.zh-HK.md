@@ -82,7 +82,7 @@
 | 資料 | 讀寫契約 |
 |---|---|
 | 版本與媒體 | 錄製或明確更新時寫必要 JPEG／Vision feature，引用綁 SHA、尺寸、保存時間、擷取來源及特徵版本。普通重行只讀。先驗引用與配額，再寫暫存，最後原子更新 catalog。中斷或額滿保護穩定版本。刪除先立 tombstone 再清各版本與媒體。 |
-| 帶標記路線 | captured schema 4 增加 `markType`（landmark／junction／door／stairs／lift／toilet）及 `markDirection`（junction 限 left／right／straight），沿用 `floorEvidence`、`floorAnchor`、`floorContextAnchor`。現版可讀 schema 1–3。舊 App 拒讀 schema 4，回退須驗相容。方向現階段只保存。復原移除最近手動標記及未被引用的媒體，重接路段保持未確認。 |
+| 帶標記路線 | captured schema 4 增加 `markType`（landmark／junction／door／stairs／lift／toilet）及 `markDirection`（junction 限 left／right／straight），沿用 `floorEvidence`、`floorAnchor`、`floorContextAnchor`。現版可讀 schema 1–3。舊 App 拒讀 schema 4，回退須驗相容。開發分支在有效的路標、樓層及面向確認後，從當前版本讀取標記和已確認步行段的方向。復原移除最近手動標記及未被引用的媒體，重接路段保持未確認。 |
 | 樓層與轉層 | 區分未知、明確確認、沿用及整段核實。沿用引用較早的有效同層確認點，須核實才可啟用。設備入口後作廢當前樓層，出口再確認。矛盾、暫停、背景、保存或重開均撤回當前上下文。有向邊只記已走方向，跨層須有入口、出口、設備及樓層來源。回程另驗。 |
 | 觀察與提示 | 普通相機提供 Vision feature print 與 OCR 候選。路線版本、方向、時序及有效樓層共同約束匹配，錯層、相似出口、過期或特徵不相容時保留未知。正式跨層及障礙提示須按旅程、世代、版本、來源序列及有效期核驗。P0 合成結果適用於工程夾具。 |
 | 裝置保護 | 路線用 AES-GCM 與獨立裝置金鑰，與待傳照片隔離。iOS 檔案 Complete 保護並排除備份，Keychain 為 WhenUnlockedThisDeviceOnly。重裝、遺失金鑰或換機後的復原無保證。 |
@@ -185,6 +185,8 @@
 | B17 場景描述／S1 | Auth／App Check → 帳本預留 → 有界 JPEG → 完整驗證。驗有效許可、內容拒絕、取消、未知用量及讀屏起音。 |
 
 ## 9. 維護與追溯
+
+2026 年 11 月 20 日補記重行從現有 schema 4 讀取標記及方向的條件。重行沿用本機版本及媒體讀取契約。[工程證據](../verification/route-replay-marks-20261120.json)
 
 2026 年 11 月 20 日補記路線版本啟用與真人重行驗收的關係。
 

@@ -425,6 +425,199 @@ void main() {
       messenger.setMockMethodCallHandler(channel, null);
     },
   );
+  for (final useReader in [true, false]) {
+    testWidgets(
+      'replay confirms a junction and uses one speech output (reader: $useReader)',
+      (t) async {
+        final language = useReader ? AppLanguage.chinese : AppLanguage.english;
+        String label(String zh, String en) => useReader ? zh : en;
+        t.platformDispatcher.accessibilityFeaturesTestValue =
+            FakeAccessibilityFeatures(
+              accessibleNavigation: useReader,
+              supportsAnnounce: useReader,
+            );
+        addTearDown(t.platformDispatcher.clearAccessibilityFeaturesTestValue);
+        t.view.physicalSize = const Size(320, 568);
+        t.view.devicePixelRatio = 1;
+        t.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(t.view.resetPhysicalSize);
+        addTearDown(t.view.resetDevicePixelRatio);
+        addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        final native = RouteNativeFixture()..attach();
+        const landmark = MethodChannel('hk.pathguide/route_landmark');
+        const speech = MethodChannel('flutter_tts');
+        final announced = <String>[], spoken = <String>[];
+        var speechStops = 0;
+        messenger.setMockDecodedMessageHandler(SystemChannels.accessibility, (
+          message,
+        ) async {
+          if (message is Map && message['type'] == 'announce') {
+            announced.add((message['data'] as Map)['message'] as String);
+          }
+          return null;
+        });
+        messenger.setMockMethodCallHandler(speech, (call) async {
+          if (call.method == 'getLanguages') return ['en-HK'];
+          if (call.method == 'speak') spoken.add(call.arguments as String);
+          if (call.method == 'stop') speechStops++;
+          return 1;
+        });
+        messenger.setMockMethodCallHandler(landmark, (call) async {
+          if (call.method == 'cancel') return null;
+          final args = Map<String, Object?>.from(call.arguments as Map);
+          final feature = Uint8List.fromList([1]);
+          return {
+            ...args,
+            'status': 'ok',
+            if (call.method == 'compare')
+              'distances': [0.0, 20.0]
+            else ...{
+              'feature': feature,
+              'featureSha': sha256.convert(feature).toString(),
+              'text': <String>[],
+              'ocrRevision': 3,
+              'manualFloorConfirmationRequired': true,
+            },
+          };
+        });
+        addTearDown(() {
+          native.detach();
+          messenger.setMockMethodCallHandler(landmark, null);
+          messenger.setMockMethodCallHandler(speech, null);
+          messenger.setMockDecodedMessageHandler(
+            SystemChannels.accessibility,
+            null,
+          );
+        });
+        late RecordedRouteController c;
+        await t.runAsync(() async {
+          final root = await Directory.systemTemp.createTemp(
+            'direction-replay-ui-',
+          );
+          addTearDown(() => root.delete(recursive: true));
+          final store = await EncryptedRouteStore.open(
+            root: root,
+            vault: Vault(),
+          );
+          final map = capturedDocument().toMap();
+          final points = map['nodes'] as List<Map<String, Object?>>;
+          map['schemaVersion'] = 4;
+          for (final point in points) {
+            point['floorEvidence'] = 'confirmed';
+          }
+          points.first.addAll({
+            'zh': '左轉 1',
+            'en': 'Turn left 1',
+            'markType': 'junction',
+            'markDirection': 'left',
+          });
+          points.last.addAll({
+            'zh': '東面路口',
+            'en': 'East junction',
+            'markType': 'junction',
+            'markDirection': 'right',
+          });
+          final doc = RouteDocument.fromMap(map);
+          await store.save(
+            doc,
+            token: store.capture(doc.id),
+            expectedRevision: 0,
+            activate: true,
+            media: capturedMedia(),
+          );
+          c = RecordedRouteController(
+            store: store,
+            source: RouteObservationSource(supported: true),
+          );
+          await c.open((await store.list()).routes.single);
+        });
+
+        Future<void> reveal(Finder finder, {double delta = 100}) async {
+          await t.scrollUntilVisible(
+            finder,
+            delta,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await t.ensureVisible(finder);
+          await t.pumpAndSettle();
+        }
+
+        await t.pumpWidget(
+          MaterialApp(
+            theme: buildAppTheme(),
+            home: RouteJourneyPage(
+              settings: AppSettings.memory(language: language),
+              createController: () async => c,
+              previewBuilder: (_) => const SizedBox(),
+            ),
+          ),
+        );
+        for (
+          var i = 0;
+          i < 200 && find.byType(Scrollable).evaluate().isEmpty;
+          i++
+        ) {
+          await t.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await t.pump();
+        }
+        await t.tap(find.text(label('開始重行', 'Start replay')));
+        await t.pumpAndSettle();
+        final message = label(
+          '已確認路口。錄製路線在這裡左轉。',
+          'Junction confirmed. The recorded route turns left here.',
+        );
+        final floor = find.byType(TextField);
+        final confirm = find.text(
+          label('拍攝並確認此路標', 'Capture and confirm landmark'),
+        );
+        await reveal(find.byType(DropdownButtonFormField<String>));
+        expect(find.text(label('路口 1', 'Junction 1')), findsOneWidget);
+        expect(find.text(label('左轉 1', 'Turn left 1')), findsNothing);
+        final selector = t.widget<DropdownButton<String>>(
+          find.byType(DropdownButton<String>),
+        );
+        expect(
+          (selector.items!.last.child as Text).data,
+          label('東面路口', 'East junction'),
+        );
+
+        await reveal(floor);
+        await t.enterText(floor, 'G');
+        await reveal(confirm);
+        await t.tap(confirm);
+        await t.pumpAndSettle();
+        expect(c.notice, 'wrongDirection');
+        expect(announced, isEmpty);
+        expect(spoken, isEmpty);
+
+        await reveal(floor, delta: -100);
+        await t.enterText(floor, 'G');
+        final attestation = find.byType(CheckboxListTile);
+        await reveal(attestation);
+        await t.tap(attestation);
+        await reveal(confirm);
+        await t.tap(confirm);
+        await t.pumpAndSettle();
+        expect(c.replayDirection, 'left');
+        await reveal(find.text(message), delta: -100);
+        expect(find.text(message), findsOneWidget);
+        expect(announced, useReader ? [message] : isEmpty);
+        expect(spoken, useReader ? isEmpty : [message]);
+        final stopsBeforePause = speechStops;
+        await t.tap(find.text(label('暫停', 'Pause')));
+        await t.pumpAndSettle();
+        expect(find.text(message), findsNothing);
+        expect(speechStops, stopsBeforePause + 1);
+        expect(t.takeException(), isNull);
+        await t.pumpWidget(const SizedBox());
+      },
+    );
+  }
+
   testWidgets('corrupt captured route never advertises replay availability', (
     t,
   ) async {

@@ -31,6 +31,17 @@ class RouteJourneyPage extends StatefulWidget {
 
 class _RouteJourneyPageState extends State<RouteJourneyPage>
     with WidgetsBindingObserver {
+  static const _markTypes = {
+    'landmark': ('一般路標', 'Landmark'),
+    'junction': ('路口', 'Junction'),
+    'door': ('門口', 'Door'),
+    'stairs': ('樓梯', 'Stairs'),
+    'lift': ('升降機', 'Lift'),
+    'toilet': ('廁所', 'Toilet'),
+  };
+  static final _generatedDirectionName = RegExp(
+    r'^(?:左轉|右轉|直行|Turn left|Turn right|Straight) [0-9]+$',
+  );
   RecordedRouteController? c;
   final _name = TextEditingController(), _actualFloor = TextEditingController();
   bool _loading = true,
@@ -41,12 +52,13 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   bool _allowPop = false;
   bool _markBusy = false;
   late final _feedbackTts = FlutterTtsSpeaker(
-    cantoneseOnly: true,
+    cantoneseOnly: widget.settings.language == AppLanguage.chinese,
     language: widget.settings.language,
     speechRate: widget.settings.speechSpeed.rate,
   );
   bool _feedbackActive = true;
   int _feedbackEpoch = 0;
+  RoutePoint? _replayFeedbackPoint;
   String? _target;
   ({
     String name,
@@ -68,7 +80,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     _load();
     // Fresh position evidence expires independently of button presses.
     _expiry = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && c?.mode == RecordedRouteMode.replay) setState(() {});
+      if (c?.mode == RecordedRouteMode.replay) _changed();
     });
   }
 
@@ -97,7 +109,21 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (c?.mode == RecordedRouteMode.replay && c?.running == false) {
+      _direction = false;
+    }
+    if (_replayFeedbackPoint != null &&
+        !identical(_replayFeedbackPoint, c?.confirmedReplayMark)) {
+      _stopFeedback();
+    }
+    setState(() {});
+  }
+
+  void _stopFeedback() {
+    _replayFeedbackPoint = null;
+    _feedbackEpoch++;
+    unawaited(_feedbackTts.stop());
   }
 
   @override
@@ -112,8 +138,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       _feedbackActive = false;
-      _feedbackEpoch++;
-      unawaited(_feedbackTts.stop());
+      _stopFeedback();
       c?.setForeground(false);
     }
   }
@@ -124,15 +149,14 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     _expiry?.cancel();
     c?.removeListener(_changed);
     c?.dispose();
-    _feedbackEpoch++;
-    unawaited(_feedbackTts.stop());
+    _stopFeedback();
     _name.dispose();
     _actualFloor.dispose();
     super.dispose();
   }
 
-  Future<void> _feedback(String text) async {
-    if (!mounted || !_feedbackActive) return;
+  Future<void> _feedback(String text, {bool Function()? isCurrent}) async {
+    if (!mounted || !_feedbackActive || isCurrent?.call() == false) return;
     final ticket = ++_feedbackEpoch;
     try {
       if (MediaQuery.accessibleNavigationOf(context)) {
@@ -145,7 +169,9 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         }
       } else {
         await _feedbackTts.initialize();
-        if (mounted && ticket == _feedbackEpoch) await _feedbackTts.speak(text);
+        if (mounted && ticket == _feedbackEpoch && isCurrent?.call() != false) {
+          await _feedbackTts.speak(text);
+        }
       }
     } catch (_) {
       /* The persistent accessible status remains available. */
@@ -177,23 +203,16 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     spacing: 8,
     runSpacing: 8,
     children: [
-      for (final item in const [
-        ('landmark', '一般路標', 'Landmark'),
-        ('junction', '路口', 'Junction'),
-        ('door', '門口', 'Door'),
-        ('stairs', '樓梯', 'Stairs'),
-        ('lift', '升降機', 'Lift'),
-        ('toilet', '廁所', 'Toilet'),
-      ])
+      for (final item in _markTypes.entries)
         SizedBox(
           width: 120,
           child: FilledButton(
-            key: ValueKey('mark-${item.$1}'),
+            key: ValueKey('mark-${item.key}'),
             onPressed: c!.running
-                ? () => _mark(item.$1, t(item.$2, item.$3))
+                ? () => _mark(item.key, t(item.value.$1, item.value.$2))
                 : null,
             style: FilledButton.styleFrom(minimumSize: const Size(56, 56)),
-            child: Text(t(item.$2, item.$3)),
+            child: Text(t(item.value.$1, item.value.$2)),
           ),
         ),
       for (final item in const [
@@ -340,6 +359,29 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       child: Text(text, style: Theme.of(context).textTheme.titleLarge),
     ),
   );
+
+  String _replayMarkMessage(
+    RecordedRouteController controller,
+    RoutePoint mark,
+  ) {
+    final type = _markTypes[mark.markType]!;
+    final confirmed = t('已確認${type.$1}。', '${type.$2} confirmed.');
+    return confirmed +
+        switch (controller.replayDirection) {
+          'left' => t('錄製路線在這裡左轉。', ' The recorded route turns left here.'),
+          'right' => t('錄製路線在這裡右轉。', ' The recorded route turns right here.'),
+          'straight' => t(
+            '錄製路線在這裡直行。',
+            ' The recorded route continues straight here.',
+          ),
+          _ when controller.atArrival => t(
+            '請自行確認已到達。',
+            ' Confirm arrival yourself.',
+          ),
+          _ => '',
+        };
+  }
+
   Widget _status() {
     final controller = c!;
     final messages = <String, (String, String)>{
@@ -478,9 +520,11 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         'Position evidence expired. Confirm the landmark again.',
       );
     }
+    final mark = controller.confirmedReplayMark;
     return Semantics(
       liveRegion:
           !_markBusy &&
+          mark == null &&
           ![
             'capturing',
             'captured',
@@ -1096,13 +1140,49 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       primary: true,
     ),
   ];
+  String _replayPointLabel(RoutePoint point, int index) {
+    // Direction buttons used to put the maneuver in the saved point name.
+    // Keep that text out of selectors and previews before position is confirmed.
+    final name = t(point.nameZh, point.nameEn);
+    return point.direction != null && _generatedDirectionName.hasMatch(name)
+        ? t('路口 ${index + 1}', 'Junction ${index + 1}')
+        : name;
+  }
+
+  Future<void> _checkReplayPosition(String target) async {
+    final controller = c!;
+    if (!controller.canCheck) return;
+    final checking = controller.checkPosition(
+      target,
+      _actualFloor.text,
+      directionConfirmed: _direction,
+    );
+    setState(() {
+      _target = target;
+      _actualFloor.clear();
+      _direction = false;
+    });
+    if (!await checking || !mounted) return;
+    final mark = controller.confirmedReplayMark;
+    if (mark == null || mark.id != target) return;
+    _replayFeedbackPoint = mark;
+    unawaited(
+      _feedback(
+        _replayMarkMessage(controller, mark),
+        isCurrent: () => identical(controller.confirmedReplayMark, mark),
+      ),
+    );
+  }
+
   List<Widget> _replay() {
     final controller = c!, exit = c!.transitionExit;
+    final nodes = controller.nodes, next = controller.nextPoint;
+    final mark = controller.confirmedReplayMark;
     final target =
         exit?.id ??
-        (_target != null && controller.nodes.any((n) => n.id == _target)
+        (_target != null && nodes.any((n) => n.id == _target)
             ? _target
-            : controller.nodes.firstOrNull?.id);
+            : nodes.firstOrNull?.id);
     return [
       heading(controller.name),
       Text(
@@ -1118,9 +1198,9 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         Text(
           '${t('預期出口樓層', 'Expected exit floor')}: ${controller.expectedFloor!.label}',
         ),
-      if (controller.nextPoint != null)
+      if (next != null && controller.actualNodeId != null)
         Text(
-          '${t('記錄的下一路標', 'Recorded next landmark')}: ${controller.nextPoint!.nameZh}',
+          '${t('記錄的下一路標', 'Recorded next landmark')}: ${_replayPointLabel(next, nodes.indexOf(next))}',
         ),
       if (controller.replayAvailable && !controller.finished) ...[
         DropdownButtonFormField<String>(
@@ -1134,16 +1214,27 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             ),
           ),
           items: [
-            for (final n in controller.nodes)
-              DropdownMenuItem(value: n.id, child: Text(n.nameZh)),
+            for (final (index, point) in nodes.indexed)
+              DropdownMenuItem(
+                value: point.id,
+                child: Text(
+                  _replayPointLabel(point, index),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
           ],
           onChanged: exit != null || controller.busy
               ? null
-              : (v) => setState(() {
-                  _target = v;
-                  _actualFloor.clear();
-                  _direction = false;
-                }),
+              : (v) {
+                  if (v == target) return;
+                  setState(() {
+                    _target = v;
+                    _actualFloor.clear();
+                    _direction = false;
+                  });
+                  controller.clearReplayPosition();
+                },
         ),
         TextField(
           controller: _actualFloor,
@@ -1166,23 +1257,23 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             ),
           ),
         ),
+        if (mark != null)
+          Semantics(
+            liveRegion:
+                MediaQuery.accessibleNavigationOf(context) &&
+                !MediaQuery.supportsAnnounceOf(context),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(_replayMarkMessage(controller, mark)),
+              ),
+            ),
+          ),
         button(
           '拍攝並確認此路標',
           'Capture and confirm landmark',
           controller.canCheck && target != null
-              ? () async {
-                  await controller.checkPosition(
-                    target,
-                    _actualFloor.text,
-                    directionConfirmed: _direction,
-                  );
-                  if (mounted) {
-                    setState(() {
-                      _actualFloor.clear();
-                      _direction = false;
-                    });
-                  }
-                }
+              ? () => _checkReplayPosition(target)
               : null,
           primary: true,
         ),
