@@ -90,6 +90,8 @@
 
 [路線格式](../app/lib/route_memory/route_package.dart) · [加密版本庫](../app/lib/route_memory/encrypted_route_store.dart) · [媒體政策](../configs/planning/codex-p3a-storage-20261105.json) · [特徵證據](../verification/codex-p3b-landmarks-20261105.json) · [標記證據](../verification/route-mark-core-20261110.json)
 
+路線版本的啟用條件目前核對資料完整度，供試行。真人重行驗收另按原路線版本與行進方向記證據，App 內的驗收狀態待實作。[重行驗收狀態](FRONTEND-DESIGN.zh-HK.md#route-replay-acceptance)
+
 <a id="8-導航資料與使用說明發佈前草稿重點"></a>
 
 ### 地圖、語音與深度資料
@@ -183,5 +185,7 @@
 | B17 場景描述／S1 | Auth／App Check → 帳本預留 → 有界 JPEG → 完整驗證。驗有效許可、內容拒絕、取消、未知用量及讀屏起音。 |
 
 ## 9. 維護與追溯
+
+2026 年 11 月 20 日補記路線版本啟用與真人重行驗收的關係。
 
 2026-11-20 依程式、舊規格與最近收據整理。保留同意、覆核、保留期、路線相容、模型回退及發佈的有效規格。已到期的場景窗口按歷史許可標示。歷史逐版結果與診斷可從 Git 及 [verification](../verification/) 追溯。 [上一次整理證據](../verification/docs-current-cleanup-20261110.json)
