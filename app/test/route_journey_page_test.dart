@@ -132,7 +132,7 @@ void main() {
     );
   }
   testWidgets(
-    'automatic entry needs no point form, finish names and reopens a real draft',
+    'automatic entry and more marks need no point form and reopen a real draft',
     (t) async {
       t.platformDispatcher.accessibilityFeaturesTestValue =
           const FakeAccessibilityFeatures(
@@ -253,6 +253,65 @@ void main() {
       await t.pump();
       expect(c.nodes.length, 1);
 
+      t.view.physicalSize = const Size(320, 568);
+      t.view.devicePixelRatio = 1;
+      t.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(t.view.resetPhysicalSize);
+      addTearDown(t.view.resetDevicePixelRatio);
+      addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
+      await t.pump();
+      final more = find.byKey(const ValueKey('more-marks'));
+      final capturesBeforeMenu = native.capturedResponse;
+      Future<void> openMarks() async {
+        await t.ensureVisible(more);
+        await t.pumpAndSettle();
+        await t.tap(more);
+        await t.pumpAndSettle();
+      }
+
+      await openMarks();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await t.pump(const Duration(seconds: 6));
+      expect(native.capturedResponse, same(capturesBeforeMenu));
+      expect(c.nodes.length, 1);
+      await t.tap(find.text('取消'));
+      await t.pumpAndSettle();
+      expect(native.capturedResponse, same(capturesBeforeMenu));
+      expect(t.widget<OutlinedButton>(more).focusNode!.hasPrimaryFocus, isTrue);
+
+      final ramp = find.text('斜道');
+      final rampButton = find.widgetWithText(OutlinedButton, '斜道');
+      await openMarks();
+      c.setForeground(false);
+      await t.pumpAndSettle();
+      expect(t.widget<OutlinedButton>(rampButton).onPressed, isNull);
+      await t.tap(find.text('取消'));
+      await t.pumpAndSettle();
+      expect(native.capturedResponse, same(capturesBeforeMenu));
+      c.setForeground(true);
+      await t.pumpAndSettle();
+      await t.tap(find.text('繼續錄路'));
+      await progress(() => c.running);
+
+      await openMarks();
+      await t.ensureVisible(ramp);
+      await t.pumpAndSettle();
+      final selectRamp = t.widget<OutlinedButton>(rampButton).onPressed!;
+      await t.tap(ramp);
+      selectRamp();
+      await progress(() => !c.busy && c.nodes.length == 2);
+      await t.pumpAndSettle();
+      expect(c.nodes.last.markType, 'ramp');
+      expect(c.nodes.last.floor, isNull);
+      expect(spoken.where((v) => v == '斜道'), hasLength(1));
+      expect(spoken.where((v) => v == '斜道，已記錄'), hasLength(1));
+      expect(t.widget<OutlinedButton>(more).focusNode!.hasPrimaryFocus, isTrue);
+      expect(t.takeException(), isNull);
+      t.view.resetPhysicalSize();
+      t.view.resetDevicePixelRatio();
+      t.platformDispatcher.clearTextScaleFactorTestValue();
+      await t.pump();
+
       final finish = find.text('結束並保存');
       await t.scrollUntilVisible(
         finish,
@@ -271,7 +330,8 @@ void main() {
       await progress(() => reopened);
       expect(reopened, isTrue);
       expect(c.name, '路線 1');
-      expect(c.nodes.length, 1);
+      expect(c.nodes.length, 2);
+      expect(c.nodes.last.markType, 'ramp');
       expect(c.document!.complete, isFalse);
       await t.pumpWidget(const SizedBox());
       await t.runAsync(() async {

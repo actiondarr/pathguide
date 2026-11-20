@@ -31,6 +31,7 @@ enum FloorEvidence { unknown, confirmed, inherited, segmentConfirmed }
 
 @immutable
 class RoutePoint {
+  static const moreMarkTypes = {'escalator', 'ramp', 'reception', 'sign'};
   static const markTypes = {
     'landmark',
     'junction',
@@ -38,6 +39,7 @@ class RoutePoint {
     'stairs',
     'lift',
     'toilet',
+    ...moreMarkTypes,
   };
   static const directions = {'left', 'right', 'straight'};
   const RoutePoint(
@@ -250,6 +252,8 @@ class RouteDocument {
   Map<String, Object?> toMap() => {
     'schemaVersion': source == RouteContentSource.synthetic
         ? 1
+        : nodes.any((n) => RoutePoint.moreMarkTypes.contains(n.markType))
+        ? 5
         : nodes.any((n) => n.markType != null)
         ? 4
         : _hasProvenance
@@ -308,16 +312,16 @@ class RouteDocument {
   }
 
   factory RouteDocument.fromMap(Map<String, dynamic> v) {
+    final schema = v['schemaVersion'];
+    final hasFloorEvidence = [3, 4, 5].contains(schema);
+    final hasMarks = [4, 5].contains(schema);
     final synthetic =
-        v['schemaVersion'] == 1 &&
-        v['source'] == 'synthetic' &&
-        !v.containsKey('views');
-    final captured =
-        [2, 3, 4].contains(v['schemaVersion']) && v['source'] == 'captured';
+        schema == 1 && v['source'] == 'synthetic' && !v.containsKey('views');
+    final captured = [2, 3, 4, 5].contains(schema) && v['source'] == 'captured';
     if ((!synthetic && !captured) || v['direction'] != 'recorded') {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
-    if (![3, 4].contains(v['schemaVersion']) &&
+    if (!hasFloorEvidence &&
         (v['nodes'] as List).any(
           (n) =>
               n is Map &&
@@ -329,12 +333,15 @@ class RouteDocument {
         )) {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
-    if (v['schemaVersion'] != 4 &&
-        (v['nodes'] as List).any(
-          (n) =>
-              n is Map &&
-              (n.containsKey('markType') || n.containsKey('markDirection')),
-        )) {
+    if ((v['nodes'] as List).any(
+      (n) =>
+          n is Map &&
+          ((!hasMarks &&
+                  (n.containsKey('markType') ||
+                      n.containsKey('markDirection'))) ||
+              (schema == 4 &&
+                  RoutePoint.moreMarkTypes.contains(n['markType']))),
+    )) {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
     return RouteDocument(
@@ -360,17 +367,15 @@ class RouteDocument {
             n['id'] as String,
             n['zh'] as String,
             n['en'] as String,
-            markType: v['schemaVersion'] == 4 ? n['markType'] as String? : null,
-            direction: v['schemaVersion'] == 4
-                ? n['markDirection'] as String?
-                : null,
-            floorEvidence: [3, 4].contains(v['schemaVersion'])
+            markType: hasMarks ? n['markType'] as String? : null,
+            direction: hasMarks ? n['markDirection'] as String? : null,
+            floorEvidence: hasFloorEvidence
                 ? _decodeFloorEvidence(n['floorEvidence'])
                 : null,
-            isFloorContextAnchor: [3, 4].contains(v['schemaVersion'])
+            isFloorContextAnchor: hasFloorEvidence
                 ? (n['floorContextAnchor'] as bool? ?? false)
                 : false,
-            floorAnchorId: [3, 4].contains(v['schemaVersion'])
+            floorAnchorId: hasFloorEvidence
                 ? n['floorAnchor'] as String?
                 : null,
             floor: n['floor'] == null

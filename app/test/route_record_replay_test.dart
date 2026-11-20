@@ -53,6 +53,57 @@ void main() {
     expect(c.nodes.last.markType, 'junction');
     expect(c.nodes.last.direction, 'left');
   });
+  test(
+    'extra facility types survive encrypted replay and retain floor evidence',
+    () async {
+      await c.startRecording('Facilities');
+      expect(await c.confirmCurrentFloor('G'), isTrue);
+      final anchor = c.floorAnchors.single;
+      for (final type in RoutePoint.moreMarkTypes) {
+        expect(await c.mark(type, type), isTrue);
+        expect(c.nodes.last.floorEvidence, FloorEvidence.inherited);
+        expect(c.nodes.last.floorAnchorId, anchor.id);
+        expect(c.nodes.last.direction, isNull);
+      }
+      expect(c.document!.complete, isFalse);
+      expect(
+        c.document!.edges.map((edge) => edge.mode),
+        everyElement(ConnectorMode.walk),
+      );
+      final map = c.document!.toMap();
+      expect(map['schemaVersion'], 5);
+      expect(
+        () => RouteDocument.fromMap({...map, 'schemaVersion': 4}),
+        throwsA(
+          isA<RouteStoreFailure>().having(
+            (e) => e.problem,
+            'problem',
+            RouteProblem.incompatible,
+          ),
+        ),
+      );
+      await c.pause();
+      c.confirmFloorSegment(anchor.id);
+      await c.save(activate: true);
+      final entry = (await store.list()).routes.single;
+      await c.open(entry);
+      expect(
+        c.nodes.skip(1).map((n) => n.markType),
+        RoutePoint.moreMarkTypes.toList(),
+      );
+      await c.resume();
+      match = 2;
+      expect(
+        await c.checkPosition('n-3', 'G', directionConfirmed: true),
+        isTrue,
+      );
+      expect(c.confirmedReplayMark?.markType, 'ramp');
+      expect(c.replayDirection, isNull);
+      await c.open(entry, recording: true);
+      expect(c.undoLastMark(), isTrue);
+      expect(c.nodes.last.markType, 'reception');
+    },
+  );
   test('undo manual mark preserves later unmarked frames and invalidates joined connection', () async {
     await c.startRecording('Undo');
     await c.recordLandmark('auto before', '');

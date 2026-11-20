@@ -39,11 +39,18 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     'lift': ('升降機', 'Lift'),
     'toilet': ('廁所', 'Toilet'),
   };
+  static const _moreMarkTypes = {
+    'escalator': ('扶手電梯', 'Escalator'),
+    'ramp': ('斜道', 'Ramp'),
+    'reception': ('接待處', 'Reception desk'),
+    'sign': ('指示牌', 'Sign'),
+  };
   static final _generatedDirectionName = RegExp(
     r'^(?:左轉|右轉|直行|Turn left|Turn right|Straight) [0-9]+$',
   );
   RecordedRouteController? c;
   final _name = TextEditingController(), _actualFloor = TextEditingController();
+  final _moreMarksFocus = FocusNode(debugLabel: 'More marks');
   bool _loading = true,
       _loadError = false,
       _newRoute = false,
@@ -51,6 +58,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       _leaving = false;
   bool _allowPop = false;
   bool _markBusy = false;
+  bool _moreMarksOpen = false;
   late final _feedbackTts = FlutterTtsSpeaker(
     cantoneseOnly: widget.settings.language == AppLanguage.chinese,
     language: widget.settings.language,
@@ -152,6 +160,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     _stopFeedback();
     _name.dispose();
     _actualFloor.dispose();
+    _moreMarksFocus.dispose();
     super.dispose();
   }
 
@@ -199,6 +208,68 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     if (ok) unawaited(HapticFeedback.selectionClick());
   }
 
+  Future<void> _showMoreMarks() async {
+    final controller = c!;
+    if (_moreMarksOpen || _pendingLandmark != null) return;
+    if (_markBusy || controller.busy) {
+      unawaited(_feedback(t('記錄中', 'Recording')));
+      return;
+    }
+    if (!controller.canCapture) return;
+
+    _moreMarksOpen = true;
+    controller.setManualEntryPending(true);
+    try {
+      final route = DialogRoute<String>(
+        context: context,
+        builder: (dialogContext) {
+          void close(String? type) {
+            if (ModalRoute.isCurrentOf(dialogContext) == true) {
+              Navigator.pop(dialogContext, type);
+            }
+          }
+
+          return ListenableBuilder(
+            listenable: controller,
+            builder: (context, _) => AlertDialog(
+              scrollable: true,
+              title: Text(t('更多標記', 'More marks')),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final item in _moreMarkTypes.entries)
+                    button(
+                      item.value.$1,
+                      item.value.$2,
+                      controller.canCapture ? () => close(item.key) : null,
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => close(null),
+                  child: Text(t('取消', 'Cancel')),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      final type = await Navigator.of(context, rootNavigator: true).push(route);
+      if (!mounted) return;
+      if (type != null && controller.canCapture) {
+        final label = _moreMarkTypes[type]!;
+        unawaited(_mark(type, t(label.$1, label.$2)));
+      }
+      await route.completed;
+      if (mounted && controller.running) _moreMarksFocus.requestFocus();
+    } finally {
+      _moreMarksOpen = false;
+      controller.setManualEntryPending(false);
+    }
+  }
+
   Widget _markPanel() => Wrap(
     spacing: 8,
     runSpacing: 8,
@@ -232,6 +303,13 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             child: Text(t(item.$2, item.$3)),
           ),
         ),
+      OutlinedButton(
+        key: const ValueKey('more-marks'),
+        focusNode: _moreMarksFocus,
+        onPressed: c!.running ? _showMoreMarks : null,
+        style: OutlinedButton.styleFrom(minimumSize: const Size(56, 56)),
+        child: Text(t('更多標記', 'More marks')),
+      ),
       OutlinedButton(
         key: const ValueKey('undo-mark'),
         onPressed: c!.canUndoMark
@@ -364,7 +442,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     RecordedRouteController controller,
     RoutePoint mark,
   ) {
-    final type = _markTypes[mark.markType]!;
+    final type = (_markTypes[mark.markType] ?? _moreMarkTypes[mark.markType])!;
     final confirmed = t('已確認${type.$1}。', '${type.$2} confirmed.');
     return confirmed +
         switch (controller.replayDirection) {
