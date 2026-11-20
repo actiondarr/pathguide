@@ -46,7 +46,7 @@ class RouteLearningStore {
   final _cipher = AesGcm.with256bits();
   int _epoch = 0;
   static const retention = Duration(days: 7);
-  static const maxCandidates = 48, maxPerTrip = 12;
+  static const maxCandidates = 48, maxPerRoute = 24, maxPerTrip = 12;
   static const diskLimit = 64 * 1024 * 1024;
   static final _id = RegExp(r'^[a-zA-Z0-9_-]{1,120}$');
   static String _random() => List.generate(
@@ -198,15 +198,16 @@ class RouteLearningStore {
   Future<void> _commit(
     Map<String, dynamic> cat,
     SecretKey key,
-    int epoch,
-  ) async {
+    int epoch, {
+    bool Function()? isCurrent,
+  }) async {
     final bytes = await _seal(cat, key, 'catalog');
     if (bytes.length > 256 * 1024) _fail('capacity');
     final temp = File('${directory.path}/${_random()}.tmp');
     await _write(temp, bytes);
     try {
       await checkpoint?.call();
-      if (epoch != _epoch) _fail('cancelled');
+      if (epoch != _epoch || isCurrent?.call() == false) _fail('cancelled');
       await _move(temp, _catalog.path);
     } finally {
       if (await temp.exists()) await temp.delete();
@@ -227,8 +228,9 @@ class RouteLearningStore {
     String id,
     Map<String, dynamic> data,
     SecretKey key,
-    int epoch,
-  ) async {
+    int epoch, {
+    bool Function()? isCurrent,
+  }) async {
     final records = cat['records'] as Map;
     final old = records[id] as Map?;
     final folder = _sha(utf8.encode(data['route'] as String));
@@ -260,7 +262,7 @@ class RouteLearningStore {
       'state': data['state'],
     };
     try {
-      await _commit(cat, key, epoch);
+      await _commit(cat, key, epoch, isCurrent: isCurrent);
     } catch (_) {
       // A unique unreferenced blob never becomes a candidate after cancellation.
       if (await file.exists()) await file.delete();
@@ -280,15 +282,19 @@ class RouteLearningStore {
     required int sequence,
     required String requestedNode,
     required String result,
+    String? predictedNode,
     required Uint8List jpeg,
     required Uint8List feature,
     required String featureProfile,
     required String preprocessProfile,
+    bool Function()? isCurrent,
   }) => _run((key, epoch) async {
+    if (isCurrent?.call() == false) _fail('cancelled');
     _valid(
       [routeId, tripId, session, requestedNode].every(_id.hasMatch) &&
           routeVersion > 0 &&
           sequence >= 0 &&
+          (predictedNode == null || _id.hasMatch(predictedNode)) &&
           jpeg.length >= 4 &&
           jpeg.length <= 512 * 1024 &&
           jpeg[0] == 255 &&
@@ -313,7 +319,10 @@ class RouteLearningStore {
     );
     final cat = await _load(key), records = cat['records'] as Map;
     if ((cat['deleted'] as List).contains(routeId)) _fail('deleted');
+    await _removeExpired(cat, key, epoch);
     if (records.length >= maxCandidates ||
+        records.values.where((m) => m['route'] == routeId).length >=
+            maxPerRoute ||
         records.values.where((m) => m['trip'] == tripId).length >= maxPerTrip) {
       _fail('capacity');
     }
@@ -322,7 +331,11 @@ class RouteLearningStore {
       final m = records[id] as Map;
       if (m['trip'] == tripId) {
         final previous = await _record(cat, id as String, key);
-        if (previous['imageSha'] == imageSha) _fail('duplicate');
+        if (previous['imageSha'] == imageSha ||
+            (previous['session'] == session &&
+                previous['sequence'] == sequence)) {
+          _fail('duplicate');
+        }
       }
     }
     final id = _random(), now = clock().toUtc();
@@ -338,6 +351,7 @@ class RouteLearningStore {
         'sequence': sequence,
         'requestedNode': requestedNode,
         'prediction': result,
+        'predictedNode': predictedNode,
         'featureProfile': featureProfile,
         'preprocessProfile': preprocessProfile,
         'created': now.millisecondsSinceEpoch,
@@ -352,6 +366,7 @@ class RouteLearningStore {
       },
       key,
       epoch,
+      isCurrent: isCurrent,
     );
     return id;
   });
@@ -390,11 +405,12 @@ class RouteLearningStore {
   Future<Map<String, dynamic>> read(String id) =>
       _run((key, _) async => _record(await _load(key), id, key));
 
-  Future<List<String>> list() => _run((key, _) async {
+  Future<List<String>> list({String? routeId}) => _run((key, _) async {
     final cat = await _load(key);
     return [
       for (final e in (cat['records'] as Map).entries)
-        if ((e.value['expires'] as int) > clock().millisecondsSinceEpoch)
+        if ((routeId == null || e.value['route'] == routeId) &&
+            (e.value['expires'] as int) > clock().millisecondsSinceEpoch)
           e.key as String,
     ];
   });
@@ -410,6 +426,7 @@ class RouteLearningStore {
     String? floor,
     bool directionChecked = false,
     bool exitChecked = false,
+    bool Function()? isCurrent,
   }) => _run((key, epoch) async {
     _valid(
       reviewer.trim().isNotEmpty &&
@@ -445,44 +462,87 @@ class RouteLearningStore {
     });
     data['revision'] = expectedRevision + 1;
     data['state'] = decision.name;
-    await _saveRecord(cat, id, data, key, epoch);
+    await _saveRecord(cat, id, data, key, epoch, isCurrent: isCurrent);
   });
 
   /// Tombstone commits first, so a late queued add cannot restore a deleted route.
   Future<void> deleteRoute(String routeId) {
     cancelPending();
     return _run((key, epoch) async {
-      final cat = await _load(key), records = cat['records'] as Map;
-      final removed = records.entries
-          .where((e) => e.value['route'] == routeId)
-          .toList();
-      for (final e in removed) {
-        records.remove(e.key);
-      }
+      final cat = await _load(key);
       final deleted = cat['deleted'] as List;
       if (!deleted.contains(routeId)) deleted.add(routeId);
-      await _commit(cat, key, epoch);
-      for (final e in removed) {
-        final file = File('${directory.path}/${e.value['file']}');
-        if (await file.exists()) await file.delete();
-      }
+      await _removeRecords(
+        cat,
+        key,
+        epoch,
+        (m) => m['route'] == routeId,
+        commitEvenIfEmpty: true,
+      );
+      await _cleanupOrphans(cat);
     });
+  }
+
+  Future<void> deleteTrip(String tripId) => _run((key, epoch) async {
+    final cat = await _load(key);
+    await _removeRecords(cat, key, epoch, (m) => m['trip'] == tripId);
+    await _cleanupOrphans(cat);
+  });
+
+  Future<void> deleteCandidate(String id) => _run((key, epoch) async {
+    final cat = await _load(key);
+    final record = (cat['records'] as Map)[id];
+    await _removeRecords(cat, key, epoch, (m) => identical(m, record));
+    await _cleanupOrphans(cat);
+  });
+
+  Future<void> _removeRecords(
+    Map<String, dynamic> cat,
+    SecretKey key,
+    int epoch,
+    bool Function(Map) matches, {
+    bool commitEvenIfEmpty = false,
+  }) async {
+    final records = cat['records'] as Map;
+    final removed = records.entries
+        .where((e) => matches(e.value as Map))
+        .toList();
+    if (removed.isEmpty && !commitEvenIfEmpty) return;
+    for (final entry in removed) {
+      records.remove(entry.key);
+    }
+    await _commit(cat, key, epoch);
+    for (final entry in removed) {
+      final file = File('${directory.path}/${entry.value['file']}');
+      if (await file.exists()) await file.delete();
+    }
+  }
+
+  Future<void> _removeExpired(
+    Map<String, dynamic> cat,
+    SecretKey key,
+    int epoch,
+  ) {
+    final now = clock().millisecondsSinceEpoch;
+    return _removeRecords(cat, key, epoch, (m) => (m['expires'] as int) <= now);
   }
 
   /// Explicit expiry/orphan maintenance; never touches the stable route library.
   Future<void> cleanup() => _run((key, epoch) async {
-    final cat = await _load(key), records = cat['records'] as Map;
-    records.removeWhere(
-      (_, v) => (v['expires'] as int) <= clock().millisecondsSinceEpoch,
-    );
-    await _commit(cat, key, epoch);
+    final cat = await _load(key);
+    await _removeExpired(cat, key, epoch);
+    await _cleanupOrphans(cat);
+  });
+
+  Future<void> _cleanupOrphans(Map<String, dynamic> cat) async {
     final keep = {
       _catalog.path,
       '${directory.path}/.lock',
-      for (final m in records.values) '${directory.path}/${m['file']}',
+      for (final m in (cat['records'] as Map).values)
+        '${directory.path}/${m['file']}',
     };
     await for (final f in directory.list(recursive: true, followLinks: false)) {
       if (f is File && !keep.contains(f.path)) await f.delete();
     }
-  });
+  }
 }

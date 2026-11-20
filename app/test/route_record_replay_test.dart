@@ -8,6 +8,7 @@ import 'package:pathguide/route_memory/encrypted_route_store.dart';
 import 'package:pathguide/route_memory/recorded_route_controller.dart';
 import 'package:pathguide/route_memory/cross_floor_contract.dart';
 import 'package:pathguide/route_memory/route_localizer.dart';
+import 'package:pathguide/route_memory/route_learning_store.dart';
 import 'package:pathguide/route_memory/route_package.dart';
 import 'package:pathguide/route_memory/route_observation_source.dart';
 
@@ -30,6 +31,9 @@ void main() {
   late RecordedRouteController c;
   late EncryptedRouteStore store;
   late RouteNativeFixture native;
+  late Vault learningVault;
+  Future<void> Function()? learningCheckpoint;
+  var learningOpens = 0;
   var ordinal = 0, match = 0;
   var ambiguous = false;
   List<String> observedText = [];
@@ -354,6 +358,9 @@ void main() {
     ambiguous = false;
     observedText = [];
     analysisGate = null;
+    learningCheckpoint = null;
+    learningVault = Vault();
+    learningOpens = 0;
     messenger.setMockMethodCallHandler(channel, (call) async {
       final a = Map<String, Object?>.from(call.arguments as Map);
       if (call.method == 'cancel') return null;
@@ -383,6 +390,14 @@ void main() {
     c = RecordedRouteController(
       store: store,
       source: RouteObservationSource(supported: true),
+      openLearningStore: () {
+        learningOpens++;
+        return RouteLearningStore.open(
+          root: root,
+          vault: learningVault,
+          checkpoint: () async => learningCheckpoint?.call(),
+        );
+      },
     );
   });
   tearDown(() async {
@@ -430,6 +445,126 @@ void main() {
       return v;
     };
   }
+
+  Future<void> waitForCandidate(RouteLearningStore learning) async {
+    for (var i = 0; i < 200; i++) {
+      if ((await learning.list()).isNotEmpty) return;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    fail('Candidate was not stored');
+  }
+
+  test(
+    'learning is opt-in and separately stores prediction and requested node',
+    () async {
+      await replay();
+      useDetailedFrame();
+      expect(
+        await c.checkPosition('n-1', 'G', directionConfirmed: true),
+        isTrue,
+      );
+      expect(learningOpens, 0);
+      c.enableLearning();
+      match = 1;
+      expect(
+        await c.checkPosition('n-1', 'G', directionConfirmed: true),
+        isFalse,
+      );
+      expect(c.notice, 'wrongNode');
+      final learning = await c.learningStore();
+      await waitForCandidate(learning);
+      final record = await learning.read((await learning.list()).single);
+      expect(record['prediction'], 'candidate');
+      expect(record['predictedNode'], 'n-2');
+      expect(record['requestedNode'], 'n-1');
+      expect(record['routeVersion'], c.selected!.activeVersion);
+      expect(record['state'], 'pending');
+      expect(record['reviews'], isEmpty);
+      final entry = c.selected!;
+      await c.open(entry);
+      expect(c.learningEnabled, isFalse);
+      expect(await learning.list(routeId: entry.id), hasLength(1));
+      await c.delete(entry);
+      expect(await learning.list(), isEmpty);
+      expect((await store.list()).routes, isEmpty);
+    },
+  );
+
+  for (final withdraw in [true, false]) {
+    test(
+      'learning write is fenced by ${withdraw ? 'withdrawal' : 'background'}',
+      () async {
+        await replay();
+        useDetailedFrame();
+        c.enableLearning();
+        final learning = await c.learningStore();
+        final atCommit = Completer<void>(), releaseCommit = Completer<void>();
+        learningCheckpoint = () async {
+          if (!atCommit.isCompleted) atCommit.complete();
+          await releaseCommit.future;
+        };
+        expect(
+          await c.checkPosition('n-1', 'G', directionConfirmed: true),
+          isTrue,
+        );
+        await atCommit.future.timeout(const Duration(seconds: 3));
+        Future<void>? withdrawal;
+        if (withdraw) {
+          withdrawal = c.withdrawLearning();
+          expect(c.actualNodeId, 'n-1');
+          expect(c.learningEnabled, isFalse);
+        } else {
+          c.setForeground(false);
+        }
+        releaseCommit.complete();
+        await withdrawal;
+        expect(await learning.list(), isEmpty);
+      },
+    );
+  }
+
+  test(
+    'withdrawing candidates leaves the recorded route and position intact',
+    () async {
+      await replay();
+      useDetailedFrame();
+      c.enableLearning();
+      expect(
+        await c.checkPosition('n-1', 'G', directionConfirmed: true),
+        isTrue,
+      );
+      final learning = await c.learningStore();
+      await waitForCandidate(learning);
+      await c.withdrawLearning();
+      expect(await learning.list(), isEmpty);
+      expect(c.actualNodeId, 'n-1');
+      expect(c.learningEnabled, isFalse);
+      expect(
+        (await store.list()).routes.single.activeVersion,
+        c.selected!.activeVersion,
+      );
+    },
+  );
+
+  test(
+    'candidate storage failure leaves a successful landmark check intact',
+    () async {
+      await replay();
+      useDetailedFrame();
+      learningCheckpoint = () async => throw const FileSystemException('test');
+      c.enableLearning();
+      expect(
+        await c.checkPosition('n-1', 'G', directionConfirmed: true),
+        isTrue,
+      );
+      for (var i = 0; i < 200 && !c.learningSaveFailed; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(c.learningSaveFailed, isTrue);
+      expect(c.actualNodeId, 'n-1');
+      expect(await (await c.learningStore()).list(), isEmpty);
+    },
+  );
 
   test(
     'feature similarity rejects different JPEGs of a similar candidate',

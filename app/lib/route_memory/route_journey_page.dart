@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,8 @@ import 'cross_floor_contract.dart';
 import 'encrypted_route_store.dart';
 import 'recorded_route_controller.dart';
 import 'route_audio_note_dialog.dart';
+import 'route_learning_review_page.dart';
+import 'route_learning_store.dart';
 import 'route_package.dart';
 
 /// Product recording and replay. Merely opening the library never opens camera.
@@ -114,7 +117,12 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       final controller =
           await (widget.createController?.call() ??
               EncryptedRouteStore.open().then(
-                (s) => RecordedRouteController(store: s),
+                (s) => RecordedRouteController(
+                  store: s,
+                  openLearningStore: defaultTargetPlatform == TargetPlatform.iOS
+                      ? RouteLearningStore.open
+                      : null,
+                ),
               ));
       if (!mounted) {
         controller.dispose();
@@ -1624,6 +1632,60 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
           'Match landmarks in the recorded direction. Record return journeys separately. Live obstacle avoidance and continuous spoken guidance are not connected.',
         ),
       ),
+      if (controller.openLearningStore != null) ...[
+        if (controller.replayAvailable)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              t('為這趟收集路標候選', 'Collect landmark candidates for this trip'),
+            ),
+            subtitle: Text(
+              t(
+                '把比對時拍下的部分相片加密保存在此裝置，七日後到期。關閉會移除這趟候選。',
+                'Keep some photos taken during landmark checks encrypted on this device for up to seven days. Turning this off removes this trip’s candidates.',
+              ),
+            ),
+            value: controller.learningEnabled,
+            onChanged:
+                controller.learningBusy ||
+                    controller.learningWithdrawalFailed ||
+                    (controller.finished && !controller.learningEnabled)
+                ? null
+                : (enabled) {
+                    if (enabled) {
+                      controller.enableLearning();
+                    } else {
+                      controller.withdrawLearning();
+                    }
+                  },
+          ),
+        if (controller.learningSaveFailed)
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              t(
+                '部分候選未能保存。你可繼續重行。',
+                'Some candidates could not be saved. You can continue replay.',
+              ),
+            ),
+          ),
+        if (controller.learningWithdrawalFailed)
+          button(
+            '未能刪除這趟候選，重試',
+            'Could not delete this trip’s candidates. Retry',
+            controller.withdrawLearning,
+          ),
+        button(
+          '覆核路標候選',
+          'Review landmark candidates',
+          !controller.busy &&
+                  !controller.running &&
+                  !controller.learningBusy &&
+                  controller.notice != 'stopUnconfirmed'
+              ? _openLearningReview
+              : null,
+        ),
+      ],
       Text(
         '${t('實際樓層', 'Actual floor')}: ${controller.actualFloor?.label ?? t('未確認', 'Unknown')}',
       ),
@@ -1778,6 +1840,24 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         ),
       ],
     ];
+  }
+
+  Future<void> _openLearningReview() async {
+    final controller = c!;
+    final entry = controller.selected;
+    if (entry == null || !_feedbackActive) return;
+    await controller.pause();
+    if (!mounted || !_feedbackActive || controller.notice != 'paused') return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => RouteLearningReviewPage(
+          openStore: controller.learningStore,
+          routes: controller.store,
+          routeId: entry.id,
+          english: widget.settings.language == AppLanguage.english,
+        ),
+      ),
+    );
   }
 
   @override

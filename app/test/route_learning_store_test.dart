@@ -165,6 +165,22 @@ void main() {
     await expectLater(add(image: 5), fails('deleted'));
     expect(await store.list(), [other]);
   });
+
+  test(
+    'route capacity spans trips and expired rows free it on the next add',
+    () async {
+      for (var i = 0; i < RouteLearningStore.maxPerRoute; i++) {
+        await add(trip: 'trip-$i', image: i + 1);
+      }
+      await expectLater(add(trip: 'extra'), fails('capacity'));
+      final other = await add(route: 'route-two', trip: 'other');
+      expect(await store.list(routeId: 'route-one'), hasLength(24));
+      expect(await store.list(routeId: 'route-two'), [other]);
+      now = now.add(RouteLearningStore.retention);
+      final next = await add(trip: 'extra');
+      expect(await store.list(), [next]);
+    },
+  );
   test('cancel before catalog switch never publishes late evidence', () async {
     final entered = Completer<void>(), release = Completer<void>();
     store = await RouteLearningStore.open(

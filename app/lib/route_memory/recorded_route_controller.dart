@@ -11,16 +11,18 @@ import 'route_observation_source.dart';
 import 'route_landmark_client.dart';
 import 'route_localizer.dart';
 import 'route_frame_quality.dart';
+import 'route_learning_store.dart';
 
 enum RecordedRouteMode { library, record, replay }
 
 /// One screen owns camera, analysis jobs and store writes. Every asynchronous
-/// operation is fenced; replay never calls save or retains new camera frames.
+/// operation is fenced. Replay writes only to the optional learning store.
 class RecordedRouteController extends ChangeNotifier {
   RecordedRouteController({
     required this.store,
     RouteObservationSource? source,
     RouteLandmarkClient? analyzer,
+    this.openLearningStore,
   }) : source = source ?? RouteObservationSource(),
        analyzer = analyzer ?? RouteLandmarkClient() {
     _events = this.source.events.listen(
@@ -47,6 +49,107 @@ class RecordedRouteController extends ChangeNotifier {
   final EncryptedRouteStore store;
   final RouteObservationSource source;
   final RouteLandmarkClient analyzer;
+  final Future<RouteLearningStore> Function()? openLearningStore;
+  RouteLearningStore? _learningStore;
+  String? _learningTrip;
+  bool _savingLearningFrame = false;
+  bool _withdrawingLearning = false;
+  bool get learningEnabled =>
+      _learningTrip != null &&
+      !_withdrawingLearning &&
+      !learningWithdrawalFailed;
+  bool get learningBusy => _withdrawingLearning;
+  bool learningWithdrawalFailed = false;
+  bool learningSaveFailed = false;
+
+  Future<RouteLearningStore> learningStore() async =>
+      _learningStore ??= await openLearningStore!();
+
+  void enableLearning() {
+    if (openLearningStore == null ||
+        !replayAvailable ||
+        finished ||
+        !_foreground ||
+        _disposed ||
+        _withdrawingLearning ||
+        _learningTrip != null) {
+      return;
+    }
+    learningSaveFailed = false;
+    _learningTrip = _newId();
+    _changed();
+  }
+
+  Future<void> withdrawLearning() async {
+    final trip = _learningTrip;
+    if (trip == null || _withdrawingLearning) return;
+    _withdrawingLearning = true;
+    learningWithdrawalFailed = false;
+    _changed();
+    try {
+      // No store is opened by opt-in alone.
+      await _learningStore?.deleteTrip(trip);
+      _learningTrip = null;
+      learningSaveFailed = false;
+    } catch (_) {
+      learningWithdrawalFailed = true;
+    } finally {
+      _withdrawingLearning = false;
+      _changed();
+    }
+  }
+
+  Future<void> _keepLearningFrame(
+    String trip,
+    int op,
+    RouteKeyframe frame,
+    LandmarkAnalysis analysis,
+    String nodeId,
+    RouteMatchState prediction,
+    String? predictedNode,
+  ) async {
+    if (_savingLearningFrame) return;
+    final route = _id!, version = _captureVersion;
+    bool isCurrent() =>
+        _current(op) && _running && learningEnabled && _learningTrip == trip;
+    _savingLearningFrame = true;
+    try {
+      if (!await RouteFrameQuality.usable(frame) || !isCurrent()) return;
+      final session = frame.observation['session'];
+      final sequence = frame.observation['sequence'];
+      if (session is! String || sequence is! int) return;
+      final storage = await learningStore();
+      if (!isCurrent()) return;
+      await storage.add(
+        routeId: route,
+        routeVersion: version,
+        tripId: trip,
+        session: session,
+        sequence: sequence,
+        requestedNode: nodeId,
+        result: prediction.name,
+        predictedNode: predictedNode,
+        jpeg: frame.bytes,
+        feature: analysis.feature,
+        featureProfile: RouteLocalizer.featureRevision,
+        preprocessProfile: RouteLocalizer.preprocessRevision,
+        isCurrent: isCurrent,
+      );
+    } on LearningStoreFailure catch (error) {
+      if (isCurrent() && !['cancelled', 'duplicate'].contains(error.code)) {
+        learningSaveFailed = true;
+        _changed();
+      }
+    } catch (_) {
+      if (isCurrent()) {
+        learningSaveFailed = true;
+        _changed();
+      }
+    } finally {
+      _savingLearningFrame = false;
+    }
+  }
+
   StreamSubscription<RouteCaptureStatus>? _events;
   RecordedRouteMode mode = RecordedRouteMode.library;
   List<RouteLibraryEntry> entries = const [];
@@ -1058,6 +1161,7 @@ class RecordedRouteController extends ChangeNotifier {
       return false;
     }
     final op = _epoch, watch = Stopwatch()..start();
+    final trip = learningEnabled ? _learningTrip : null;
     _busy = true;
     problem = null;
     notice = 'checking';
@@ -1090,8 +1194,23 @@ class RecordedRouteController extends ChangeNotifier {
         preprocess: RouteLocalizer.preprocessRevision,
         ocr: value.text,
       );
-      if (_localizer!.result != RouteMatchState.candidate) {
-        notice = _localizer!.result.name;
+      final prediction = _localizer!.result;
+      if (trip != null &&
+          ['candidate', 'unknown', 'ambiguous'].contains(prediction.name)) {
+        unawaited(
+          _keepLearningFrame(
+            trip,
+            op,
+            frame,
+            value,
+            nodeId,
+            prediction,
+            _localizer!.candidateNodeId,
+          ),
+        );
+      }
+      if (prediction != RouteMatchState.candidate) {
+        notice = prediction.name;
         return false;
       }
       _localizer!.confirmFloor(node.floor!);
@@ -1200,7 +1319,13 @@ class RecordedRouteController extends ChangeNotifier {
     _busy = true;
     _changed();
     try {
-      await store.delete(entry.id, expectedRevision: entry.revision);
+      await store.delete(
+        entry.id,
+        expectedRevision: entry.revision,
+        beforeDelete: openLearningStore == null
+            ? null
+            : () async => (await learningStore()).deleteRoute(entry.id),
+      );
       if (!_current(op)) return;
       _clearSelection();
       notice = 'deleted';
@@ -1240,6 +1365,9 @@ class RecordedRouteController extends ChangeNotifier {
   }
 
   void _clearSelection() {
+    _learningTrip = null;
+    learningWithdrawalFailed = false;
+    learningSaveFailed = false;
     _automaticTimer?.cancel();
     automaticRecording = false;
     _localizer?.dispose();

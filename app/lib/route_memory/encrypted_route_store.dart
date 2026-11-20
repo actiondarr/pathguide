@@ -846,7 +846,11 @@ class EncryptedRouteStore {
     });
   }
 
-  Future<void> delete(String id, {required int expectedRevision}) {
+  Future<void> delete(
+    String id, {
+    required int expectedRevision,
+    Future<void> Function()? beforeDelete,
+  }) {
     _actor.routeEpoch[id] = (_actor.routeEpoch[id] ?? 0) + 1;
     return _locked((key) async {
       final cat = await _catalog(key);
@@ -857,6 +861,7 @@ class EncryptedRouteStore {
       if (e != null && e['revision'] != expectedRevision) {
         throw const RouteStoreFailure(RouteProblem.conflict);
       }
+      await beforeDelete?.call();
       cat['routes'].remove(id);
       cat['deleted'][id] = true;
       await _commit(cat, key, deletion: true);
