@@ -251,6 +251,7 @@ class _AppShellState extends State<AppShell> {
               )
             : _menuVisible
             ? MenuPage(
+                generalReading: true,
                 settings: widget.settings,
                 onBack: () => setState(() => _menuVisible = false),
               )

@@ -1090,7 +1090,7 @@ void main() {
     await start(tester, initialSection: AppSection.home);
     expect(find.text('即時辨識'), findsOneWidget);
     expect(find.text('路線導航'), findsOneWidget);
-    expect(find.text('菜單閱讀與語音搜尋'), findsOneWidget);
+    expect(find.text('閱讀文字'), findsOneWidget);
     expect(visionCalls, isEmpty);
     await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
     await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
@@ -1098,11 +1098,11 @@ void main() {
     await expectLater(tester, meetsGuideline(textContrastGuideline));
     semantics.dispose();
     await capture(tester, 'task-home');
-    await tester.tap(find.text('菜單閱讀與語音搜尋'));
+    await tester.tap(find.text('閱讀文字'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('略過說明'));
     await tester.pumpAndSettle();
-    expect(find.text('菜單閱讀'), findsOneWidget);
+    expect(find.text('閱讀文字'), findsOneWidget);
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
     expect(visionCalls, isEmpty);
