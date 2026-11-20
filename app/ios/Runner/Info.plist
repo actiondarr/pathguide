@@ -41,7 +41,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>在前景使用目前位置計算步行路線及導航；不儲存行走軌跡。</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>按下語音搜尋後，使用咪高峰聽取你想找的菜式或目的地；不會持續錄音。</string>
+	<string>按下語音搜尋或開始錄音備註後使用咪高峰。路標錄音隨路線加密保存在此手機。</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>把你講的菜式或目的地轉成搜尋文字。優先使用裝置端辨識；需要 Apple 線上語音服務時會先詢問。</string>
 	<key>UIApplicationSceneManifest</key>

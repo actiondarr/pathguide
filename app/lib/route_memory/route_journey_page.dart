@@ -10,6 +10,7 @@ import '../settings/app_settings.dart';
 import 'cross_floor_contract.dart';
 import 'encrypted_route_store.dart';
 import 'recorded_route_controller.dart';
+import 'route_audio_note_dialog.dart';
 import 'route_package.dart';
 
 /// Product recording and replay. Merely opening the library never opens camera.
@@ -32,6 +33,7 @@ class RouteJourneyPage extends StatefulWidget {
 class _RouteJourneyPageState extends State<RouteJourneyPage>
     with WidgetsBindingObserver {
   static const _textNoteAction = 'textNote';
+  static const _audioNoteAction = 'audioNote';
   static const _markTypes = {
     'landmark': ('一般路標', 'Landmark'),
     'junction': ('路口', 'Junction'),
@@ -75,6 +77,9 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   int _feedbackEpoch = 0;
   RoutePoint? _replayFeedbackPoint;
   RoutePoint? _openedNote;
+  final _noteAudio = RouteNoteAudio();
+  bool _playingNoteAudio = false, _audioPlaybackFailed = false;
+  int _noteAudioEpoch = 0;
   String? _target;
   ({
     String name,
@@ -134,11 +139,14 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       _stopFeedback();
     }
     // An open note can outlast the position timer within the same replay step.
-    if (_openedNote != null &&
-        (c?.canCheck != true ||
-            (c?.notice != 'confirmed' && c?.notice != 'arrival'))) {
-      _openedNote = null;
-      _stopFeedback();
+    if (c?.canCheck != true ||
+        (c?.notice != 'confirmed' && c?.notice != 'arrival')) {
+      if (_openedNote != null) {
+        _openedNote = null;
+        _stopFeedback();
+      }
+      _cancelReplayAudio();
+      _audioPlaybackFailed = false;
     }
     setState(() {});
   }
@@ -162,6 +170,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         state == AppLifecycleState.detached) {
       _feedbackActive = false;
       _openedNote = null;
+      _cancelReplayAudio();
       _stopFeedback();
       c?.setForeground(false);
     }
@@ -174,6 +183,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     c?.removeListener(_changed);
     c?.dispose();
     _stopFeedback();
+    _cancelReplayAudio();
     _name.dispose();
     _actualFloor.dispose();
     _moreMarksFocus.dispose();
@@ -272,6 +282,15 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                         ? () => close(_textNoteAction)
                         : null,
                   ),
+                  if (RouteNoteAudio.supported)
+                    button(
+                      '錄音備註',
+                      'Audio note',
+                      controller.canEdit &&
+                              controller.nodes.any((n) => n.markType != null)
+                          ? () => close(_audioNoteAction)
+                          : null,
+                    ),
                 ],
               ),
               actions: [
@@ -286,12 +305,13 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       );
       final type = await Navigator.of(context, rootNavigator: true).push(route);
       if (!mounted) return;
-      if (type != null && type != _textNoteAction && controller.canCapture) {
-        final label = _moreMarkTypes[type]!;
+      final label = _moreMarkTypes[type];
+      if (type != null && label != null && controller.canCapture) {
         unawaited(_mark(type, t(label.$1, label.$2)));
       }
       await route.completed;
       if (mounted && type == _textNoteAction) await _editMarkNote();
+      if (mounted && type == _audioNoteAction) await _editAudioNote();
       if (mounted && controller.running) _moreMarksFocus.requestFocus();
     } finally {
       _moreMarksOpen = false;
@@ -336,7 +356,16 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     return chosen;
   }
 
-  Future<void> _editMarkNote([RoutePoint? selected]) async {
+  Future<void> _editMarkNote([RoutePoint? selected]) =>
+      _editNoteOnMark(selected, _showTextNoteEditor);
+
+  Future<void> _editAudioNote([RoutePoint? selected]) =>
+      _editNoteOnMark(selected, _showAudioNoteEditor);
+
+  Future<void> _editNoteOnMark(
+    RoutePoint? selected,
+    Future<void> Function(RoutePoint) edit,
+  ) async {
     final controller = c!;
     if (_editingNote || _pendingLandmark != null || !controller.canEdit) return;
     final marks = controller.nodes.where((n) => n.markType != null).toList();
@@ -353,73 +382,95 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
           !controller.nodes.contains(mark)) {
         return;
       }
-      final field = GlobalKey<FormFieldState<String>>();
-      final dialog = DialogRoute<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          scrollable: true,
-          title: Text(t('文字備註', 'Text note')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(t(mark.nameZh, mark.nameEn)),
-              const SizedBox(height: 12),
-              TextFormField(
-                key: field,
-                initialValue: mark.textNote,
-                maxLength: RoutePoint.maxTextNoteLength,
-                minLines: 2,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  labelText: t('備註內容', 'Note text'),
-                  helperText: mark.textNote == null
-                      ? null
-                      : t('留空並套用可移除備註', 'Apply an empty note to remove it'),
-                ),
-                validator: (value) {
-                  if (!controller.canEdit || !controller.nodes.contains(mark)) {
-                    return t(
-                      '此標記目前無法編輯',
-                      'This landmark is unavailable for editing',
-                    );
-                  }
-                  final text = value?.trim() ?? '';
-                  return text.isEmpty || RoutePoint.validTextNote(text)
-                      ? null
-                      : t('請縮短備註', 'Shorten this note');
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                if (ModalRoute.isCurrentOf(ctx) == true) Navigator.pop(ctx);
-              },
-              child: Text(t('取消', 'Cancel')),
-            ),
-            FilledButton(
-              onPressed: () {
-                final input = field.currentState;
-                if (ModalRoute.isCurrentOf(ctx) == true &&
-                    input != null &&
-                    input.validate() &&
-                    controller.updateMarkNote(mark, input.value ?? '')) {
-                  Navigator.pop(ctx);
-                }
-              },
-              child: Text(t('套用備註', 'Apply note')),
-            ),
-          ],
-        ),
-      );
-      await Navigator.of(context, rootNavigator: true).push(dialog);
-      await dialog.completed;
+      await edit(mark);
     } finally {
       _editingNote = false;
       controller.setManualEntryPending(false);
     }
+  }
+
+  Future<void> _showTextNoteEditor(RoutePoint mark) async {
+    final controller = c!;
+    final field = GlobalKey<FormFieldState<String>>();
+    final dialog = DialogRoute<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        scrollable: true,
+        title: Text(t('文字備註', 'Text note')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(t(mark.nameZh, mark.nameEn)),
+            const SizedBox(height: 12),
+            TextFormField(
+              key: field,
+              initialValue: mark.textNote,
+              maxLength: RoutePoint.maxTextNoteLength,
+              minLines: 2,
+              maxLines: 4,
+              decoration: InputDecoration(
+                labelText: t('備註內容', 'Note text'),
+                helperText: mark.textNote == null
+                    ? null
+                    : t('留空並套用可移除備註', 'Apply an empty note to remove it'),
+              ),
+              validator: (value) {
+                if (!controller.canEdit || !controller.nodes.contains(mark)) {
+                  return t(
+                    '此標記目前無法編輯',
+                    'This landmark is unavailable for editing',
+                  );
+                }
+                final text = value?.trim() ?? '';
+                return text.isEmpty || RoutePoint.validTextNote(text)
+                    ? null
+                    : t('請縮短備註', 'Shorten this note');
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (ModalRoute.isCurrentOf(ctx) == true) Navigator.pop(ctx);
+            },
+            child: Text(t('取消', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              final input = field.currentState;
+              if (ModalRoute.isCurrentOf(ctx) == true &&
+                  input != null &&
+                  input.validate() &&
+                  controller.updateMarkNote(mark, input.value ?? '')) {
+                Navigator.pop(ctx);
+              }
+            },
+            child: Text(t('套用備註', 'Apply note')),
+          ),
+        ],
+      ),
+    );
+    await Navigator.of(context, rootNavigator: true).push(dialog);
+    await dialog.completed;
+  }
+
+  Future<void> _showAudioNoteEditor(RoutePoint mark) async {
+    final controller = c!;
+    _stopFeedback();
+    final dialog = DialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => RouteAudioNoteDialog(
+        markName: t(mark.nameZh, mark.nameEn),
+        initial: mark.audioNote,
+        translate: t,
+        apply: (note) => controller.updateMarkAudioNote(mark, note),
+      ),
+    );
+    await Navigator.of(context, rootNavigator: true).push(dialog);
+    await dialog.completed;
   }
 
   Widget _markPanel() => Wrap(
@@ -630,7 +681,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       ),
       'captured': ('已加入路標，請保存路線。', 'Landmark added. Save your route.'),
       'edited': ('已更改，請保存路線。', 'Changes made. Save your route.'),
-      'noteEdited': ('已更新文字備註，請保存路線。', 'Text note updated. Save your route.'),
+      'noteEdited': ('已更新備註，請保存路線。', 'Note updated. Save your route.'),
       'duplicate': (
         '此路標已有這張照片；請換個角度再拍。',
         'This view already exists. Try another angle.',
@@ -765,7 +816,8 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     return Semantics(
       liveRegion:
           !_markBusy &&
-          (_openedNote == null || controller.actualNodeId != null) &&
+          ((_openedNote == null && !_playingNoteAudio) ||
+              controller.actualNodeId != null) &&
           mark == null &&
           (!markFailure ||
               (MediaQuery.accessibleNavigationOf(context) &&
@@ -1406,6 +1458,14 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                       : 'Edit text note',
                   c!.canEdit ? () => _editMarkNote(c!.nodes[i]) : null,
                 ),
+              if (RouteNoteAudio.supported && c!.nodes[i].markType != null)
+                button(
+                  c!.nodes[i].audioNote == null ? '加入錄音備註' : '編輯錄音備註',
+                  c!.nodes[i].audioNote == null
+                      ? 'Add audio note'
+                      : 'Edit audio note',
+                  c!.canEdit ? () => _editAudioNote(c!.nodes[i]) : null,
+                ),
               button(
                 '補拍同一路標',
                 'Add another view',
@@ -1498,6 +1558,50 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     _stopFeedback();
   }
 
+  void _cancelReplayAudio() {
+    if (!_playingNoteAudio) return;
+    _playingNoteAudio = false;
+    _noteAudioEpoch++;
+    unawaited(_noteAudio.cancel());
+  }
+
+  Future<void> _playReplayAudio(RoutePoint mark) async {
+    final clip = mark.audioNote;
+    if (clip == null ||
+        _playingNoteAudio ||
+        !identical(c?.confirmedReplayMark, mark)) {
+      return;
+    }
+    final ticket = ++_noteAudioEpoch;
+    final shouldStopSpeech = !MediaQuery.accessibleNavigationOf(context);
+    setState(() {
+      _openedNote = null;
+      _playingNoteAudio = true;
+      _audioPlaybackFailed = false;
+      _replayFeedbackPoint = null;
+      _feedbackEpoch++;
+    });
+    if (shouldStopSpeech) await _feedbackTts.stop();
+    if (!mounted ||
+        ticket != _noteAudioEpoch ||
+        !identical(c?.confirmedReplayMark, mark)) {
+      if (mounted && ticket == _noteAudioEpoch) setState(_cancelReplayAudio);
+      return;
+    }
+    try {
+      await _noteAudio.play(clip);
+    } catch (_) {
+      if (mounted && ticket == _noteAudioEpoch) {
+        setState(() => _audioPlaybackFailed = true);
+        await _noteAudio.cancel();
+      }
+    } finally {
+      if (mounted && ticket == _noteAudioEpoch) {
+        setState(() => _playingNoteAudio = false);
+      }
+    }
+  }
+
   List<Widget> _replay() {
     final controller = c!, exit = c!.transitionExit;
     final nodes = controller.nodes, next = controller.nextPoint;
@@ -1559,6 +1663,8 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                   if (v == target) return;
                   _closeReplayNote();
                   setState(() {
+                    _cancelReplayAudio();
+                    _audioPlaybackFailed = false;
                     _target = v;
                     _actualFloor.clear();
                     _direction = false;
@@ -1621,11 +1727,24 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
               ),
             ),
           )
-        else if (mark?.textNote != null)
+        else if (!_playingNoteAudio && mark?.textNote != null)
           button(
             noteUsesLiveRegion ? '查看文字備註' : '讀出文字備註',
             noteUsesLiveRegion ? 'View text note' : 'Read text note',
             () => _readReplayNote(mark!),
+          ),
+        if (_playingNoteAudio)
+          button(
+            '停止播放備註',
+            'Stop note playback',
+            () => setState(_cancelReplayAudio),
+          )
+        else if (RouteNoteAudio.supported && mark?.audioNote != null)
+          button('播放錄音備註', 'Play audio note', () => _playReplayAudio(mark!)),
+        if (_audioPlaybackFailed)
+          Semantics(
+            liveRegion: true,
+            child: Text(t('未能播放錄音備註。', 'Could not play the audio note.')),
           ),
         button(
           '拍攝並確認此路標',

@@ -102,6 +102,7 @@ class EncryptedRouteStore {
   int _epoch = 0;
   final _cipher = AesGcm.with256bits();
   static const _scope = 'pathguide/device-local/routes/v1';
+  static const _versionEnvelopeLimit = 8 * 1024 * 1024;
 
   static Future<EncryptedRouteStore> open({
     Directory? root,
@@ -257,11 +258,16 @@ class EncryptedRouteStore {
     );
   }
 
-  Future<List<int>> _unsealBytes(File file, SecretKey key, String aad) async {
+  Future<List<int>> _unsealBytes(
+    File file,
+    SecretKey key,
+    String aad, {
+    int limit = 2 * 1024 * 1024,
+  }) async {
     try {
       if (await FileSystemEntity.type(file.path, followLinks: false) !=
               FileSystemEntityType.file ||
-          await file.length() > 2 * 1024 * 1024) {
+          await file.length() > limit) {
         throw const FormatException();
       }
       final sealed = jsonDecode(await file.readAsString()) as Map;
@@ -282,11 +288,13 @@ class EncryptedRouteStore {
   Future<Map<String, dynamic>> _unseal(
     File file,
     SecretKey key,
-    String aad,
-  ) async {
+    String aad, {
+    int limit = 2 * 1024 * 1024,
+  }) async {
     try {
-      return jsonDecode(utf8.decode(await _unsealBytes(file, key, aad)))
-          as Map<String, dynamic>;
+      return jsonDecode(
+        utf8.decode(await _unsealBytes(file, key, aad, limit: limit)),
+      ) as Map<String, dynamic>;
     } catch (_) {
       throw const RouteStoreFailure(RouteProblem.corrupt);
     }
@@ -428,13 +436,18 @@ class EncryptedRouteStore {
     if (info == null) throw const RouteStoreFailure(RouteProblem.notFound);
     final file = File('${_routeDir(id).path}/${info['file']}');
     try {
-      if (await file.length() > 2 * 1024 * 1024) {
+      if (await file.length() > _versionEnvelopeLimit) {
         throw const RouteStoreFailure(RouteProblem.corrupt);
       }
       if (_sha(await file.readAsBytes()) != info['sha']) {
         throw const RouteStoreFailure(RouteProblem.corrupt);
       }
-      final v = await _unseal(file, key, '$id/$version');
+      final v = await _unseal(
+        file,
+        key,
+        '$id/$version',
+        limit: _versionEnvelopeLimit,
+      );
       final document = RouteDocument.fromMap(
         v['document'] as Map<String, dynamic>,
       );
@@ -725,9 +738,10 @@ class EncryptedRouteStore {
         throw const RouteStoreFailure(RouteProblem.capacity);
       }
       final version = previous?['next'] as int? ?? 1;
-      final doc = document.toMap(),
-          docBytes = utf8.encode(jsonEncode(document.toMap()));
-      if (docBytes.length > limits.documentBytes) {
+      final doc = document.toMap();
+      final docBytes = utf8.encode(jsonEncode(doc));
+      if (docBytes.length - document.encodedAudioNoteLength >
+          limits.documentBytes) {
         throw const RouteStoreFailure(RouteProblem.capacity);
       }
       final hash = _sha(docBytes);
@@ -741,6 +755,9 @@ class EncryptedRouteStore {
         key,
         '${document.id}/$version',
       );
+      if (bytes.length > _versionEnvelopeLimit) {
+        throw const RouteStoreFailure(RouteProblem.capacity);
+      }
       final filename = '${_random()}.enc';
       final index = <String, Map<String, Object>>{
         for (final e in refs.entries)

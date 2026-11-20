@@ -12,6 +12,7 @@ import 'package:pathguide/route_memory/route_package.dart';
 import 'package:pathguide/route_memory/route_observation_source.dart';
 
 import 'route_camera_fixture.dart';
+import 'support/route_audio_fixture.dart';
 
 class Vault implements RouteKeyVault {
   List<int>? bytes;
@@ -127,6 +128,70 @@ void main() {
     expect(c.nodes.single.markType, 'stairs');
     expect(c.markFailures, isEmpty);
   });
+
+  test(
+    'audio notes are bounded and encrypted without changing the media catalog',
+    () async {
+      final wave = syntheticNoteWav(rate: 48000, seconds: 10);
+      expect(
+        () => RouteAudioNote.fromBytes(Uint8List.fromList(wave)..[0] = 0),
+        throwsA(isA<RouteStoreFailure>()),
+      );
+      final note = RouteAudioNote.fromBytes(wave);
+      await c.startRecording('Audio notes');
+      for (var i = 0; i < 5; i++) {
+        expect(
+          await c.recordLandmark(
+            'Door ${i + 1}',
+            'G',
+            confirmed: true,
+            markType: 'door',
+          ),
+          isTrue,
+        );
+      }
+      for (var i = 0; i < 4; i++) {
+        expect(c.updateMarkAudioNote(c.nodes[i], note), isTrue);
+      }
+      expect(c.updateMarkAudioNote(c.nodes.last, note), isFalse);
+      expect(c.updateMarkNote(c.nodes.first, 'Reception'), isTrue);
+      c.updateNode(0, 'Door by reception', 'G', ConnectorMode.walk, true);
+      expect(c.nodes.first.audioNote, same(note));
+      final map = c.document!.toMap();
+      expect(map['schemaVersion'], 8);
+      expect(
+        () => RouteDocument.fromMap({...map, 'schemaVersion': 7}),
+        throwsA(isA<RouteStoreFailure>()),
+      );
+      await c.save(activate: true);
+      expect(c.notice, 'saved');
+      final files = await root
+          .list(recursive: true)
+          .where((f) => f is File && f.path.endsWith('.enc'))
+          .cast<File>()
+          .toList();
+      for (final file in files) {
+        expect(await file.readAsString(), isNot(contains(note.encoded)));
+      }
+      final entry = (await store.list()).routes.single;
+      await c.open(entry);
+      expect(c.confirmedReplayMark, isNull);
+      await c.resume();
+      expect(
+        await c.checkPosition('n-1', 'G', directionConfirmed: true),
+        isTrue,
+      );
+      expect(c.confirmedReplayMark?.audioNote?.encoded, note.encoded);
+      expect(c.confirmedReplayMark?.textNote, 'Reception');
+      await c.open(entry, recording: true);
+      for (var i = 0; i < 4; i++) {
+        expect(c.updateMarkAudioNote(c.nodes[i], null), isTrue);
+      }
+      expect(c.document!.toMap()['schemaVersion'], 7);
+      await c.delete(entry);
+      expect((await store.list()).routes, isEmpty);
+    },
+  );
 
   test(
     'text notes stay on the selected mark through review and encrypted replay',

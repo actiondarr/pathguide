@@ -66,6 +66,7 @@ class RoutePoint {
     this.markType,
     this.direction,
     this.textNote,
+    this.audioNote,
     FloorEvidence? floorEvidence,
     this.floorAnchorId,
     this.isFloorContextAnchor = false,
@@ -74,6 +75,7 @@ class RoutePoint {
            (floor == null ? FloorEvidence.unknown : FloorEvidence.confirmed);
   final String id, nameZh, nameEn;
   final String? markType, direction, textNote;
+  final RouteAudioNote? audioNote;
   final FloorRef? floor;
   final FloorEvidence floorEvidence;
   final String? floorAnchorId;
@@ -161,6 +163,10 @@ class RouteDocument {
   final List<RouteSegment> edges;
   final List<RouteMarkFailure> markFailures;
   static const maxMarkFailures = 64;
+  int get audioNoteBytes =>
+      nodes.fold(0, (sum, n) => sum + (n.audioNote?.bytes.length ?? 0));
+  int get encodedAudioNoteLength =>
+      nodes.fold(0, (sum, n) => sum + (n.audioNote?.encoded.length ?? 0));
   static bool validId(String id) =>
       RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(id);
   bool get compatible => source == RouteContentSource.synthetic
@@ -177,6 +183,7 @@ class RouteDocument {
                 preprocessRevision == 'none-synthetic')) ||
         views.length > RouteMediaBounds.viewsPerRoute ||
         markFailures.length > maxMarkFailures ||
+        audioNoteBytes > RouteMediaBounds.audioBytesPerRoute ||
         markFailures.any(
           (f) =>
               !f.attemptedAtUtc.isUtc ||
@@ -214,6 +221,7 @@ class RouteDocument {
           !RoutePoint.validMark(n.markType, n.direction) ||
           (n.textNote != null &&
               (n.markType == null || !RoutePoint.validTextNote(n.textNote!))) ||
+          (n.audioNote != null && n.markType == null) ||
           !validId(n.id) ||
           n.nameZh.length > 120 ||
           n.nameEn.length > 120 ||
@@ -318,6 +326,8 @@ class RouteDocument {
   Map<String, Object?> toMap() => {
     'schemaVersion': source == RouteContentSource.synthetic
         ? 1
+        : nodes.any((n) => n.audioNote != null)
+        ? 8
         : nodes.any((n) => n.textNote != null)
         ? 7
         : markFailures.isNotEmpty
@@ -347,6 +357,7 @@ class RouteDocument {
           if (_hasMarkMetadata) 'markType': n.markType,
           if (_hasMarkMetadata) 'markDirection': n.direction,
           if (n.textNote != null) 'textNote': n.textNote,
+          if (n.audioNote != null) 'audioNote': n.audioNote!.encoded,
           if (_hasProvenance || _hasMarkMetadata)
             'floorEvidence': n.floorEvidence.name,
           if (_hasProvenance || _hasMarkMetadata)
@@ -385,12 +396,12 @@ class RouteDocument {
 
   factory RouteDocument.fromMap(Map<String, dynamic> v) {
     final schema = v['schemaVersion'];
-    final hasFloorEvidence = [3, 4, 5, 6, 7].contains(schema);
-    final hasMarks = [4, 5, 6, 7].contains(schema);
+    final hasFloorEvidence = [3, 4, 5, 6, 7, 8].contains(schema);
+    final hasMarks = [4, 5, 6, 7, 8].contains(schema);
     final synthetic =
         schema == 1 && v['source'] == 'synthetic' && !v.containsKey('views');
     final captured =
-        [2, 3, 4, 5, 6, 7].contains(schema) && v['source'] == 'captured';
+        [2, 3, 4, 5, 6, 7, 8].contains(schema) && v['source'] == 'captured';
     if ((!synthetic && !captured) || v['direction'] != 'recorded') {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
@@ -398,7 +409,7 @@ class RouteDocument {
     final hasFailures = v.containsKey('markFailures');
     if ((schema == 6 && !hasFailures) ||
         (hasFailures &&
-            ((schema != 6 && schema != 7) ||
+            ((schema != 6 && schema != 7 && schema != 8) ||
                 rawFailures is! List ||
                 rawFailures.isEmpty ||
                 rawFailures.length > maxMarkFailures))) {
@@ -406,9 +417,17 @@ class RouteDocument {
     }
     final nodes = v['nodes'] as List;
     final noteNodes = nodes.where((n) => n is Map && n.containsKey('textNote'));
-    if (schema == 7
-        ? noteNodes.isEmpty || noteNodes.any((n) => n['textNote'] is! String)
-        : noteNodes.isNotEmpty) {
+    final audioNodes = nodes.where(
+      (n) => n is Map && n.containsKey('audioNote'),
+    );
+    if ((schema == 7 && noteNodes.isEmpty) ||
+        (noteNodes.isNotEmpty &&
+            ((schema != 7 && schema != 8) ||
+                noteNodes.any((n) => n['textNote'] is! String))) ||
+        (schema == 8
+            ? audioNodes.isEmpty ||
+                  audioNodes.any((n) => n['audioNote'] is! String)
+            : audioNodes.isNotEmpty)) {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
     if (!hasFloorEvidence &&
@@ -467,7 +486,10 @@ class RouteDocument {
             n['en'] as String,
             markType: hasMarks ? n['markType'] as String? : null,
             direction: hasMarks ? n['markDirection'] as String? : null,
-            textNote: schema == 7 ? n['textNote'] as String? : null,
+            textNote: n['textNote'] as String?,
+            audioNote: n['audioNote'] == null
+                ? null
+                : RouteAudioNote.fromBase64(n['audioNote'] as String),
             floorEvidence: hasFloorEvidence
                 ? _decodeFloorEvidence(n['floorEvidence'])
                 : null,

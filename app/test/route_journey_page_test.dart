@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pathguide/navigation/navigation_hub_page.dart';
 import 'package:pathguide/route_memory/encrypted_route_store.dart';
 import 'package:pathguide/route_memory/recorded_route_controller.dart';
+import 'package:pathguide/route_memory/route_audio_note_dialog.dart';
 import 'package:pathguide/route_memory/route_journey_page.dart';
 import 'package:pathguide/route_memory/route_localizer.dart';
 import 'package:pathguide/route_memory/route_observation_source.dart';
@@ -19,6 +22,7 @@ import 'package:pathguide/ui/app_theme.dart';
 import 'route_record_replay_test.dart' show Vault;
 import 'captured_route_store_test.dart' show capturedDocument, capturedMedia;
 import 'route_camera_fixture.dart';
+import 'support/route_audio_fixture.dart';
 
 void main() {
   for (final language in AppLanguage.values) {
@@ -133,7 +137,7 @@ void main() {
     );
   }
   testWidgets(
-    'automatic recording saves and reopens a text note on the chosen mark',
+    'automatic recording saves and reopens text and audio on the chosen mark',
     (t) async {
       t.platformDispatcher.accessibilityFeaturesTestValue =
           const FakeAccessibilityFeatures(
@@ -337,6 +341,76 @@ void main() {
       expect(c.nodes[1].textNote, note);
       expect(c.nodes.last.textNote, isNull);
       expect(t.widget<OutlinedButton>(more).focusNode!.hasPrimaryFocus, isTrue);
+
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final wave = syntheticNoteWav();
+      final audioCalls = <String>[];
+      var denyMicrophone = true;
+      messenger.setMockMethodCallHandler(RouteNoteAudio.channel, (call) async {
+        audioCalls.add(call.method);
+        if (call.method == 'start') {
+          if (denyMicrophone) throw PlatformException(code: 'permission');
+          return 10000;
+        }
+        if (call.method == 'finish') return wave;
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(RouteNoteAudio.channel, null),
+      );
+
+      Future<void> openAudioEditor() async {
+        await openMarks();
+        final audio = find.text('錄音備註');
+        await t.ensureVisible(audio);
+        await t.pumpAndSettle();
+        await t.tap(audio);
+        await t.pumpAndSettle();
+        await t.ensureVisible(selected);
+        await t.pumpAndSettle();
+        await t.tap(selected);
+        await t.pumpAndSettle();
+      }
+
+      await openAudioEditor();
+      expect(audioCalls, isEmpty);
+      await t.tap(find.text('開始錄音'));
+      await t.pumpAndSettle();
+      expect(find.text('請在系統設定允許咪高峰。'), findsOneWidget);
+      denyMicrophone = false;
+      await t.tap(find.text('開始錄音'));
+      await t.pumpAndSettle();
+      expect(find.text('停止錄音'), findsOneWidget);
+      await t.pump(const Duration(seconds: 10));
+      await t.pumpAndSettle();
+      expect(audioCalls.where((method) => method == 'finish'), hasLength(1));
+      expect(c.nodes[1].audioNote, isNull);
+      final preview = find.text('試聽錄音');
+      await t.ensureVisible(preview);
+      await t.pumpAndSettle();
+      await t.tap(preview);
+      await t.pumpAndSettle();
+      expect(audioCalls.where((method) => method == 'play'), hasLength(1));
+      await t.tap(find.text('套用錄音'));
+      await t.pumpAndSettle();
+      expect(c.nodes[1].audioNote?.bytes, orderedEquals(wave));
+      expect(c.nodes[1].textNote, note);
+      expect(native.capturedResponse, same(lastFrame));
+
+      await openAudioEditor();
+      final replace = find.text('重新錄音');
+      await t.ensureVisible(replace);
+      await t.pumpAndSettle();
+      await t.tap(replace);
+      await t.pumpAndSettle();
+      final callsBeforeCancel = audioCalls.length;
+      await t.tap(find.text('取消'));
+      await t.pumpAndSettle();
+      expect(audioCalls.skip(callsBeforeCancel), contains('cancel'));
+      expect(audioCalls.where((method) => method == 'finish'), hasLength(1));
+      expect(c.nodes[1].audioNote?.bytes, orderedEquals(wave));
+      debugDefaultTargetPlatformOverride = null;
       expect(t.takeException(), isNull);
       t.view.resetPhysicalSize();
       t.view.resetDevicePixelRatio();
@@ -364,6 +438,7 @@ void main() {
       expect(c.nodes.length, 3);
       expect(c.nodes[1].markType, 'ramp');
       expect(c.nodes[1].textNote, note);
+      expect(c.nodes[1].audioNote?.bytes, orderedEquals(wave));
       expect(c.document!.complete, isFalse);
       final edit = find.text('編輯文字備註');
       await t.pumpAndSettle();
@@ -639,6 +714,11 @@ void main() {
         final language = useReader ? AppLanguage.chinese : AppLanguage.english;
         String label(String zh, String en) => useReader ? zh : en;
         final note = label('轉角有接待處。', 'Reception is by the corner.');
+        final wave = RouteAudioNote.fromBytes(syntheticNoteWav());
+        if (useReader) {
+          debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+          addTearDown(() => debugDefaultTargetPlatformOverride = null);
+        }
         t.platformDispatcher.accessibilityFeaturesTestValue =
             FakeAccessibilityFeatures(
               accessibleNavigation: useReader,
@@ -657,6 +737,24 @@ void main() {
         const landmark = MethodChannel('hk.pathguide/route_landmark');
         const speech = MethodChannel('flutter_tts');
         final announced = <String>[], spoken = <String>[];
+        final audioCalls = <String>[];
+        Completer<void>? playback;
+        messenger.setMockMethodCallHandler(RouteNoteAudio.channel, (
+          call,
+        ) async {
+          audioCalls.add(call.method);
+          if (call.method == 'play') {
+            expect((call.arguments as Map)['bytes'], orderedEquals(wave.bytes));
+            playback = Completer<void>();
+            await playback!.future;
+          }
+          if (call.method == 'cancel') playback?.complete();
+          return null;
+        });
+        addTearDown(
+          () =>
+              messenger.setMockMethodCallHandler(RouteNoteAudio.channel, null),
+        );
         var speechStops = 0;
         messenger.setMockDecodedMessageHandler(SystemChannels.accessibility, (
           message,
@@ -711,7 +809,7 @@ void main() {
           );
           final map = capturedDocument().toMap();
           final points = map['nodes'] as List<Map<String, Object?>>;
-          map['schemaVersion'] = 7;
+          map['schemaVersion'] = useReader ? 8 : 7;
           for (final point in points) {
             point['floorEvidence'] = 'confirmed';
           }
@@ -721,6 +819,7 @@ void main() {
             'markType': 'junction',
             'markDirection': 'left',
             'textNote': note,
+            if (useReader) 'audioNote': wave.encoded,
           });
           points.last.addAll({
             'zh': '東面路口',
@@ -784,7 +883,9 @@ void main() {
           label('拍攝並確認此路標', 'Capture and confirm landmark'),
         );
         final readNote = find.text(label('讀出文字備註', 'Read text note'));
+        final playNote = find.text('播放錄音備註');
         expect(readNote, findsNothing);
+        expect(playNote, findsNothing);
         expect(find.text(note), findsNothing);
         await reveal(find.byType(DropdownButtonFormField<String>));
         expect(find.text(label('路口 1', 'Junction 1')), findsOneWidget);
@@ -827,6 +928,15 @@ void main() {
         expect(find.text(note), findsOneWidget);
         expect(announced, useReader ? [message, note] : isEmpty);
         expect(spoken, useReader ? isEmpty : [message, note]);
+        expect(audioCalls, isEmpty);
+        if (useReader) {
+          await reveal(playNote);
+          await t.tap(playNote);
+          await t.pumpAndSettle();
+          expect(audioCalls, ['play']);
+          expect(find.text('停止播放備註'), findsOneWidget);
+          expect(find.text(note), findsNothing);
+        }
         if (!useReader) {
           await t.runAsync(() => Future<void>.delayed(RouteLocalizer.validity));
           await t.pump(const Duration(seconds: 1));
@@ -849,9 +959,11 @@ void main() {
         await t.pumpAndSettle();
         expect(find.text(message), findsNothing);
         expect(find.text(note), findsNothing);
-        expect(speechStops, stopsBeforePause + (useReader ? 1 : 0));
+        expect(speechStops, stopsBeforePause);
+        expect(audioCalls, useReader ? ['play', 'cancel'] : isEmpty);
         expect(t.takeException(), isNull);
         await t.pumpWidget(const SizedBox());
+        if (useReader) debugDefaultTargetPlatformOverride = null;
       },
     );
   }

@@ -84,9 +84,10 @@
 | 資料 | 讀寫契約 |
 |---|---|
 | 版本與媒體 | 錄製或明確更新時寫必要 JPEG／Vision feature，引用綁 SHA、尺寸、保存時間、擷取來源及特徵版本。普通重行只讀。先驗引用與配額，再寫暫存，最後原子更新 catalog。中斷或額滿保護穩定版本。刪除先立 tombstone 再清各版本與媒體。 |
-| 帶標記路線 | `markType`（landmark／junction／door／stairs／lift／toilet）及 `markDirection`（junction 限 left／right／straight）自 schema 4 起支援，schema 5 加入 escalator／ramp／reception／sign。保存時按所含資料使用相容 schema，失敗紀錄最低需要 schema 6，文字備註需要 schema 7。開發分支可讀 schema 1–7。`1.11.0+29` 可讀至 schema 4，上一個原始碼檢查點可讀至 schema 6。回退前須核對路線版本。沿用 `floorEvidence`、`floorAnchor`、`floorContextAnchor`。復原移除最近成功手動標記及未被引用的媒體，重接路段保持未確認。 |
+| 帶標記路線 | `markType`（landmark／junction／door／stairs／lift／toilet）及 `markDirection`（junction 限 left／right／straight）自 schema 4 起支援，schema 5 加入 escalator／ramp／reception／sign。保存時按所含資料使用相容 schema，失敗紀錄最低需要 schema 6，文字備註需要 schema 7，錄音備註需要 schema 8。開發分支可讀 schema 1–8。`1.11.0+29` 可讀至 schema 4，前一個原始碼檢查點可讀至 schema 7。回退前須核對路線版本。沿用 `floorEvidence`、`floorAnchor`、`floorContextAnchor`。復原移除最近成功手動標記及未被引用的媒體，重接路段保持未確認。 |
 | 失敗紀錄 | `markFailures` 跟當前草稿或路線版本加密保存。每筆只存標記類型、選填方向、UTC 嘗試時間及固定原因 `capture`／`capacity`，保留最近 64 筆。純失敗紀錄可存草稿。重行只用路標、有效媒體及路段，失敗紀錄供查看。刪除路線時跟隨原有版本清除。 |
 | 文字備註 | schema 7 的 `textNote` 隨指定手動標記保存在本機加密路線版本，最多 240 個字元及 1 KiB UTF-8。更新或清空備註隨路線保存。舊版本按既有版本規則保留，刪除整條路線時一併清除。廢除標記同時移除當前版本的備註。備註作文字顯示及按需讀出，定位與路段判定沿用路標、樓層、面向及有效媒體。 |
+| 錄音備註 | schema 8 的 `audioNote` 隨指定手動標記保存單聲道 16-bit PCM WAV。iOS 在記憶體收音和播放，路線版本沿用 AES-GCM、裝置檔案保護、原子保存及刪除。每段上限 10 秒及 1 MiB，單一路線版本原始錄音合計最多 4 MiB，加密版本檔案上限 8 MiB。錄音編碼內容獨立計入容量，其他 JSON 沿用 256 KiB；磁碟配額計入整個加密檔案。catalog 與 JPEG／feature 的媒體索引沿用現行格式。播放使用該版本的錄音及有效位置確認，取相分析和語音辨識維持各自用途。 |
 | 樓層與轉層 | 區分未知、明確確認、沿用及整段核實。沿用引用較早的有效同層確認點，須核實才可啟用。設備入口後作廢當前樓層，出口再確認。矛盾、暫停、背景、保存或重開均撤回當前上下文。有向邊只記已走方向，跨層須有入口、出口、設備及樓層來源。回程另驗。 |
 | 觀察與提示 | 普通相機提供 Vision feature print 與 OCR 候選。路線版本、方向、時序及有效樓層共同約束匹配，錯層、相似出口、過期或特徵不相容時保留未知。正式跨層及障礙提示須按旅程、世代、版本、來源序列及有效期核驗。P0 合成結果適用於工程夾具。 |
 | 裝置保護 | 路線用 AES-GCM 與獨立裝置金鑰，與待傳照片隔離。iOS 檔案 Complete 保護並排除備份，Keychain 為 WhenUnlockedThisDeviceOnly。重裝、遺失金鑰或換機後的復原無保證。 |
@@ -184,11 +185,13 @@
 | B12 發佈及預算／S0–S6 | 記安全 ID、版本、雜湊、階段、耗時及費用估算。驗遠端 tag／Release 方可裝機，另核真人結果。 |
 | B13 室內即時資料／S4 | 同幀深度及物件留手機。按前端真機量尺、對位、失效驗收，序列上傳另取同意。 |
 | B14 路線記憶及場地版本／S4–S7 | 有向路段、觀察、樓層來源及版本分開。驗重行位置與出口，場地圖與同步另驗資料、存取及離線。 |
-| B15 路線錄製／S1–S4 | schema 4–7、加密媒體、失敗紀錄、文字備註、CAS 及容量／刪除互鎖。驗重開、版本相容、下一趟重行、讀屏及按需讀出。同步待接。 |
+| B15 路線錄製／S1–S4 | schema 4–8、加密媒體、失敗紀錄、文字／錄音備註、CAS 及容量／刪除互鎖。驗重開、版本相容、下一趟重行、讀屏、收音及按需播放。同步待接。 |
 | B16 額外登入／S7 | Apple／電話以 Firebase provider linking 維持原 UID。處理登入衝突，驗跨平台、刪除及同 UID 復原。 |
 | B17 場景描述／S1 | Auth／App Check → 帳本預留 → 有界 JPEG → 完整驗證。驗有效許可、內容拒絕、取消、未知用量及讀屏起音。 |
 
 ## 9. 維護與追溯
+
+2026 年 11 月 20 日記錄 schema 8 的錄音格式、本機加密、容量及舊版讀取界線。[工程證據](../verification/route-audio-notes-20261120.json)
 
 2026 年 11 月 20 日補記「閱讀文字」的本機暫存及清除條件。
 

@@ -166,6 +166,7 @@ class RecordedRouteController extends ChangeNotifier {
         markType: n.markType,
         direction: n.direction,
         textNote: n.textNote,
+        audioNote: n.audioNote,
         floor: floor,
         floorEvidence: FloorEvidence.segmentConfirmed,
         floorAnchorId: anchorId,
@@ -725,13 +726,37 @@ class RecordedRouteController extends ChangeNotifier {
   }
 
   bool updateMarkNote(RoutePoint mark, String input) {
-    if (!canEdit || mark.markType == null) return false;
-    final index = _nodes.indexOf(mark);
-    if (index < 0) return false;
     final text = input.trim();
     final note = text.isEmpty ? null : text;
     if (note != null && !RoutePoint.validTextNote(note)) return false;
-    if (mark.textNote == note) return true;
+    return _updateMarkNotes(mark, textNote: note, audioNote: mark.audioNote);
+  }
+
+  bool updateMarkAudioNote(RoutePoint mark, RouteAudioNote? note) {
+    final otherBytes = _nodes.fold<int>(
+      0,
+      (sum, point) =>
+          sum +
+          (identical(point, mark) ? 0 : point.audioNote?.bytes.length ?? 0),
+    );
+    if (otherBytes + (note?.bytes.length ?? 0) >
+        RouteMediaBounds.audioBytesPerRoute) {
+      return false;
+    }
+    return _updateMarkNotes(mark, textNote: mark.textNote, audioNote: note);
+  }
+
+  bool _updateMarkNotes(
+    RoutePoint mark, {
+    required String? textNote,
+    required RouteAudioNote? audioNote,
+  }) {
+    if (!canEdit || mark.markType == null) return false;
+    final index = _nodes.indexOf(mark);
+    if (index < 0) return false;
+    if (mark.textNote == textNote && identical(mark.audioNote, audioNote)) {
+      return true;
+    }
     _nodes[index] = RoutePoint(
       mark.id,
       mark.nameZh,
@@ -739,7 +764,8 @@ class RecordedRouteController extends ChangeNotifier {
       floor: mark.floor,
       markType: mark.markType,
       direction: mark.direction,
-      textNote: note,
+      textNote: textNote,
+      audioNote: audioNote,
       floorEvidence: mark.floorEvidence,
       floorAnchorId: mark.floorAnchorId,
       isFloorContextAnchor: mark.isFloorContextAnchor,
@@ -782,6 +808,7 @@ class RecordedRouteController extends ChangeNotifier {
         markType: previous.markType,
         direction: previous.direction,
         textNote: previous.textNote,
+        audioNote: previous.audioNote,
         floor: f,
         floorEvidence: preserve ? previous.floorEvidence : null,
         floorAnchorId: preserve ? previous.floorAnchorId : null,
@@ -808,6 +835,7 @@ class RecordedRouteController extends ChangeNotifier {
             markType: n.markType,
             direction: n.direction,
             textNote: n.textNote,
+            audioNote: n.audioNote,
           );
           final e = _edges[j - 1];
           _edges[j - 1] = RouteSegment(
