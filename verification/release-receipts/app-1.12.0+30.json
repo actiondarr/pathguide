@@ -18,6 +18,22 @@
     "skipped": 7,
     "codesign": "deep strict pass"
   },
-  "phoneInstall": null,
-  "humanAcceptance": "Pending"
+  "phoneInstall": {
+    "bundleIdentifier": "hk.pathguide.pathguide",
+    "version": "1.12.0",
+    "bundleVersion": "30",
+    "installedInPlace": true,
+    "dataCleared": false,
+    "independentInventoryVerified": true,
+    "initialLaunch": "iOS developer trust required",
+    "userConfirmedLaunchAfterTrust": true,
+    "normalLaunchSucceeded": true
+  },
+  "humanAcceptance": "Pending",
+  "release": {
+    "sourceCommit": "a8a650e6db6b69badc32292d257a6c14a74a937c",
+    "tag": "v1.12.0+30",
+    "remoteTagAndPrereleaseVerifiedBeforeInstall": true,
+    "privateBinaryUploaded": false
+  }
 }

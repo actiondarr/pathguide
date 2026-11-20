@@ -12,7 +12,7 @@
 
 ## 現版 App 可以做甚麼
 
-最近有收據的 iPhone 工程版為 **1.11.0+29**，已原位安裝、獨立核對版本及正常啟動。開發分支本輪 Flutter 測試 609 項通過、7 項略過，靜態分析及 iOS Simulator 建置通過。錄路收音、VoiceOver、場景內容及實地任務仍有真人驗收項目。[版本收據](../verification/release-receipts/app-1.11.0+29.json) · [工程證據](../verification/general-text-reading-20261120.json)
+最近有收據的 iPhone 工程預發版為 **1.12.0+30**，已原位安裝、獨立核對版本，並在使用者信任開發者後正常啟動。開發分支本輪 Flutter 測試 609 項通過、7 項略過，靜態分析及 iOS Simulator 建置通過。錄路收音、VoiceOver、場景內容及實地任務仍有真人驗收項目。[版本收據](../verification/release-receipts/app-1.12.0+30.json) · [工程證據](../verification/general-text-reading-20261120.json)
 
 首頁先選任務。首次開啟即時辨識、路線導航或菜單會顯示教學。相機按任務使用，首頁本身不開相機。設定保存繁體中文／English、粵語播報速度及首次教學狀態。[首頁](../app/lib/ui/task_home_page.dart) · [任務入口](../app/lib/ui/app_shell.dart)
 
