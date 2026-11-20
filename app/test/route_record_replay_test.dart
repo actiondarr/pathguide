@@ -125,7 +125,96 @@ void main() {
     expect(await first, isTrue);
     expect(c.nodes.length, 1);
     expect(c.nodes.single.markType, 'stairs');
+    expect(c.markFailures, isEmpty);
   });
+  test(
+    'failed manual marks stay in an encrypted draft through retry and undo',
+    () async {
+      await c.startRecording('Failed turn');
+      native.changeCapture = (reply) => {...reply, 'status': 'no_frame'};
+      expect(await c.mark('junction', '左轉', direction: 'left'), isFalse);
+      expect(c.running, isTrue);
+      expect(c.notice, 'markFailed');
+      expect(c.dirty, isTrue);
+      expect(c.document!.nodes, isEmpty);
+      expect(c.document!.views, isEmpty);
+      final failure = c.markFailures.single;
+      expect(failure.direction, 'left');
+      expect(failure.reason, RouteMarkFailureReason.capture);
+      expect(failure.attemptedAtUtc.isUtc, isTrue);
+      final failureMap = c.document!.toMap();
+      expect(failureMap['schemaVersion'], 6);
+      expect(
+        () => RouteDocument.fromMap({...failureMap, 'schemaVersion': 5}),
+        throwsA(isA<RouteStoreFailure>()),
+      );
+
+      native.changeCapture = null;
+      observedText = ['A' * 121];
+      expect(await c.mark('door', '門口'), isFalse);
+      expect(c.markFailures.last.markType, 'door');
+      expect(c.document!.views, isEmpty);
+      observedText = [];
+      expect(await c.mark('junction', '左轉', direction: 'left'), isTrue);
+      expect(c.nodes.single.nameZh, '左轉 1');
+      expect(c.markFailures, hasLength(2));
+      expect(c.undoLastMark(), isTrue);
+      expect(c.document!.views, isEmpty);
+      expect(c.canSaveDraft, isTrue);
+      await c.save(activate: false);
+      final entry = (await store.list()).routes.single;
+      expect(entry.activeVersion, isNull);
+      await c.open(entry);
+      expect(c.nodes, isEmpty);
+      expect(c.replayAvailable, isFalse);
+      expect(c.markFailures.first.toMap(), failure.toMap());
+      expect(c.markFailures.last.markType, 'door');
+
+      await c.open(entry, recording: true);
+      await c.resume();
+      native.delayCapture = true;
+      final pending = c.mark('stairs', '樓梯');
+      await Future<void>.delayed(Duration.zero);
+      await c.pause();
+      native.captureReply!.complete(native.capturedResponse);
+      expect(await pending, isFalse);
+      expect(c.markFailures, hasLength(2));
+      expect(c.dirty, isFalse);
+      await c.delete(entry);
+      expect(c.markFailures, isEmpty);
+      expect((await store.list()).routes, isEmpty);
+    },
+  );
+
+  test(
+    'capacity failures retain only the latest attempts without taking photos',
+    () async {
+      await c.startRecording('Photo limit');
+      for (var i = 0; i < RouteMediaBounds.viewsPerRoute; i++) {
+        expect(
+          await c.recordLandmark('Point ${i + 1}', 'G', confirmed: true),
+          isTrue,
+        );
+      }
+      final lastCapture = native.capturedResponse;
+      expect(await c.mark('stairs', 'Stairs'), isFalse);
+      expect(c.markFailures.single.reason, RouteMarkFailureReason.capacity);
+      for (var i = 0; i < RouteDocument.maxMarkFailures; i++) {
+        expect(await c.mark('ramp', 'Ramp'), isFalse);
+      }
+      expect(c.notice, 'markCapacity');
+      expect(c.markFailures, hasLength(RouteDocument.maxMarkFailures));
+      expect(c.markFailures.map((f) => f.markType), everyElement('ramp'));
+      expect(native.capturedResponse, same(lastCapture));
+      expect(c.document!.complete, isTrue);
+      await c.save(activate: true);
+      await c.open((await store.list()).routes.single);
+      expect(c.replayAvailable, isTrue);
+      expect(c.markFailures, hasLength(RouteDocument.maxMarkFailures));
+      expect(c.nodes, hasLength(RouteMediaBounds.viewsPerRoute));
+      expect(c.nodes.every((point) => point.markType == null), isTrue);
+    },
+  );
   setUp(() async {
     root = await Directory.systemTemp.createTemp('record-route-');
     native = RouteNativeFixture()..attach();

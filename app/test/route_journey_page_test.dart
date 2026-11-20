@@ -342,6 +342,105 @@ void main() {
       messenger.setMockMethodCallHandler(channel, null);
     },
   );
+  testWidgets('a failed first mark can be saved and viewed from the library', (
+    t,
+  ) async {
+    final root = (await t.runAsync(
+      () => Directory.systemTemp.createTemp('failed-mark-ui-'),
+    ))!;
+    addTearDown(() => root.delete(recursive: true));
+    final store = (await t.runAsync(
+      () => EncryptedRouteStore.open(root: root, vault: Vault()),
+    ))!;
+    final native = RouteNativeFixture()..attach();
+    native.changeCapture = (reply) => {...reply, 'status': 'no_frame'};
+    addTearDown(native.detach);
+    t.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(
+          accessibleNavigation: true,
+          supportsAnnounce: true,
+        );
+    addTearDown(t.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final announced = <String>[];
+    messenger.setMockDecodedMessageHandler(SystemChannels.accessibility, (
+      message,
+    ) async {
+      if (message is Map && message['type'] == 'announce') {
+        announced.add((message['data'] as Map)['message'] as String);
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockDecodedMessageHandler(
+        SystemChannels.accessibility,
+        null,
+      ),
+    );
+    final c = RecordedRouteController(
+      store: store,
+      source: RouteObservationSource(supported: true),
+    );
+
+    Future<void> progress(bool Function() done) async {
+      for (var i = 0; i < 200 && !done(); i++) {
+        await t.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await t.pump();
+      }
+      await t.pumpAndSettle();
+      expect(done(), isTrue);
+    }
+
+    await t.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        home: RouteJourneyPage(
+          settings: AppSettings.memory(),
+          initialRecording: true,
+          createController: () async => c,
+          previewBuilder: (_) => const SizedBox(),
+        ),
+      ),
+    );
+    final start = find.text('開始錄路');
+    await progress(() => start.evaluate().isNotEmpty);
+    await t.ensureVisible(start);
+    await t.tap(start);
+    await progress(() => c.running);
+    final mark = find.byKey(const ValueKey('mark-left'));
+    await t.ensureVisible(mark);
+    await t.tap(mark);
+    await progress(() => c.notice == 'markFailed');
+    expect(
+      announced.where((message) => message == '未能記錄，可在原處再試'),
+      hasLength(1),
+    );
+    expect(announced, isNot(contains('左轉，已記錄')));
+    expect(c.nodes, isEmpty);
+    final finish = find.text('結束並保存');
+    await t.tap(finish);
+    await progress(() => c.notice == 'saved');
+
+    await t.tap(find.byTooltip('返回'));
+    final open = find.text('開啟路線');
+    await progress(() => open.evaluate().isNotEmpty);
+    await t.ensureVisible(open);
+    await t.tap(open);
+    await progress(() => c.mode == RecordedRouteMode.replay && !c.busy);
+    expect(find.text('開始重行'), findsNothing);
+    final history = find.text('標記失敗紀錄（1）');
+    await t.ensureVisible(history);
+    await t.tap(history);
+    await t.pumpAndSettle();
+    expect(find.text('左轉'), findsOneWidget);
+    expect(find.textContaining('取相或分析未完成'), findsOneWidget);
+    expect(t.takeException(), isNull);
+    await t.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'landmark dialog submits typed floor and closes safely while capture is pending',
     (t) async {

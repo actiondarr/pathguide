@@ -45,6 +45,11 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     'reception': ('接待處', 'Reception desk'),
     'sign': ('指示牌', 'Sign'),
   };
+  static const _markDirections = {
+    'left': ('左轉', 'Turn left'),
+    'right': ('右轉', 'Turn right'),
+    'straight': ('直行', 'Straight'),
+  };
   static final _generatedDirectionName = RegExp(
     r'^(?:左轉|右轉|直行|Turn left|Turn right|Straight) [0-9]+$',
   );
@@ -198,13 +203,17 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     final ok = await c!.mark(type, label, direction: direction);
     if (!mounted) return;
     setState(() => _markBusy = false);
-    unawaited(
-      _feedback(
-        ok
-            ? t('$label，已記錄', '$label recorded')
-            : t('未能記錄，請再試', 'Not recorded. Try again'),
-      ),
-    );
+    final feedback = ok
+        ? t('$label，已記錄', '$label recorded')
+        : switch (c!.notice) {
+            'markFailed' => t(
+              '未能記錄，可在原處再試',
+              'Not recorded. Try again from here',
+            ),
+            'markCapacity' => t('路標相片已達上限', 'Landmark photo limit reached'),
+            _ => null,
+          };
+    if (feedback != null) unawaited(_feedback(feedback));
     if (ok) unawaited(HapticFeedback.selectionClick());
   }
 
@@ -286,21 +295,20 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             child: Text(t(item.value.$1, item.value.$2)),
           ),
         ),
-      for (final item in const [
-        ('left', '左轉', 'Turn left'),
-        ('right', '右轉', 'Turn right'),
-        ('straight', '直行', 'Straight'),
-      ])
+      for (final item in _markDirections.entries)
         SizedBox(
           width: 120,
           child: OutlinedButton(
-            key: ValueKey('mark-${item.$1}'),
+            key: ValueKey('mark-${item.key}'),
             onPressed: c!.running
-                ? () =>
-                      _mark('junction', t(item.$2, item.$3), direction: item.$1)
+                ? () => _mark(
+                    'junction',
+                    t(item.value.$1, item.value.$2),
+                    direction: item.key,
+                  )
                 : null,
             style: OutlinedButton.styleFrom(minimumSize: const Size(56, 56)),
-            child: Text(t(item.$2, item.$3)),
+            child: Text(t(item.value.$1, item.value.$2)),
           ),
         ),
       OutlinedButton(
@@ -486,8 +494,8 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       'markUndone': ('已復原上次標記。', 'Last mark undone.'),
       'saved': ('已在此裝置加密保存。', 'Saved encrypted on this device.'),
       'draft': (
-        '這是草稿；補齊樓層及路段確認後才可重行。',
-        'Draft. Confirm floors and connections before replay.',
+        '這是草稿；錄製路標並核實樓層及路段後才可重行。',
+        'Draft. Record landmarks and confirm floors and connections before replay.',
       ),
       'incompatible': (
         '這個版本無法在目前裝置重認，請重新錄製。',
@@ -506,6 +514,14 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       'captureFailed': (
         '未能取得或分析相片，尚未加入路標。請停止相機，再按繼續重試。',
         'Could not capture or analyze the photo. No landmark was added. Stop the camera, then resume to retry.',
+      ),
+      'markFailed': (
+        '未能記錄這個標記。你可以在原處再按一次。',
+        'This mark was not recorded. You can try again from here.',
+      ),
+      'markCapacity': (
+        '路標相片已達上限。你可以結束並保存草稿。',
+        'Landmark photo limit reached. You can finish and save a draft.',
       ),
       'failed': (
         '相機未有回應。請按停止，再繼續重試。',
@@ -599,10 +615,16 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       );
     }
     final mark = controller.confirmedReplayMark;
+    final markFailure =
+        controller.notice == 'markFailed' ||
+        controller.notice == 'markCapacity';
     return Semantics(
       liveRegion:
           !_markBusy &&
           mark == null &&
+          (!markFailure ||
+              (MediaQuery.accessibleNavigationOf(context) &&
+                  !MediaQuery.supportsAnnounceOf(context))) &&
           ![
             'capturing',
             'captured',
@@ -1069,6 +1091,52 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     }
   }
 
+  Widget _markFailureHistory(List<RouteMarkFailure> failures) => ExpansionTile(
+    key: const ValueKey('mark-failure-history'),
+    title: Text(
+      t('標記失敗紀錄（${failures.length}）', 'Failed marks (${failures.length})'),
+    ),
+    subtitle: failures.length == RouteDocument.maxMarkFailures
+        ? Text(
+            t(
+              '顯示最近 ${failures.length} 次',
+              'Showing the latest ${failures.length} attempts',
+            ),
+          )
+        : null,
+    children: [
+      for (final failure in failures.reversed) _markFailureRow(failure),
+    ],
+  );
+
+  Widget _markFailureRow(RouteMarkFailure failure) {
+    final labels =
+        (_markDirections[failure.direction] ??
+        _markTypes[failure.markType] ??
+        _moreMarkTypes[failure.markType])!;
+    final local = failure.attemptedAtUtc.toLocal();
+    final format = MaterialLocalizations.of(context);
+    final date = format.formatShortDate(local);
+    final time = format.formatTimeOfDay(
+      TimeOfDay.fromDateTime(local),
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
+    final reason = switch (failure.reason) {
+      RouteMarkFailureReason.capture => t(
+        '取相或分析未完成',
+        'Capture or analysis failed',
+      ),
+      RouteMarkFailureReason.capacity => t(
+        '路標相片已達上限',
+        'Landmark photo limit reached',
+      ),
+    };
+    return ListTile(
+      title: Text(t(labels.$1, labels.$2)),
+      subtitle: Text('$date $time · $reason'),
+    );
+  }
+
   List<Widget> _record() => [
     Text(
       t(
@@ -1081,6 +1149,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       ),
     ),
     heading(c!.name),
+    if (c!.markFailures.isNotEmpty) _markFailureHistory(c!.markFailures),
     heading(t('樓層紀錄', 'Recording floor')),
     Text(
       t(
@@ -1207,7 +1276,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     button(
       '保存草稿',
       'Save draft',
-      c!.canEdit && c!.nodes.isNotEmpty ? () => c!.save(activate: false) : null,
+      c!.canSaveDraft ? () => c!.save(activate: false) : null,
     ),
     button(
       '完成並保存重行版本',
@@ -1263,6 +1332,8 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             : nodes.firstOrNull?.id);
     return [
       heading(controller.name),
+      if (!controller.running && controller.markFailures.isNotEmpty)
+        _markFailureHistory(controller.markFailures),
       Text(
         t(
           '只沿錄製方向逐點重認；回程須另錄。此版本沒有即時避障或連續語音帶路。',
@@ -1416,9 +1487,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                       button(
                         '結束並保存',
                         'Finish and save',
-                        c!.busy || c!.nodes.isEmpty
-                            ? null
-                            : _finishAutomaticDraft,
+                        c!.canSaveDraft ? _finishAutomaticDraft : null,
                         primary: true,
                       ),
                     if (!c!.running &&

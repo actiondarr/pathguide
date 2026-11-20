@@ -82,7 +82,8 @@
 | 資料 | 讀寫契約 |
 |---|---|
 | 版本與媒體 | 錄製或明確更新時寫必要 JPEG／Vision feature，引用綁 SHA、尺寸、保存時間、擷取來源及特徵版本。普通重行只讀。先驗引用與配額，再寫暫存，最後原子更新 catalog。中斷或額滿保護穩定版本。刪除先立 tombstone 再清各版本與媒體。 |
-| 帶標記路線 | captured schema 4 增加 `markType`（landmark／junction／door／stairs／lift／toilet）及 `markDirection`（junction 限 left／right／straight）。含 escalator／ramp／reception／sign 的路線使用 schema 5。兩者沿用 `floorEvidence`、`floorAnchor`、`floorContextAnchor`。開發分支可讀 schema 1–5。`1.11.0+29` 遇 schema 5 會拒讀，回退前須核對可讀路線版本。開發分支在有效的路標、樓層及面向確認後，從當前版本讀取標記和已確認步行段的方向。復原移除最近手動標記及未被引用的媒體，重接路段保持未確認。 |
+| 帶標記路線 | captured schema 4 增加 `markType`（landmark／junction／door／stairs／lift／toilet）及 `markDirection`（junction 限 left／right／straight）。含 escalator／ramp／reception／sign 的路線使用 schema 5，含失敗紀錄的路線使用 schema 6。沿用 `floorEvidence`、`floorAnchor`、`floorContextAnchor`。開發分支可讀 schema 1–6。`1.11.0+29` 可讀至 schema 4，上一個原始碼檢查點可讀至 schema 5，回退前須核對路線版本。有效的路標、樓層及面向確認後，App 從當前版本讀取標記和已確認步行段的方向。復原移除最近成功手動標記及未被引用的媒體，重接路段保持未確認。 |
+| 失敗紀錄 | schema 6 的 `markFailures` 跟當前草稿或路線版本加密保存。每筆只存標記類型、選填方向、UTC 嘗試時間及固定原因 `capture`／`capacity`，保留最近 64 筆。純失敗紀錄可存草稿。重行只用路標、有效媒體及路段，失敗紀錄供查看。刪除路線時跟隨原有版本清除。 |
 | 樓層與轉層 | 區分未知、明確確認、沿用及整段核實。沿用引用較早的有效同層確認點，須核實才可啟用。設備入口後作廢當前樓層，出口再確認。矛盾、暫停、背景、保存或重開均撤回當前上下文。有向邊只記已走方向，跨層須有入口、出口、設備及樓層來源。回程另驗。 |
 | 觀察與提示 | 普通相機提供 Vision feature print 與 OCR 候選。路線版本、方向、時序及有效樓層共同約束匹配，錯層、相似出口、過期或特徵不相容時保留未知。正式跨層及障礙提示須按旅程、世代、版本、來源序列及有效期核驗。P0 合成結果適用於工程夾具。 |
 | 裝置保護 | 路線用 AES-GCM 與獨立裝置金鑰，與待傳照片隔離。iOS 檔案 Complete 保護並排除備份，Keychain 為 WhenUnlockedThisDeviceOnly。重裝、遺失金鑰或換機後的復原無保證。 |
@@ -180,11 +181,13 @@
 | B12 發佈及預算／S0–S6 | 記安全 ID、版本、雜湊、階段、耗時及費用估算。驗遠端 tag／Release 方可裝機，另核真人結果。 |
 | B13 室內即時資料／S4 | 同幀深度及物件留手機。按前端真機量尺、對位、失效驗收，序列上傳另取同意。 |
 | B14 路線記憶及場地版本／S4–S7 | 有向路段、觀察、樓層來源及版本分開。驗重行位置與出口，場地圖與同步另驗資料、存取及離線。 |
-| B15 路線錄製／S1–S4 | schema 4／5、加密媒體、CAS 及容量／刪除互鎖。驗重開、版本相容、下一趟重行、讀屏及方向使用。同步待接。 |
+| B15 路線錄製／S1–S4 | schema 4–6、加密媒體及失敗紀錄、CAS 與容量／刪除互鎖。驗重開、版本相容、下一趟重行、讀屏及方向使用。同步待接。 |
 | B16 額外登入／S7 | Apple／電話以 Firebase provider linking 維持原 UID。處理登入衝突，驗跨平台、刪除及同 UID 復原。 |
 | B17 場景描述／S1 | Auth／App Check → 帳本預留 → 有界 JPEG → 完整驗證。驗有效許可、內容拒絕、取消、未知用量及讀屏起音。 |
 
 ## 9. 維護與追溯
+
+2026 年 11 月 20 日記錄 schema 6 的失敗紀錄欄位及容量、草稿、刪除和舊版讀取規則。[工程證據](../verification/route-mark-failures-20261120.json)
 
 2026 年 11 月 20 日記錄更多設施標記採 schema 5，以及舊版讀取界線。[工程證據](../verification/route-more-marks-20261120.json)
 

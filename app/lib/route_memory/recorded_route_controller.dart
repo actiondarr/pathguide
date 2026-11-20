@@ -53,6 +53,7 @@ class RecordedRouteController extends ChangeNotifier {
   List<RoutePoint> _nodes = [];
   List<RouteSegment> _edges = [];
   List<CapturedRouteView> _views = [];
+  List<RouteMarkFailure> _markFailures = [];
   Map<String, Uint8List> _media = {};
   String? _id;
   String _name = '', _building = '';
@@ -245,6 +246,8 @@ class RecordedRouteController extends ChangeNotifier {
       !_reloadRequired &&
       mode == RecordedRouteMode.record;
   bool get canCapture => canEdit && _running;
+  bool get canSaveDraft =>
+      canEdit && (_nodes.isNotEmpty || _markFailures.isNotEmpty);
   bool get canCheck =>
       !_disposed &&
       _foreground &&
@@ -254,6 +257,7 @@ class RecordedRouteController extends ChangeNotifier {
       !finished;
   String get name => _name;
   List<RoutePoint> get nodes => List.unmodifiable(_nodes);
+  List<RouteMarkFailure> get markFailures => List.unmodifiable(_markFailures);
   String? get actualNodeId => _localizer?.actualNodeId;
   FloorRef? get actualFloor => _localizer?.actualFloor;
   FloorRef? get expectedFloor => _localizer?.expectedFloor;
@@ -288,6 +292,7 @@ class RecordedRouteController extends ChangeNotifier {
           edges: _edges,
           source: RouteContentSource.captured,
           views: _views,
+          markFailures: _markFailures,
           featureRevision: RouteLocalizer.featureRevision,
           preprocessRevision: RouteLocalizer.preprocessRevision,
         );
@@ -377,6 +382,7 @@ class RecordedRouteController extends ChangeNotifier {
     _nodes = [];
     _edges = [];
     _views = [];
+    _markFailures = [];
     _media = {};
     selected = null;
     _dirty = false;
@@ -469,6 +475,29 @@ class RecordedRouteController extends ChangeNotifier {
     return (frame, value);
   }
 
+  void _recordMarkFailure(
+    String type,
+    String? direction,
+    DateTime attemptedAtUtc,
+    RouteMarkFailureReason reason,
+  ) {
+    if (_markFailures.length == RouteDocument.maxMarkFailures) {
+      _markFailures.removeAt(0);
+    }
+    _markFailures.add(
+      RouteMarkFailure(
+        markType: type,
+        direction: direction,
+        attemptedAtUtc: attemptedAtUtc,
+        reason: reason,
+      ),
+    );
+    _dirty = true;
+    notice = reason == RouteMarkFailureReason.capacity
+        ? 'markCapacity'
+        : 'markFailed';
+  }
+
   Future<bool> recordLandmark(
     String name,
     String floor, {
@@ -481,22 +510,28 @@ class RecordedRouteController extends ChangeNotifier {
     String? markType,
     String? direction,
   }) async {
-    if ((markType != null && !RoutePoint.markTypes.contains(markType)) ||
-        (direction != null &&
-            (markType != 'junction' ||
-                !RoutePoint.directions.contains(direction)))) {
-      return false;
-    }
+    if (!RoutePoint.validMark(markType, direction)) return false;
     if (!canCapture || name.trim().isEmpty || name.length > 120) return false;
     final existing = nodeId == null
         ? null
         : _nodes.indexWhere((n) => n.id == nodeId);
     if (existing != null && existing < 0) return false;
+    final attemptedAtUtc = markType != null && nodeId == null && !automatic
+        ? DateTime.now().toUtc()
+        : null;
     if (_views.length >= (automatic ? 48 : 64) ||
         (nodeId != null &&
             _views.where((v) => v.nodeId == nodeId).length >= 4)) {
       problem = 'capacity';
       notice = 'error';
+      if (attemptedAtUtc != null) {
+        _recordMarkFailure(
+          markType!,
+          direction,
+          attemptedAtUtc,
+          RouteMarkFailureReason.capacity,
+        );
+      }
       _changed();
       return false;
     }
@@ -628,6 +663,14 @@ class RecordedRouteController extends ChangeNotifier {
           }
         } else {
           _error(e);
+          if (attemptedAtUtc != null) {
+            _recordMarkFailure(
+              markType!,
+              direction,
+              attemptedAtUtc,
+              RouteMarkFailureReason.capture,
+            );
+          }
         }
       }
     } finally {
@@ -777,7 +820,7 @@ class RecordedRouteController extends ChangeNotifier {
   }
 
   Future<void> save({required bool activate, String? name}) async {
-    if (!canEdit || _nodes.isEmpty) return;
+    if (!canSaveDraft) return;
     if (name != null) {
       if (name.trim().isEmpty || name.length > 120) return;
       _name = name.trim();
@@ -868,6 +911,7 @@ class RecordedRouteController extends ChangeNotifier {
       _nodes = List.of(doc.nodes);
       _edges = List.of(doc.edges);
       _views = List.of(doc.views);
+      _markFailures = List.of(doc.markFailures);
       _media = Map.of(media);
       selected = entry;
       _revision = entry.revision;
@@ -1101,14 +1145,7 @@ class RecordedRouteController extends ChangeNotifier {
     try {
       await store.delete(entry.id, expectedRevision: entry.revision);
       if (!_current(op)) return;
-      _id = null;
-      _media.clear();
-      _nodes = [];
-      _edges = [];
-      _views = [];
-      _dirty = false;
-      selected = null;
-      mode = RecordedRouteMode.library;
+      _clearSelection();
       notice = 'deleted';
     } catch (e) {
       if (_current(op)) _error(e);
@@ -1131,10 +1168,8 @@ class RecordedRouteController extends ChangeNotifier {
     try {
       await store.rollback(entry.id, version, expectedRevision: entry.revision);
       if (_current(op)) {
+        _clearSelection();
         notice = 'rolledBack';
-        mode = RecordedRouteMode.library;
-        selected = null;
-        _media.clear();
       }
     } catch (e) {
       if (_current(op)) _error(e);
@@ -1156,6 +1191,7 @@ class RecordedRouteController extends ChangeNotifier {
     _nodes = [];
     _edges = [];
     _views = [];
+    _markFailures = [];
     _media.clear();
     selected = null;
     _dirty = false;

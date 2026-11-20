@@ -42,6 +42,11 @@ class RoutePoint {
     ...moreMarkTypes,
   };
   static const directions = {'left', 'right', 'straight'};
+  static bool validMark(String? type, String? direction) =>
+      (type == null || markTypes.contains(type)) &&
+      (direction == null ||
+          (type == 'junction' && directions.contains(direction)));
+
   const RoutePoint(
     this.id,
     this.nameZh,
@@ -61,6 +66,43 @@ class RoutePoint {
   final FloorEvidence floorEvidence;
   final String? floorAnchorId;
   final bool isFloorContextAnchor;
+}
+
+enum RouteMarkFailureReason { capture, capacity }
+
+@immutable
+class RouteMarkFailure {
+  const RouteMarkFailure({
+    required this.markType,
+    this.direction,
+    required this.attemptedAtUtc,
+    required this.reason,
+  });
+
+  final String markType;
+  final String? direction;
+  final DateTime attemptedAtUtc;
+  final RouteMarkFailureReason reason;
+
+  Map<String, Object?> toMap() => {
+    'markType': markType,
+    if (direction != null) 'direction': direction,
+    'attemptedAtUtc': attemptedAtUtc.toIso8601String(),
+    'reason': reason.name,
+  };
+
+  factory RouteMarkFailure.fromMap(Map<String, dynamic> v) {
+    final time = DateTime.tryParse(v['attemptedAtUtc'] as String);
+    if (time == null || time.toIso8601String() != v['attemptedAtUtc']) {
+      throw const RouteStoreFailure(RouteProblem.invalid);
+    }
+    return RouteMarkFailure(
+      markType: v['markType'] as String,
+      direction: v['direction'] as String?,
+      attemptedAtUtc: time,
+      reason: RouteMarkFailureReason.values.byName(v['reason'] as String),
+    );
+  }
 }
 
 @immutable
@@ -91,11 +133,13 @@ class RouteDocument {
     required List<RouteSegment> edges,
     this.source = RouteContentSource.synthetic,
     List<CapturedRouteView> views = const [],
+    List<RouteMarkFailure> markFailures = const [],
     this.featureRevision = 'p0-synthetic-v1',
     this.preprocessRevision = 'none-synthetic',
   }) : views = List.unmodifiable(views),
        nodes = List.unmodifiable(nodes),
-       edges = List.unmodifiable(edges) {
+       edges = List.unmodifiable(edges),
+       markFailures = List.unmodifiable(markFailures) {
     validate();
   }
   final String id, name, buildingId, featureRevision, preprocessRevision;
@@ -103,6 +147,8 @@ class RouteDocument {
   final List<CapturedRouteView> views;
   final List<RoutePoint> nodes;
   final List<RouteSegment> edges;
+  final List<RouteMarkFailure> markFailures;
+  static const maxMarkFailures = 64;
   static bool validId(String id) =>
       RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(id);
   bool get compatible => source == RouteContentSource.synthetic
@@ -112,11 +158,18 @@ class RouteDocument {
             preprocessRevision == 'upright-jpeg-v1';
 
   void validate() {
-    if ((source == RouteContentSource.synthetic && views.isNotEmpty) ||
+    if ((source == RouteContentSource.synthetic &&
+            (views.isNotEmpty || markFailures.isNotEmpty)) ||
         (source == RouteContentSource.captured &&
             (featureRevision == 'p0-synthetic-v1' ||
                 preprocessRevision == 'none-synthetic')) ||
-        views.length > RouteMediaBounds.viewsPerRoute) {
+        views.length > RouteMediaBounds.viewsPerRoute ||
+        markFailures.length > maxMarkFailures ||
+        markFailures.any(
+          (f) =>
+              !f.attemptedAtUtc.isUtc ||
+              !RoutePoint.validMark(f.markType, f.direction),
+        )) {
       throw const RouteStoreFailure(RouteProblem.invalid);
     }
     final identities = <String>{}, images = <String>{};
@@ -146,10 +199,7 @@ class RouteDocument {
     }
     for (final n in nodes) {
       if ((n.markType != null && source != RouteContentSource.captured) ||
-          (n.markType != null && !RoutePoint.markTypes.contains(n.markType)) ||
-          (n.direction != null &&
-              (n.markType != "junction" ||
-                  !RoutePoint.directions.contains(n.direction))) ||
+          !RoutePoint.validMark(n.markType, n.direction) ||
           !validId(n.id) ||
           n.nameZh.length > 120 ||
           n.nameEn.length > 120 ||
@@ -216,6 +266,8 @@ class RouteDocument {
             n.floorEvidence == FloorEvidence.inherited ||
             n.floorEvidence == FloorEvidence.segmentConfirmed,
       );
+  bool get _hasMarkMetadata =>
+      markFailures.isNotEmpty || nodes.any((n) => n.markType != null);
 
   bool get complete {
     if (nodes.length < 2 ||
@@ -252,9 +304,11 @@ class RouteDocument {
   Map<String, Object?> toMap() => {
     'schemaVersion': source == RouteContentSource.synthetic
         ? 1
+        : markFailures.isNotEmpty
+        ? 6
         : nodes.any((n) => RoutePoint.moreMarkTypes.contains(n.markType))
         ? 5
-        : nodes.any((n) => n.markType != null)
+        : _hasMarkMetadata
         ? 4
         : _hasProvenance
         ? 3
@@ -262,6 +316,8 @@ class RouteDocument {
     'source': source.name,
     if (source == RouteContentSource.captured)
       'views': [for (final view in views) view.toMap()],
+    if (markFailures.isNotEmpty)
+      'markFailures': [for (final failure in markFailures) failure.toMap()],
     'direction': 'recorded',
     'id': id,
     'name': name,
@@ -272,14 +328,13 @@ class RouteDocument {
       for (final n in nodes)
         {
           'id': n.id,
-          if (nodes.any((v) => v.markType != null)) 'markType': n.markType,
-          if (nodes.any((v) => v.markType != null))
-            'markDirection': n.direction,
-          if (_hasProvenance || nodes.any((v) => v.markType != null))
+          if (_hasMarkMetadata) 'markType': n.markType,
+          if (_hasMarkMetadata) 'markDirection': n.direction,
+          if (_hasProvenance || _hasMarkMetadata)
             'floorEvidence': n.floorEvidence.name,
-          if (_hasProvenance || nodes.any((v) => v.markType != null))
+          if (_hasProvenance || _hasMarkMetadata)
             'floorAnchor': n.floorAnchorId,
-          if (_hasProvenance || nodes.any((v) => v.markType != null))
+          if (_hasProvenance || _hasMarkMetadata)
             'floorContextAnchor': n.isFloorContextAnchor,
           'zh': n.nameZh,
           'en': n.nameEn,
@@ -313,12 +368,21 @@ class RouteDocument {
 
   factory RouteDocument.fromMap(Map<String, dynamic> v) {
     final schema = v['schemaVersion'];
-    final hasFloorEvidence = [3, 4, 5].contains(schema);
-    final hasMarks = [4, 5].contains(schema);
+    final hasFloorEvidence = [3, 4, 5, 6].contains(schema);
+    final hasMarks = [4, 5, 6].contains(schema);
     final synthetic =
         schema == 1 && v['source'] == 'synthetic' && !v.containsKey('views');
-    final captured = [2, 3, 4, 5].contains(schema) && v['source'] == 'captured';
+    final captured =
+        [2, 3, 4, 5, 6].contains(schema) && v['source'] == 'captured';
     if ((!synthetic && !captured) || v['direction'] != 'recorded') {
+      throw const RouteStoreFailure(RouteProblem.incompatible);
+    }
+    final rawFailures = v['markFailures'];
+    if (schema == 6
+        ? rawFailures is! List ||
+              rawFailures.isEmpty ||
+              rawFailures.length > maxMarkFailures
+        : v.containsKey('markFailures')) {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
     if (!hasFloorEvidence &&
@@ -353,6 +417,14 @@ class RouteDocument {
               for (final view in v['views'] as List)
                 CapturedRouteView.fromMap(
                   Map<String, dynamic>.from(view as Map),
+                ),
+            ]
+          : const [],
+      markFailures: schema == 6
+          ? [
+              for (final failure in rawFailures as List)
+                RouteMarkFailure.fromMap(
+                  Map<String, dynamic>.from(failure as Map),
                 ),
             ]
           : const [],
