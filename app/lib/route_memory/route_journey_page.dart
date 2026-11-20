@@ -799,6 +799,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       'deleted': ('路線已刪除。', 'Route deleted.'),
       'rolledBack': ('已還原所選版本。', 'Selected version restored.'),
       'cleaned': ('已清理未使用的本機資料。', 'Unused local data cleaned.'),
+      'saveFailed': _routeSaveFailure(controller.problem),
       'error': (
         '未能完成；資料容量、版本衝突或讀取可能有問題。請返回路線列表重新開啟；未保存資料仍留在此頁。',
         'Could not complete. Storage, version conflict or reading may have failed. Reopen from the library; unsaved data stays on this page.',
@@ -844,6 +845,37 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       ),
     );
   }
+
+  (String, String) _routeSaveFailure(String? problem) => switch (problem) {
+    'invalid' => (
+      '路線資料未通過保存檢查。未保存內容仍在此頁。',
+      'The route data did not pass save validation. Unsaved changes are still on this page.',
+    ),
+    'capacity' => (
+      '已達路線資料或版本上限。未保存內容仍在此頁。',
+      'Route storage or version limit reached. Unsaved changes are still on this page.',
+    ),
+    'conflict' => (
+      '已保存的路線版本有變更。這次修改未保存，仍留在此頁。',
+      'The saved route version changed. These unsaved changes are still on this page.',
+    ),
+    'outcomeUnknown' => (
+      '暫時未能確認路線有冇保存成功。請保留此頁。',
+      'The save could not be confirmed. Keep this page open.',
+    ),
+    'corrupt' || 'incompatible' => (
+      '未能讀取已保存的路線版本。未保存內容仍在此頁。',
+      'The saved route version could not be read. Unsaved changes are still on this page.',
+    ),
+    'keyUnavailable' => (
+      '暫時未能存取本機路線金鑰。請保持 iPhone 解鎖並重試保存。',
+      'The local route key is unavailable. Keep the iPhone unlocked and try saving again.',
+    ),
+    _ => (
+      '未能保存路線。未保存內容仍在此頁，可重試保存。',
+      'Could not save the route. Unsaved changes are still on this page. You can try saving again.',
+    ),
+  };
 
   Future<void> _editLandmark({int? index, bool addView = false}) async {
     if (_pendingLandmark != null) return;

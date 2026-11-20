@@ -44,11 +44,12 @@ class RouteFilePolicy {
     'mkdir',
     {'scope': scope, 'path': _relative(dir.path)},
   );
-  Future<void> write(File file, List<int> bytes) =>
+  Future<void> write(File file, List<int> bytes, {bool routeVersion = false}) =>
       channel.invokeMethod<void>('write', {
         'scope': scope,
         'path': _relative(file.path),
         'bytes': Uint8List.fromList(bytes),
+        if (routeVersion) 'routeVersion': true,
       });
   Future<void> rename(File source, String destination) =>
       channel.invokeMethod<void>('move', {

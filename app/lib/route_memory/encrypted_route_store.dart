@@ -138,9 +138,13 @@ class EncryptedRouteStore {
     }
   }
 
-  Future<void> _writeFile(File file, List<int> bytes) async {
+  Future<void> _writeFile(
+    File file,
+    List<int> bytes, {
+    bool routeVersion = false,
+  }) async {
     if (_files != null) {
-      await _files.write(file, bytes);
+      await _files.write(file, bytes, routeVersion: routeVersion);
     } else {
       await file.writeAsBytes(bytes, flush: true);
     }
@@ -813,7 +817,7 @@ class EncryptedRouteStore {
         await _renameFile(temp, '${folder.path}/${index[e.key]!['file']}');
       }
       final temp = File('${folder.path}/$filename.tmp');
-      await _writeFile(temp, bytes);
+      await _writeFile(temp, bytes, routeVersion: true);
       await _step('afterVersionWrite');
       _guard(token);
       await _renameFile(temp, '${folder.path}/$filename');

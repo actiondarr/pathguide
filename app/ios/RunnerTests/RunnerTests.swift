@@ -201,6 +201,31 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(audit["files"] as? Int, 2) // lock and catalog
   }
 
+  func testRouteStorageReusesDirectoryForAnotherVersion() throws {
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: base) }
+    let storage = RouteProtectedFiles(root: base)
+    try storage.prepare()
+    let folder = String(repeating: "a", count: 64)
+    let first = folder + "/" + String(repeating: "b", count: 32) + ".enc"
+    try storage.mkdir(folder)
+    try storage.write(path: first + ".tmp", data: Data([1]))
+    try storage.move(from: first + ".tmp", to: first)
+
+    try storage.mkdir(folder)
+    let second = folder + "/" + String(repeating: "c", count: 32) + ".enc"
+    let version = Data(count: 8 * 1024 * 1024)
+    XCTAssertThrowsError(try storage.write(path: second + ".tmp", data: version))
+    XCTAssertThrowsError(try storage.write(
+      path: String(repeating: "d", count: 32) + ".tmp", data: version, routeVersion: true))
+    XCTAssertThrowsError(try storage.write(
+      path: second + ".tmp", data: version + Data([1]), routeVersion: true))
+    try storage.write(path: second + ".tmp", data: version, routeVersion: true)
+    try storage.move(from: second + ".tmp", to: second)
+    XCTAssertEqual(try Data(contentsOf: base.appendingPathComponent(first)), Data([1]))
+    XCTAssertEqual(try Data(contentsOf: base.appendingPathComponent(second)), version)
+  }
+
 
 
   func testRouteOldEventSubscriberCannotStopNewCameraSession() {

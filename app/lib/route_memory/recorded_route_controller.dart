@@ -1019,6 +1019,7 @@ class RecordedRouteController extends ChangeNotifier {
     } catch (e) {
       if (_current(op)) {
         _error(e);
+        notice = 'saveFailed';
         if (e is RouteStoreFailure &&
             [
               RouteProblem.outcomeUnknown,
