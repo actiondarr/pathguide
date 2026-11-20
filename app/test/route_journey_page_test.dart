@@ -9,6 +9,7 @@ import 'package:pathguide/navigation/navigation_hub_page.dart';
 import 'package:pathguide/route_memory/encrypted_route_store.dart';
 import 'package:pathguide/route_memory/recorded_route_controller.dart';
 import 'package:pathguide/route_memory/route_journey_page.dart';
+import 'package:pathguide/route_memory/route_localizer.dart';
 import 'package:pathguide/route_memory/route_observation_source.dart';
 import 'package:pathguide/route_memory/route_package.dart';
 import 'package:pathguide/route_memory/cross_floor_contract.dart';
@@ -132,7 +133,7 @@ void main() {
     );
   }
   testWidgets(
-    'automatic entry and more marks need no point form and reopen a real draft',
+    'automatic recording saves and reopens a text note on the chosen mark',
     (t) async {
       t.platformDispatcher.accessibilityFeaturesTestValue =
           const FakeAccessibilityFeatures(
@@ -306,6 +307,36 @@ void main() {
       expect(spoken.where((v) => v == '斜道'), hasLength(1));
       expect(spoken.where((v) => v == '斜道，已記錄'), hasLength(1));
       expect(t.widget<OutlinedButton>(more).focusNode!.hasPrimaryFocus, isTrue);
+
+      final door = find.byKey(const ValueKey('mark-door'));
+      await t.ensureVisible(door);
+      await t.pumpAndSettle();
+      await t.tap(door);
+      await progress(() => !c.busy && c.nodes.length == 3);
+      final lastFrame = native.capturedResponse;
+      await openMarks();
+      final textNote = find.text('文字備註');
+      await t.ensureVisible(textNote);
+      await t.pumpAndSettle();
+      await t.tap(textNote);
+      await t.pumpAndSettle();
+      final selected = find.text('1. 斜道 1');
+      await t.ensureVisible(selected);
+      await t.pumpAndSettle();
+      await t.tap(selected);
+      await t.pumpAndSettle();
+      const note = '斜道旁有扶手。';
+      await t.enterText(find.byType(TextFormField), note);
+      await t.pump(const Duration(seconds: 6));
+      final apply = find.text('套用備註');
+      await t.ensureVisible(apply);
+      await t.pumpAndSettle();
+      await t.tap(apply);
+      await t.pumpAndSettle();
+      expect(native.capturedResponse, same(lastFrame));
+      expect(c.nodes[1].textNote, note);
+      expect(c.nodes.last.textNote, isNull);
+      expect(t.widget<OutlinedButton>(more).focusNode!.hasPrimaryFocus, isTrue);
       expect(t.takeException(), isNull);
       t.view.resetPhysicalSize();
       t.view.resetDevicePixelRatio();
@@ -330,9 +361,26 @@ void main() {
       await progress(() => reopened);
       expect(reopened, isTrue);
       expect(c.name, '路線 1');
-      expect(c.nodes.length, 2);
-      expect(c.nodes.last.markType, 'ramp');
+      expect(c.nodes.length, 3);
+      expect(c.nodes[1].markType, 'ramp');
+      expect(c.nodes[1].textNote, note);
       expect(c.document!.complete, isFalse);
+      final edit = find.text('編輯文字備註');
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(
+        edit.hitTestable(),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await t.ensureVisible(edit);
+      await t.pumpAndSettle();
+      await t.tap(edit);
+      await t.pumpAndSettle();
+      expect(find.text(note), findsOneWidget);
+      await t.enterText(find.byType(TextFormField), '取消改動');
+      await t.tap(find.text('取消'));
+      await t.pumpAndSettle();
+      expect(c.nodes[1].textNote, note);
       await t.pumpWidget(const SizedBox());
       await t.runAsync(() async {
         await Future<void>.delayed(Duration.zero);
@@ -586,10 +634,11 @@ void main() {
   );
   for (final useReader in [true, false]) {
     testWidgets(
-      'replay confirms a junction and uses one speech output (reader: $useReader)',
+      'replay confirms a junction and reads its note only on request (reader: $useReader)',
       (t) async {
         final language = useReader ? AppLanguage.chinese : AppLanguage.english;
         String label(String zh, String en) => useReader ? zh : en;
+        final note = label('轉角有接待處。', 'Reception is by the corner.');
         t.platformDispatcher.accessibilityFeaturesTestValue =
             FakeAccessibilityFeatures(
               accessibleNavigation: useReader,
@@ -662,7 +711,7 @@ void main() {
           );
           final map = capturedDocument().toMap();
           final points = map['nodes'] as List<Map<String, Object?>>;
-          map['schemaVersion'] = 4;
+          map['schemaVersion'] = 7;
           for (final point in points) {
             point['floorEvidence'] = 'confirmed';
           }
@@ -671,6 +720,7 @@ void main() {
             'en': 'Turn left 1',
             'markType': 'junction',
             'markDirection': 'left',
+            'textNote': note,
           });
           points.last.addAll({
             'zh': '東面路口',
@@ -733,6 +783,9 @@ void main() {
         final confirm = find.text(
           label('拍攝並確認此路標', 'Capture and confirm landmark'),
         );
+        final readNote = find.text(label('讀出文字備註', 'Read text note'));
+        expect(readNote, findsNothing);
+        expect(find.text(note), findsNothing);
         await reveal(find.byType(DropdownButtonFormField<String>));
         expect(find.text(label('路口 1', 'Junction 1')), findsOneWidget);
         expect(find.text(label('左轉 1', 'Turn left 1')), findsNothing);
@@ -750,6 +803,7 @@ void main() {
         await t.tap(confirm);
         await t.pumpAndSettle();
         expect(c.notice, 'wrongDirection');
+        expect(readNote, findsNothing);
         expect(announced, isEmpty);
         expect(spoken, isEmpty);
 
@@ -766,11 +820,36 @@ void main() {
         expect(find.text(message), findsOneWidget);
         expect(announced, useReader ? [message] : isEmpty);
         expect(spoken, useReader ? isEmpty : [message]);
+        expect(find.text(note), findsNothing);
+        await reveal(readNote);
+        await t.tap(readNote);
+        await t.pumpAndSettle();
+        expect(find.text(note), findsOneWidget);
+        expect(announced, useReader ? [message, note] : isEmpty);
+        expect(spoken, useReader ? isEmpty : [message, note]);
+        if (!useReader) {
+          await t.runAsync(() => Future<void>.delayed(RouteLocalizer.validity));
+          await t.pump(const Duration(seconds: 1));
+          expect(c.confirmedReplayMark, isNull);
+          expect(find.text(note), findsOneWidget);
+          final repeat = find.text('Read note again');
+          await reveal(repeat);
+          await t.tap(repeat);
+          await t.pumpAndSettle();
+          expect(spoken, [message, note, note]);
+          final close = find.text('Close note');
+          await reveal(close);
+          await t.tap(close);
+          await t.pumpAndSettle();
+          expect(find.text(note), findsNothing);
+          expect(readNote, findsNothing);
+        }
         final stopsBeforePause = speechStops;
         await t.tap(find.text(label('暫停', 'Pause')));
         await t.pumpAndSettle();
         expect(find.text(message), findsNothing);
-        expect(speechStops, stopsBeforePause + 1);
+        expect(find.text(note), findsNothing);
+        expect(speechStops, stopsBeforePause + (useReader ? 1 : 0));
         expect(t.takeException(), isNull);
         await t.pumpWidget(const SizedBox());
       },

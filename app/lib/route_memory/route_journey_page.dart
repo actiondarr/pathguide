@@ -31,6 +31,7 @@ class RouteJourneyPage extends StatefulWidget {
 
 class _RouteJourneyPageState extends State<RouteJourneyPage>
     with WidgetsBindingObserver {
+  static const _textNoteAction = 'textNote';
   static const _markTypes = {
     'landmark': ('一般路標', 'Landmark'),
     'junction': ('路口', 'Junction'),
@@ -64,6 +65,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   bool _allowPop = false;
   bool _markBusy = false;
   bool _moreMarksOpen = false;
+  bool _editingNote = false;
   late final _feedbackTts = FlutterTtsSpeaker(
     cantoneseOnly: widget.settings.language == AppLanguage.chinese,
     language: widget.settings.language,
@@ -72,6 +74,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   bool _feedbackActive = true;
   int _feedbackEpoch = 0;
   RoutePoint? _replayFeedbackPoint;
+  RoutePoint? _openedNote;
   String? _target;
   ({
     String name,
@@ -130,6 +133,13 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         !identical(_replayFeedbackPoint, c?.confirmedReplayMark)) {
       _stopFeedback();
     }
+    // An open note can outlast the position timer within the same replay step.
+    if (_openedNote != null &&
+        (c?.canCheck != true ||
+            (c?.notice != 'confirmed' && c?.notice != 'arrival'))) {
+      _openedNote = null;
+      _stopFeedback();
+    }
     setState(() {});
   }
 
@@ -151,6 +161,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       _feedbackActive = false;
+      _openedNote = null;
       _stopFeedback();
       c?.setForeground(false);
     }
@@ -253,6 +264,14 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                       item.value.$2,
                       controller.canCapture ? () => close(item.key) : null,
                     ),
+                  button(
+                    '文字備註',
+                    'Text note',
+                    controller.canEdit &&
+                            controller.nodes.any((n) => n.markType != null)
+                        ? () => close(_textNoteAction)
+                        : null,
+                  ),
                 ],
               ),
               actions: [
@@ -267,14 +286,138 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       );
       final type = await Navigator.of(context, rootNavigator: true).push(route);
       if (!mounted) return;
-      if (type != null && controller.canCapture) {
+      if (type != null && type != _textNoteAction && controller.canCapture) {
         final label = _moreMarkTypes[type]!;
         unawaited(_mark(type, t(label.$1, label.$2)));
       }
       await route.completed;
+      if (mounted && type == _textNoteAction) await _editMarkNote();
       if (mounted && controller.running) _moreMarksFocus.requestFocus();
     } finally {
       _moreMarksOpen = false;
+      controller.setManualEntryPending(false);
+    }
+  }
+
+  Future<RoutePoint?> _pickNoteMark(List<RoutePoint> marks) async {
+    final route = DialogRoute<RoutePoint>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        scrollable: true,
+        title: Text(t('選擇要加備註的標記', 'Choose a landmark for the note')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (index, mark) in marks.indexed)
+              button(
+                '${index + 1}. ${mark.nameZh}',
+                '${index + 1}. ${mark.nameEn}',
+                () {
+                  if (ModalRoute.isCurrentOf(ctx) == true) {
+                    Navigator.pop(ctx, mark);
+                  }
+                },
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (ModalRoute.isCurrentOf(ctx) == true) Navigator.pop(ctx);
+            },
+            child: Text(t('取消', 'Cancel')),
+          ),
+        ],
+      ),
+    );
+    final chosen = await Navigator.of(context, rootNavigator: true).push(route);
+    await route.completed;
+    return chosen;
+  }
+
+  Future<void> _editMarkNote([RoutePoint? selected]) async {
+    final controller = c!;
+    if (_editingNote || _pendingLandmark != null || !controller.canEdit) return;
+    final marks = controller.nodes.where((n) => n.markType != null).toList();
+    if (marks.isEmpty) return;
+    _editingNote = true;
+    controller.setManualEntryPending(true);
+    try {
+      final mark =
+          selected ??
+          (marks.length == 1 ? marks.single : await _pickNoteMark(marks));
+      if (!mounted ||
+          mark == null ||
+          !controller.canEdit ||
+          !controller.nodes.contains(mark)) {
+        return;
+      }
+      final field = GlobalKey<FormFieldState<String>>();
+      final dialog = DialogRoute<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          scrollable: true,
+          title: Text(t('文字備註', 'Text note')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(t(mark.nameZh, mark.nameEn)),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: field,
+                initialValue: mark.textNote,
+                maxLength: RoutePoint.maxTextNoteLength,
+                minLines: 2,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: t('備註內容', 'Note text'),
+                  helperText: mark.textNote == null
+                      ? null
+                      : t('留空並套用可移除備註', 'Apply an empty note to remove it'),
+                ),
+                validator: (value) {
+                  if (!controller.canEdit || !controller.nodes.contains(mark)) {
+                    return t(
+                      '此標記目前無法編輯',
+                      'This landmark is unavailable for editing',
+                    );
+                  }
+                  final text = value?.trim() ?? '';
+                  return text.isEmpty || RoutePoint.validTextNote(text)
+                      ? null
+                      : t('請縮短備註', 'Shorten this note');
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (ModalRoute.isCurrentOf(ctx) == true) Navigator.pop(ctx);
+              },
+              child: Text(t('取消', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () {
+                final input = field.currentState;
+                if (ModalRoute.isCurrentOf(ctx) == true &&
+                    input != null &&
+                    input.validate() &&
+                    controller.updateMarkNote(mark, input.value ?? '')) {
+                  Navigator.pop(ctx);
+                }
+              },
+              child: Text(t('套用備註', 'Apply note')),
+            ),
+          ],
+        ),
+      );
+      await Navigator.of(context, rootNavigator: true).push(dialog);
+      await dialog.completed;
+    } finally {
+      _editingNote = false;
       controller.setManualEntryPending(false);
     }
   }
@@ -487,6 +630,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       ),
       'captured': ('已加入路標，請保存路線。', 'Landmark added. Save your route.'),
       'edited': ('已更改，請保存路線。', 'Changes made. Save your route.'),
+      'noteEdited': ('已更新文字備註，請保存路線。', 'Text note updated. Save your route.'),
       'duplicate': (
         '此路標已有這張照片；請換個角度再拍。',
         'This view already exists. Try another angle.',
@@ -621,6 +765,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     return Semantics(
       liveRegion:
           !_markBusy &&
+          (_openedNote == null || controller.actualNodeId != null) &&
           mark == null &&
           (!markFailure ||
               (MediaQuery.accessibleNavigationOf(context) &&
@@ -1253,6 +1398,14 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                 'Edit landmark',
                 c!.canEdit ? () => _editLandmark(index: i) : null,
               ),
+              if (c!.nodes[i].markType != null)
+                button(
+                  c!.nodes[i].textNote == null ? '加入文字備註' : '編輯文字備註',
+                  c!.nodes[i].textNote == null
+                      ? 'Add text note'
+                      : 'Edit text note',
+                  c!.canEdit ? () => _editMarkNote(c!.nodes[i]) : null,
+                ),
               button(
                 '補拍同一路標',
                 'Add another view',
@@ -1321,10 +1474,37 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     );
   }
 
+  Future<void> _readReplayNote(RoutePoint mark) async {
+    final note = mark.textNote;
+    if (note == null ||
+        c?.canCheck != true ||
+        (!identical(_openedNote, mark) &&
+            !identical(c?.confirmedReplayMark, mark))) {
+      return;
+    }
+    setState(() {
+      _openedNote = mark;
+      _replayFeedbackPoint = null;
+    });
+    final ticket = ++_feedbackEpoch;
+    if (!MediaQuery.accessibleNavigationOf(context)) await _feedbackTts.stop();
+    if (!mounted || ticket != _feedbackEpoch) return;
+    await _feedback(note, isCurrent: () => identical(_openedNote, mark));
+  }
+
+  void _closeReplayNote() {
+    if (_openedNote == null) return;
+    setState(() => _openedNote = null);
+    _stopFeedback();
+  }
+
   List<Widget> _replay() {
     final controller = c!, exit = c!.transitionExit;
     final nodes = controller.nodes, next = controller.nextPoint;
     final mark = controller.confirmedReplayMark;
+    final noteUsesLiveRegion =
+        MediaQuery.accessibleNavigationOf(context) &&
+        !MediaQuery.supportsAnnounceOf(context);
     final target =
         exit?.id ??
         (_target != null && nodes.any((n) => n.id == _target)
@@ -1377,6 +1557,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
               ? null
               : (v) {
                   if (v == target) return;
+                  _closeReplayNote();
                   setState(() {
                     _target = v;
                     _actualFloor.clear();
@@ -1417,6 +1598,34 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                 child: Text(_replayMarkMessage(controller, mark)),
               ),
             ),
+          ),
+        if (_openedNote case final open?)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Semantics(
+                    liveRegion: noteUsesLiveRegion,
+                    child: Text(open.textNote!),
+                  ),
+                  if (!noteUsesLiveRegion)
+                    button(
+                      '重讀備註',
+                      'Read note again',
+                      () => _readReplayNote(open),
+                    ),
+                  button('關閉備註', 'Close note', _closeReplayNote),
+                ],
+              ),
+            ),
+          )
+        else if (mark?.textNote != null)
+          button(
+            noteUsesLiveRegion ? '查看文字備註' : '讀出文字備註',
+            noteUsesLiveRegion ? 'View text note' : 'Read text note',
+            () => _readReplayNote(mark!),
           ),
         button(
           '拍攝並確認此路標',

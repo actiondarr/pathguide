@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show StringCharacters;
 
 import 'cross_floor_contract.dart';
 import 'route_media.dart';
@@ -42,10 +45,18 @@ class RoutePoint {
     ...moreMarkTypes,
   };
   static const directions = {'left', 'right', 'straight'};
+  static const maxTextNoteLength = 240;
+  static const maxTextNoteBytes = 1024;
   static bool validMark(String? type, String? direction) =>
       (type == null || markTypes.contains(type)) &&
       (direction == null ||
           (type == 'junction' && directions.contains(direction)));
+  static bool validTextNote(String text) =>
+      text.isNotEmpty &&
+      text == text.trim() &&
+      text.length <= maxTextNoteBytes &&
+      text.characters.length <= maxTextNoteLength &&
+      utf8.encode(text).length <= maxTextNoteBytes;
 
   const RoutePoint(
     this.id,
@@ -54,6 +65,7 @@ class RoutePoint {
     this.floor,
     this.markType,
     this.direction,
+    this.textNote,
     FloorEvidence? floorEvidence,
     this.floorAnchorId,
     this.isFloorContextAnchor = false,
@@ -61,7 +73,7 @@ class RoutePoint {
            floorEvidence ??
            (floor == null ? FloorEvidence.unknown : FloorEvidence.confirmed);
   final String id, nameZh, nameEn;
-  final String? markType, direction;
+  final String? markType, direction, textNote;
   final FloorRef? floor;
   final FloorEvidence floorEvidence;
   final String? floorAnchorId;
@@ -200,6 +212,8 @@ class RouteDocument {
     for (final n in nodes) {
       if ((n.markType != null && source != RouteContentSource.captured) ||
           !RoutePoint.validMark(n.markType, n.direction) ||
+          (n.textNote != null &&
+              (n.markType == null || !RoutePoint.validTextNote(n.textNote!))) ||
           !validId(n.id) ||
           n.nameZh.length > 120 ||
           n.nameEn.length > 120 ||
@@ -304,6 +318,8 @@ class RouteDocument {
   Map<String, Object?> toMap() => {
     'schemaVersion': source == RouteContentSource.synthetic
         ? 1
+        : nodes.any((n) => n.textNote != null)
+        ? 7
         : markFailures.isNotEmpty
         ? 6
         : nodes.any((n) => RoutePoint.moreMarkTypes.contains(n.markType))
@@ -330,6 +346,7 @@ class RouteDocument {
           'id': n.id,
           if (_hasMarkMetadata) 'markType': n.markType,
           if (_hasMarkMetadata) 'markDirection': n.direction,
+          if (n.textNote != null) 'textNote': n.textNote,
           if (_hasProvenance || _hasMarkMetadata)
             'floorEvidence': n.floorEvidence.name,
           if (_hasProvenance || _hasMarkMetadata)
@@ -368,25 +385,34 @@ class RouteDocument {
 
   factory RouteDocument.fromMap(Map<String, dynamic> v) {
     final schema = v['schemaVersion'];
-    final hasFloorEvidence = [3, 4, 5, 6].contains(schema);
-    final hasMarks = [4, 5, 6].contains(schema);
+    final hasFloorEvidence = [3, 4, 5, 6, 7].contains(schema);
+    final hasMarks = [4, 5, 6, 7].contains(schema);
     final synthetic =
         schema == 1 && v['source'] == 'synthetic' && !v.containsKey('views');
     final captured =
-        [2, 3, 4, 5, 6].contains(schema) && v['source'] == 'captured';
+        [2, 3, 4, 5, 6, 7].contains(schema) && v['source'] == 'captured';
     if ((!synthetic && !captured) || v['direction'] != 'recorded') {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
     final rawFailures = v['markFailures'];
-    if (schema == 6
-        ? rawFailures is! List ||
-              rawFailures.isEmpty ||
-              rawFailures.length > maxMarkFailures
-        : v.containsKey('markFailures')) {
+    final hasFailures = v.containsKey('markFailures');
+    if ((schema == 6 && !hasFailures) ||
+        (hasFailures &&
+            ((schema != 6 && schema != 7) ||
+                rawFailures is! List ||
+                rawFailures.isEmpty ||
+                rawFailures.length > maxMarkFailures))) {
+      throw const RouteStoreFailure(RouteProblem.incompatible);
+    }
+    final nodes = v['nodes'] as List;
+    final noteNodes = nodes.where((n) => n is Map && n.containsKey('textNote'));
+    if (schema == 7
+        ? noteNodes.isEmpty || noteNodes.any((n) => n['textNote'] is! String)
+        : noteNodes.isNotEmpty) {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
     if (!hasFloorEvidence &&
-        (v['nodes'] as List).any(
+        nodes.any(
           (n) =>
               n is Map &&
               [
@@ -397,7 +423,7 @@ class RouteDocument {
         )) {
       throw const RouteStoreFailure(RouteProblem.incompatible);
     }
-    if ((v['nodes'] as List).any(
+    if (nodes.any(
       (n) =>
           n is Map &&
           ((!hasMarks &&
@@ -420,7 +446,7 @@ class RouteDocument {
                 ),
             ]
           : const [],
-      markFailures: schema == 6
+      markFailures: hasFailures
           ? [
               for (final failure in rawFailures as List)
                 RouteMarkFailure.fromMap(
@@ -434,13 +460,14 @@ class RouteDocument {
       featureRevision: v['featureRevision'] as String,
       preprocessRevision: v['preprocessRevision'] as String,
       nodes: [
-        for (final n in v['nodes'] as List)
+        for (final n in nodes)
           RoutePoint(
             n['id'] as String,
             n['zh'] as String,
             n['en'] as String,
             markType: hasMarks ? n['markType'] as String? : null,
             direction: hasMarks ? n['markDirection'] as String? : null,
+            textNote: schema == 7 ? n['textNote'] as String? : null,
             floorEvidence: hasFloorEvidence
                 ? _decodeFloorEvidence(n['floorEvidence'])
                 : null,

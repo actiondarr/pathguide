@@ -127,6 +127,72 @@ void main() {
     expect(c.nodes.single.markType, 'stairs');
     expect(c.markFailures, isEmpty);
   });
+
+  test(
+    'text notes stay on the selected mark through review and encrypted replay',
+    () async {
+      await c.startRecording('Notes');
+      expect(await c.confirmCurrentFloor('G'), isTrue);
+      final anchor = c.floorAnchors.single;
+      expect(c.updateMarkNote(anchor, 'Unmarked point'), isFalse);
+      expect(await c.mark('junction', '左轉', direction: 'left'), isTrue);
+      expect(await c.mark('ramp', '斜道'), isTrue);
+      final mark = c.nodes[1];
+      final lastFrame = native.capturedResponse;
+      expect(
+        c.updateMarkNote(mark, 'x' * (RoutePoint.maxTextNoteLength + 1)),
+        isFalse,
+      );
+      expect(c.updateMarkNote(mark, '👩‍👩‍👦‍👦' * 100), isFalse);
+      const note = '右邊有接待處。';
+      expect(c.updateMarkNote(mark, '  $note\n'), isTrue);
+      expect(c.nodes[1].textNote, note);
+      expect(c.nodes[2].textNote, isNull);
+      expect(native.capturedResponse, same(lastFrame));
+      expect(c.updateMarkNote(mark, 'Stale edit'), isFalse);
+      c.updateNode(1, '轉角', 'G', ConnectorMode.walk, false);
+      expect(c.nodes[1].id, mark.id);
+      expect(c.nodes[1].direction, 'left');
+      expect(c.nodes[1].textNote, note);
+      native.changeCapture = (reply) => {...reply, 'status': 'no_frame'};
+      expect(await c.mark('door', '門口'), isFalse);
+      native.changeCapture = null;
+      await c.pause();
+      c.confirmFloorSegment(anchor.id);
+      expect(c.nodes[1].floorEvidence, FloorEvidence.segmentConfirmed);
+      expect(c.nodes[1].textNote, note);
+
+      final manifest = c.document!.toMap();
+      expect(manifest['schemaVersion'], 7);
+      expect(
+        () => RouteDocument.fromMap({...manifest, 'schemaVersion': 6}),
+        throwsA(isA<RouteStoreFailure>()),
+      );
+      await c.save(activate: true);
+      final entry = (await store.list()).routes.single;
+      await c.open(entry);
+      expect(c.markFailures.single.markType, 'door');
+      expect(c.confirmedReplayMark, isNull);
+      await c.resume();
+      match = 1;
+      expect(
+        await c.checkPosition(mark.id, 'G', directionConfirmed: true),
+        isTrue,
+      );
+      expect(c.confirmedReplayMark?.textNote, note);
+      expect(c.replayDirection, 'left');
+
+      await c.open(entry, recording: true);
+      final reopened = c.nodes[1];
+      expect(reopened.textNote, note);
+      expect(c.updateMarkNote(reopened, '   '), isTrue);
+      expect(c.nodes[1].textNote, isNull);
+      expect(c.document!.toMap()['schemaVersion'], 6);
+      expect(c.updateMarkNote(c.nodes.last, 'Another note'), isTrue);
+      expect(c.undoLastMark(), isTrue);
+      expect(c.document!.nodes.every((n) => n.textNote == null), isTrue);
+    },
+  );
   test(
     'failed manual marks stay in an encrypted draft through retry and undo',
     () async {

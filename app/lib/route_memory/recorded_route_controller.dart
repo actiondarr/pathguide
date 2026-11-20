@@ -165,6 +165,7 @@ class RecordedRouteController extends ChangeNotifier {
         n.nameEn,
         markType: n.markType,
         direction: n.direction,
+        textNote: n.textNote,
         floor: floor,
         floorEvidence: FloorEvidence.segmentConfirmed,
         floorAnchorId: anchorId,
@@ -723,6 +724,32 @@ class RecordedRouteController extends ChangeNotifier {
     return true;
   }
 
+  bool updateMarkNote(RoutePoint mark, String input) {
+    if (!canEdit || mark.markType == null) return false;
+    final index = _nodes.indexOf(mark);
+    if (index < 0) return false;
+    final text = input.trim();
+    final note = text.isEmpty ? null : text;
+    if (note != null && !RoutePoint.validTextNote(note)) return false;
+    if (mark.textNote == note) return true;
+    _nodes[index] = RoutePoint(
+      mark.id,
+      mark.nameZh,
+      mark.nameEn,
+      floor: mark.floor,
+      markType: mark.markType,
+      direction: mark.direction,
+      textNote: note,
+      floorEvidence: mark.floorEvidence,
+      floorAnchorId: mark.floorAnchorId,
+      isFloorContextAnchor: mark.isFloorContextAnchor,
+    );
+    _dirty = true;
+    notice = 'noteEdited';
+    _changed();
+    return true;
+  }
+
   void updateNode(
     int index,
     String name,
@@ -754,6 +781,7 @@ class RecordedRouteController extends ChangeNotifier {
         name.trim(),
         markType: previous.markType,
         direction: previous.direction,
+        textNote: previous.textNote,
         floor: f,
         floorEvidence: preserve ? previous.floorEvidence : null,
         floorAnchorId: preserve ? previous.floorAnchorId : null,
@@ -779,6 +807,7 @@ class RecordedRouteController extends ChangeNotifier {
             n.nameEn,
             markType: n.markType,
             direction: n.direction,
+            textNote: n.textNote,
           );
           final e = _edges[j - 1];
           _edges[j - 1] = RouteSegment(
