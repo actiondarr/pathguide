@@ -141,7 +141,7 @@
 
 ## 7. 部署、版本與回退
 
-- iOS 使用相符 Firebase App／bundle ID 及 Google 登入，以 `app/tool/configure_firebase_ios.py` 寫本機配置。正式 App Check 待驗。私人測試配置留本機。
+- iOS 使用相符 Firebase App／bundle ID 及 Google 登入，以 `app/tool/configure_firebase_ios.py` 寫本機配置。正式 App Check 待驗。`app/tool/run_iphone.sh --build-scene-trial` 建私人 Profile 安裝包，載入本機 Firebase／App Check 設定及受版本管理的 `app/config/scene.ios-trial.json`；該 JSON 只含兩個場景開關。
 - Android 使用相符 Firebase App／簽署 SHA、受限制的 Maps／Places 金鑰及 Google Play 服務。`NAVIGATION_GOOGLE_ENABLED` 待代理、App Check 及真機通過才開。公開導航前補營運者／聯絡、私隱及條款連結。 [Android 設定範本](../app/config/navigation.android.example.json)
 - 照片與覆核部署先驗計費、儲存、規則、索引、App Check、人員與容量。`backend/functions` 的 `pnpm test` 驗 Functions，`backend` 的 `pnpm test` 跑 Firestore／Storage Emulator（Node 22、Java 21）。場景部署只選 `describeScene`，核 Secret 引用、區域、帳戶及有效許可。
 - 工作票通過檢查及覆核 → 提交所涉來源、文件及證據 → 推送 `feature/cross-platform-navigation` 並核遠端 → 標完成。裝機及共用模型版本另提交版本、lockfile、模型與映射，建不可變 tag／Release，核遠端後才安裝／交付。實驗版用 prerelease。P2-D、P3-C、P4-B、P5 各準備手機 prerelease，P3-A 有本機資料保護真機檢查。 [版本規則](../AGENTS.md)
@@ -190,6 +190,8 @@
 | B17 場景描述／S1 | Auth／App Check → 帳本預留 → 有界 JPEG → 完整驗證。驗有效許可、內容拒絕、取消、未知用量及讀屏起音。 |
 
 ## 9. 維護與追溯
+
+2026 年 11 月 21 日補上私人場景 Profile 建置入口及共用開關配置。雲端試驗許可沿用既有獨立核准流程。
 
 2026 年 11 月 20 日修正 iOS 既有版本目錄重用及加密錄音版本寫入，保留原有 catalog 原子切換和資料格式。
 
