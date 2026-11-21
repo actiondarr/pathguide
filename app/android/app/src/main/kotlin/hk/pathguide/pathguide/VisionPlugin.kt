@@ -529,6 +529,7 @@ class VisionPlugin(
         }
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
+            if (currentPreview !== view || detector == null) return@addListener
             runCatching { bindCamera(future.get(), view) }
                 .onFailure { Log.e(TAG, "绑定相机会话失败", it) }
         }, ContextCompat.getMainExecutor(context))
@@ -558,10 +559,12 @@ class VisionPlugin(
         provider.bindToLifecycle(
             owner, CameraSelector.DEFAULT_BACK_CAMERA, previewUseCase, analysis,
         )
+        TaskWakeLock.set(activity?.window, "vision", true)
         Log.i(TAG, "相机会话已启动（预览 + 分析）")
     }
 
     fun stopCamera() {
+        TaskWakeLock.set(activity?.window, "vision", false)
         runCatching {
             ProcessCameraProvider.getInstance(context).get().unbindAll()
         }.onFailure { Log.w(TAG, "解绑相机失败（通常可忽略）", it) }

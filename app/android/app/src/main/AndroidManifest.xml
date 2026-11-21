@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- 相机是核心功能：没有它整个 Demo 无法工作 -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- 实时推理对 GPU/NNAPI 委托不是必需，但声明后可用硬件加速 -->
     <uses-feature android:name="android.hardware.camera.any" android:required="true" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -8,7 +12,10 @@
     <application
         android:label="領路通"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
+        <meta-data android:name="com.google.android.geo.API_KEY" android:value="${pathguideMapsApiKey}" />
         <!-- 竖屏锁定：Demo 的坐标映射按竖屏标定，旋转屏幕会让映射需要重算。
              需要横屏时请连同 displayRotation 一起处理。 -->
         <activity
@@ -36,6 +43,7 @@
     </application>
 
     <queries>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

@@ -11,7 +11,53 @@ void main() {
   const codec = StandardMethodCodec();
   final binding = TestDefaultBinaryMessengerBinding.instance;
 
-  for (final nativeClasses in [9, 3]) {
+  for (final phase in ['startPreview', 'modelDir', 'loadModel']) {
+    test('disposal during $phase cannot load or enable an old model', () async {
+      final entered = Completer<void>(), pending = Completer<Object?>();
+      final calls = <String>[];
+      final messenger = binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(const MethodChannel(kVisionChannel), (
+        call,
+      ) async {
+        calls.add(call.method);
+        if (call.method == phase) {
+          entered.complete();
+          return pending.future;
+        }
+        return switch (call.method) {
+          'startPreview' => {'started': true},
+          'modelDir' => '/models',
+          'fileSize' => -1,
+          'loadModel' => {'loaded': true, 'classes': 10, 'inputSize': 640},
+          _ => null,
+        };
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          const MethodChannel(kVisionChannel),
+          null,
+        ),
+      );
+      final source = PlatformVision();
+      final job = source.initialize();
+      await entered.future;
+      await source.dispose();
+      pending.complete(switch (phase) {
+        'startPreview' => {'started': true},
+        'modelDir' => '/models',
+        _ => {'loaded': true, 'classes': 10, 'inputSize': 640},
+      });
+      expect((await job).ok, isFalse);
+      expect(source.isReady, isFalse);
+      expect(calls.where((c) => c == 'release'), hasLength(1));
+      expect(
+        calls.where((c) => c == 'loadModel'),
+        hasLength(phase == 'loadModel' ? 1 : 0),
+      );
+    });
+  }
+
+  for (final nativeClasses in [9, 3, 10]) {
     test(
       'startup gates frames and validates native classes=$nativeClasses',
       () async {
@@ -41,7 +87,12 @@ void main() {
           const MethodChannel(kFrameChannel),
           (_) async => null,
         );
-        final source = PlatformVision();
+        final source = nativeClasses == 10
+            ? PlatformVision()
+            : PlatformVision(
+                modelAssetKey: legacyModelAssetKey,
+                modelManifestKey: legacyModelManifestKey,
+              );
         final frames = <VisionFrame>[];
         final subscription = source.frames.listen(frames.add);
         Future<void> emit() async {
@@ -77,7 +128,9 @@ void main() {
             reason: 'Unvalidated local IDs must never reach labels or speech',
           );
           expect(loadMaps, [
-            [11, 7, 8, 50, 49, 6, 9, 51, 24],
+            nativeClasses == 10
+                ? [6, 11, 7, 8, 9, 24, 1, 49, 26, 18]
+                : [11, 7, 8, 50, 49, 6, 9, 51, 24],
           ]);
           loaded.complete({
             'loaded': true,
@@ -85,7 +138,7 @@ void main() {
             'inputSize': 640,
           });
           final status = await initializing;
-          expect(status.ok, nativeClasses == 9);
+          expect(status.ok, nativeClasses != 3);
           expect(source.isReady, status.ok);
           await emit();
           if (status.ok) {

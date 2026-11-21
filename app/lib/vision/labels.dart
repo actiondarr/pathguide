@@ -176,7 +176,7 @@ const List<Label> kLabels = <Label>[
   Label(
     id: 18,
     nameEn: "door",
-    nameZh: "推拉門",
+    nameZh: "門",
     group: "indoor",
     priority: "P1",
     announced: true,

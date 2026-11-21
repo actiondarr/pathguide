@@ -3,6 +3,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../tts/announcer.dart' show kMinSpeakScore;
 
+enum AppTask {
+  recognition,
+  navigation,
+  menu,
+  routeCamera,
+  routeMock,
+  landmarkReplay,
+  depth,
+  visionDiagnostics,
+}
+
+enum AppLanguage { chinese, english }
+
 /// The three user-facing speech rates map to the values expected by
 /// `flutter_tts`. The labels deliberately describe relative speed rather than
 /// exposing implementation-specific decimal values.
@@ -32,11 +45,43 @@ class AppSettings extends ChangeNotifier {
     required this._preferences,
     SpeechSpeed? speed,
     double? speakThreshold,
+    AppLanguage language = AppLanguage.chinese,
+    Iterable<String> completedIntroductions = const [],
   }) : _speechSpeed = speed ?? SpeechSpeed.normal,
-       _speakThreshold = speakThreshold ?? kMinSpeakScore;
+       // ignore: prefer_initializing_formals
+       _language = language,
+       _speakThreshold = speakThreshold ?? kMinSpeakScore,
+       _completedIntroductions = completedIntroductions.toSet();
 
   static const String speechRateKey = 'speech_rate';
   static const String speakThresholdKey = 'speak_threshold';
+  static const String introductionsKey = 'completed_task_introductions_v1';
+  final Set<String> _completedIntroductions;
+  bool hasTaskIntroduction(AppTask task) =>
+      _completedIntroductions.contains(task.name);
+
+  Future<void> completeTaskIntroduction(AppTask task) async {
+    _completedIntroductions.add(task.name);
+    // A local preference failure must not prevent starting the chosen task.
+    try {
+      await _preferences?.setStringList(
+        introductionsKey,
+        _completedIntroductions.toList(),
+      );
+    } catch (_) {
+      // Keep the choice for this session; show the help again after restart.
+    }
+  }
+
+  static const String languageKey = 'app_language';
+  AppLanguage _language;
+  AppLanguage get language => _language;
+  Future<void> setLanguage(AppLanguage value) async {
+    if (_language == value) return;
+    _language = value;
+    notifyListeners();
+    await _preferences?.setString(languageKey, value.name);
+  }
 
   final SharedPreferences? _preferences;
   SpeechSpeed _speechSpeed;
@@ -54,13 +99,20 @@ class AppSettings extends ChangeNotifier {
   }
 
   /// Test and preview fallback. Production uses [load], which persists values.
-  factory AppSettings.memory({SpeechSpeed speed = SpeechSpeed.normal}) =>
-      AppSettings._(preferences: null, speed: speed);
+  factory AppSettings.memory({
+    SpeechSpeed speed = SpeechSpeed.normal,
+    AppLanguage language = AppLanguage.chinese,
+  }) => AppSettings._(preferences: null, speed: speed, language: language);
 
   static Future<AppSettings> load() async {
     final preferences = await SharedPreferences.getInstance();
     return AppSettings._(
       preferences: preferences,
+      completedIntroductions:
+          preferences.getStringList(introductionsKey) ?? const [],
+      language: preferences.getString(languageKey) == 'english'
+          ? AppLanguage.english
+          : AppLanguage.chinese,
       speed: SpeechSpeed.fromStoredRate(preferences.getDouble(speechRateKey)),
       speakThreshold: _restoreSpeakThreshold(
         preferences.getDouble(speakThresholdKey),
