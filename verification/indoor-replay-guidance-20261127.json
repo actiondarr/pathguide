@@ -1,0 +1,35 @@
+{
+  "dateHongKong": "2026-11-27",
+  "branch": "feature/cross-platform-navigation",
+  "baseCommit": "3e4d91e02272d57a3724dd365a45c78cef13322a",
+  "checkpoint": "source",
+  "implementation": [
+    "Fresh indoor confirmation can announce an unmarked landmark and its floor, the next recorded landmark, a connector exit recheck, or a manual arrival check.",
+    "Existing recorded turn cues still require a confirmed walking segment and current matching evidence.",
+    "A manual blocked-passage report pauses replay, revokes position and direction, clears notes and in-progress playback, requests camera stop, and offers stop-and-ask-for-help guidance.",
+    "A camera stop without acknowledgement blocks replay resume until stop has been confirmed. Explicit resume requires fresh position confirmation."
+  ],
+  "checks": {
+    "flutterAnalyze": "no issues",
+    "flutterScopedWithSceneFlags": { "passed": 162, "skipped": 0 },
+    "flutterFullWithSceneFlags": { "passed": 644, "skipped": 0 },
+    "iosSimulatorBuildWithSceneFlags": {
+      "command": "flutter build ios --simulator --debug --no-pub --dart-define-from-file=config/scene.ios-trial.json",
+      "result": "passed"
+    },
+    "fixtures": [
+      "test/route_checkpoint_guidance_test.dart",
+      "test/route_journey_page_test.dart"
+    ],
+    "widgetAssertions": [
+      "Ambiguous matches produce no confirmed checkpoint cue.",
+      "A fresh unmarked match announces the next recorded landmark once via simulated VoiceOver, then pause removes the cue.",
+      "Blocked passage withdraws position, direction and notes, cancels audio, and announces help once via VoiceOver or App TTS.",
+      "A failed native stop acknowledgement prevents restart until Stop is retried.",
+      "Explicit resume leaves confirmation and travel-direction attestation cleared."
+    ]
+  },
+  "humanAcceptance": "deferred by user for a combined session",
+  "phoneInstallationThisTurn": false,
+  "remainingIndoorScope": ["continuous walking perception", "live obstacle cues", "field validation"]
+}

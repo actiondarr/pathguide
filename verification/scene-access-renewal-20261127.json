@@ -1,0 +1,50 @@
+{
+  "dateHongKong": "2026-11-27",
+  "appVersionWithSceneSwitch": "1.12.1+31",
+  "checkedAtUtc": "2026-11-26T19:17:30.980Z",
+  "service": {
+    "project": "pathguide-dev",
+    "name": "describeScene",
+    "region": "asia-east2",
+    "runtime": "nodejs22",
+    "state": "ACTIVE",
+    "enabled": true,
+    "timeoutSeconds": 40,
+    "maxInstances": 2,
+    "deploymentUpdateTimeUtc": "2026-11-08T20:11:00.178131601Z",
+    "configuredAccountActive": true,
+    "configuredAccountDeletionGuard": false
+  },
+  "window": {
+    "previousExpiryUtc": "2026-11-13T19:22:40.869Z",
+    "expiresAtUtc": "2026-12-01T19:17:29.707Z",
+    "expiresAtHongKongDisplay": "2026 年 12 月 2 日 03:17:29",
+    "durationDays": 5,
+    "stopReasonBefore": "window-expired",
+    "stopReasonAfter": null
+  },
+  "allowance": {
+    "maxRequests": 100,
+    "budgetMicroUsd": 500000,
+    "priorRequestCount": 51,
+    "remainingRequests": 49,
+    "spentMicroUsd": 19141,
+    "reserveMicroUsd": 2458,
+    "priorUsageAndRequestIdsPreserved": true,
+    "priorRecoveryHistoryPreserved": true,
+    "configurationFingerprintUnchanged": true,
+    "inFlight": false
+  },
+  "verification": {
+    "compareAndSetPreviousUpdateTimeUtc": "2026-11-11T07:41:45.254274Z",
+    "committedUpdateTimeUtc": "2026-11-26T19:17:30.426995Z",
+    "updatedFields": ["window.expiresAtMs", "allowanceHistory"],
+    "independentReadbackMatchedExpectedDocument": true,
+    "trialPolicyReevaluated": true,
+    "sceneBackendUnitTestsPassed": 50,
+    "deployments": 0,
+    "inferenceRequestsByAgent": 0,
+    "phoneInstallationThisTurn": false,
+    "onDeviceSceneAndVoiceOverAcceptance": "deferred"
+  }
+}

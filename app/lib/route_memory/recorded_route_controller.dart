@@ -336,6 +336,14 @@ class RecordedRouteController extends ChangeNotifier {
   }
 
   int? _index, _transition;
+  bool _passageBlocked = false;
+  bool get passageBlocked => _passageBlocked;
+  bool get canReportBlockedPassage =>
+      !_disposed &&
+      _foreground &&
+      _running &&
+      mode == RecordedRouteMode.replay &&
+      !finished;
   String notice = 'ready';
   String? problem;
   RouteLibraryEntry? selected;
@@ -366,11 +374,16 @@ class RecordedRouteController extends ChangeNotifier {
   String? get actualNodeId => _localizer?.actualNodeId;
   FloorRef? get actualFloor => _localizer?.actualFloor;
   FloorRef? get expectedFloor => _localizer?.expectedFloor;
-  RoutePoint? get confirmedReplayMark {
+  RoutePoint? get confirmedReplayPoint {
     final index = _index;
     if (!canCheck || index == null) return null;
     final point = _nodes[index];
-    return point.id == actualNodeId && point.markType != null ? point : null;
+    return point.id == actualNodeId ? point : null;
+  }
+
+  RoutePoint? get confirmedReplayMark {
+    final point = confirmedReplayPoint;
+    return point?.markType == null ? null : point;
   }
 
   String? get replayDirection {
@@ -493,6 +506,7 @@ class RecordedRouteController extends ChangeNotifier {
     _dirty = false;
     _reloadRequired = false;
     finished = false;
+    _passageBlocked = false;
     _index = _transition = null;
     mode = RecordedRouteMode.record;
     await resume();
@@ -505,6 +519,7 @@ class RecordedRouteController extends ChangeNotifier {
         _stopping ||
         _id == null ||
         _reloadRequired ||
+        (_passageBlocked && notice == 'stopUnconfirmed') ||
         finished ||
         mode == RecordedRouteMode.library) {
       return;
@@ -527,7 +542,10 @@ class RecordedRouteController extends ChangeNotifier {
       if (!_current(op)) return;
       _running = status == RouteCaptureStatus.running;
       notice = _running ? 'ready' : status.name;
-      if (_running) _armAutomatic();
+      if (_running) {
+        _passageBlocked = false;
+        _armAutomatic();
+      }
     } catch (e) {
       if (_current(op)) _error(e);
     } finally {
@@ -1278,6 +1296,14 @@ class RecordedRouteController extends ChangeNotifier {
     }
   }
 
+  Future<void> reportBlockedPassage() async {
+    if (!canReportBlockedPassage) return;
+    _passageBlocked = true;
+    _index = _transition = null;
+    _localizer?.expectFloor(null);
+    await pause();
+  }
+
   Future<void> pause() async {
     _withdrawFloorContext();
     _recordingConnector = null;
@@ -1299,6 +1325,8 @@ class RecordedRouteController extends ChangeNotifier {
     if (_disposed || op != _epoch) return;
     notice = status == RouteCaptureStatus.stopUnconfirmed
         ? 'stopUnconfirmed'
+        : _passageBlocked
+        ? 'blockedPassage'
         : 'paused';
     _changed();
   }
@@ -1383,6 +1411,7 @@ class RecordedRouteController extends ChangeNotifier {
     _dirty = false;
     _reloadRequired = false;
     finished = false;
+    _passageBlocked = false;
     _index = _transition = null;
     mode = RecordedRouteMode.library;
   }

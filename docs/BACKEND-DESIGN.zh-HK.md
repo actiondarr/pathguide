@@ -1,6 +1,6 @@
 # 領路通 PathGuide 後端與資料契約
 
-核對日期：2026年11月20日。使用操作見[前端](FRONTEND-DESIGN.zh-HK.md)，類別、品質門檻及訓練證據見[資料與模型](DATASET-REVIEW.zh-HK.md)。
+場景服務核對日期為 2026 年 11 月 27 日。使用操作見[前端](FRONTEND-DESIGN.zh-HK.md)，類別、品質門檻及訓練證據見[資料與模型](DATASET-REVIEW.zh-HK.md)。
 
 <a id="service-scope"></a>
 <a id="service-state"></a>
@@ -12,7 +12,7 @@
 |---|---|
 | 帳號與私人聯絡 | 已接 Firebase Google 登入、本人 profile、選填聯絡人及帳號刪除流程。其他登入方式待接。 |
 | 照片提交與覆核 | 客戶端與提交／清理 Functions 已有程式。七個問題／覆核 callable 及工作台已有本機合成驗證。照片上傳及覆核預設關閉，最後部署紀錄未涵蓋兩組服務。 |
-| 場景描述 | 最近紀錄為 Firebase `pathguide-dev` 的 `describeScene` 部署，Qwen 端點為新加坡。最後有紀錄的試驗許可已在 2026-11-14 03:22:40（香港時間）到期。即時部署、額度及帳本狀態未查。 |
+| 場景描述 | 最近紀錄為 Firebase `pathguide-dev` 的 `describeScene` 部署，Qwen 端點為新加坡。已核對服務為 ACTIVE，私人試驗沿原帳本重開，香港時間 2026 年 12 月 2 日 03:17:29 到期。[場景許可紀錄](../verification/scene-access-renewal-20261127.json) |
 | 室內錄路 | `1.11.0+29` 的路標類型及方向已隨 App 交付，資料留在手機。場地及讀屏驗收待做。雲端同步與私人模型未接。 |
 | Android 步行代理 | `computeWalkingRoute` 有程式，部署與真機待核。iPhone 戶外路線由 MapKit 處理。 |
 | 訓練與模型交付 | iPhone 開發分支接通本機路標候選儲存及人工覆核。雲端快照、排程、GPU worker、registry 及私人更新未接。 |
@@ -72,7 +72,7 @@
 
 - **輸入與回覆。** 指定帳戶通過身分、App Check 及刪除 guard 後，只傳當前 JPEG（最多 512 KiB、長寬各不超過 1280）。後端剝 EXIF 並縮至最長邊 512px，模型、prompt、端點及金鑰由伺服器控制。v1 回兩至三句。v2 的 `overview` 回兩至三句，`update` 回一句，附有界 `observations`。完整核驗文字、分類、位置及細節才回有效內容。v2 prompt 要求最多三項重點，validator 上限六項。只接受指定分類和左／中／右位置。拒絕時以固定診斷分類記錄原因，無原文或補發修復請求。
 - **用量與停止。** 先在交易內預留再呼叫供應商。v1 冷卻 45 秒，v2 三秒。同帳戶一個在途，重複 ID、到期或預留不足會停止。每次保守預留 2458 microUSD。用量不明保留估算並停止新請求。開關、登入及跨日沿用累計帳本。修改許可須明確批准及以 CAS 審計。
-- **到期許可。** 最後有紀錄的試驗為累計 100 次、估算 US$0.50，窗口五天，於 2026-11-14 03:22:40（香港時間）到期。單次恢復授權另有一天上限。估算與供應商／Firebase 實際計費分開，歷史餘額只反映當時快照。
+- **試驗許可。** 2026 年 11 月 27 日以 Firestore 版本前提延長既有窗口，香港時間 2026 年 12 月 2 日 03:17:29 到期。累計上限仍為 100 次及估算 US$0.50。重開時已用 51 次，餘下 49 次，同時受預留額限制。保留過往用量、請求及恢復紀錄。單次恢復授權另有一天上限。估算與供應商及 Firebase 實際計費分開。[場景許可紀錄](../verification/scene-access-renewal-20261127.json)
 - **診斷與保存。** `operation:status` 只讀安全數值與最近三個固定結果，無取相、預留或推理。以頂層欄位替換結果，保留其他計數。遲到回覆再驗有效帳戶。App 和自家後端不長期保存相片／描述原文。供應商保留政策另核。場景資料不可加入訓練。
 
 [場景 Function](../backend/functions/scene_function.js) · [回覆驗證](../backend/functions/scene_description.js) · [試驗帳本](../backend/functions/scene_trial.js) · [部署與到期紀錄](../verification/scene-100-five-days-20261109.json) · [拒絕分類證據](../verification/scene-content-detail-20261109.json)
@@ -191,6 +191,8 @@
 | B17 場景描述／S1 | Auth／App Check → 帳本預留 → 有界 JPEG → 完整驗證。驗有效許可、內容拒絕、取消、未知用量及讀屏起音。 |
 
 ## 9. 維護與追溯
+
+2026 年 11 月 27 日重開私人場景試驗窗口，核對服務、帳本更新前提及更新後政策。無部署或推理請求。[場景許可紀錄](../verification/scene-access-renewal-20261127.json)
 
 2026 年 11 月 27 日補入戶外實錄路線的裝置資料契約。軌跡與快捷路標只留裝置，加密、寫入重試及重開已做工程驗證，裝置及實地接受另記。[工程驗證](../verification/outdoor-route-recording-replay-20261127.json)
 

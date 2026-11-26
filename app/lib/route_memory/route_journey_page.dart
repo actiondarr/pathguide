@@ -145,7 +145,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       _direction = false;
     }
     if (_replayFeedbackPoint != null &&
-        !identical(_replayFeedbackPoint, c?.confirmedReplayMark)) {
+        !identical(_replayFeedbackPoint, c?.confirmedReplayPoint)) {
       _stopFeedback();
     }
     // An open note can outlast the position timer within the same replay step.
@@ -650,12 +650,19 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     ),
   );
 
-  String _replayMarkMessage(
+  String _replayCheckpointMessage(
     RecordedRouteController controller,
-    RoutePoint mark,
+    RoutePoint point,
   ) {
-    final type = (_markTypes[mark.markType] ?? _moreMarkTypes[mark.markType])!;
-    final confirmed = t('已確認${type.$1}。', '${type.$2} confirmed.');
+    final type = _markTypes[point.markType] ?? _moreMarkTypes[point.markType];
+    final name = _replayPointLabel(point, controller.nodes.indexOf(point));
+    final floor = point.floor!.label;
+    final confirmed = type == null
+        ? t(
+            '已確認路標「$name」，$floor 樓層。',
+            'Landmark $name confirmed on floor $floor.',
+          )
+        : t('已確認${type.$1}。', '${type.$2} confirmed.');
     return confirmed +
         switch (controller.replayDirection) {
           'left' => t('錄製路線在這裡左轉。', ' The recorded route turns left here.'),
@@ -668,8 +675,23 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             '請自行確認已到達。',
             ' Confirm arrival yourself.',
           ),
-          _ => '',
+          _ => _replayNextCheckpoint(controller),
         };
+  }
+
+  String _replayNextCheckpoint(RecordedRouteController controller) {
+    final next = controller.nextPoint;
+    if (next == null) return '';
+    final label = _replayPointLabel(next, controller.nodes.indexOf(next));
+    final connector = controller.nextConnector;
+    if (connector != null && connector != ConnectorMode.walk) {
+      final mode = _modeName(connector);
+      return t(
+        '下一段使用$mode。到出口請核對樓層同路標「$label」。',
+        ' The next section uses the $mode. Check the floor and landmark $label at the exit.',
+      );
+    }
+    return t('下一個已錄路標係「$label」。', ' The next recorded landmark is $label.');
   }
 
   Widget _status() {
@@ -807,6 +829,25 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         'Could not complete. Storage, version conflict or reading may have failed. Reopen from the library; unsaved data stays on this page.',
       ),
     };
+    if (controller.passageBlocked) {
+      final detail = messages[controller.notice];
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Semantics(
+              liveRegion:
+                  MediaQuery.accessibleNavigationOf(context) &&
+                  !MediaQuery.supportsAnnounceOf(context),
+              child: Text(_blockedPassagePrompt()),
+            ),
+            if (detail != null && controller.notice != 'stopping')
+              Semantics(liveRegion: true, child: Text(t(detail.$1, detail.$2))),
+          ],
+        ),
+      );
+    }
     var message =
         messages[controller.notice] ??
         (
@@ -820,7 +861,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         'Position evidence expired. Confirm the landmark again.',
       );
     }
-    final mark = controller.confirmedReplayMark;
+    final checkpoint = controller.confirmedReplayPoint;
     final markFailure =
         controller.notice == 'markFailed' ||
         controller.notice == 'markCapacity';
@@ -829,7 +870,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
           !_markBusy &&
           ((_openedNote == null && !_playingNoteAudio) ||
               controller.actualNodeId != null) &&
-          mark == null &&
+          checkpoint == null &&
           (!markFailure ||
               (MediaQuery.accessibleNavigationOf(context) &&
                   !MediaQuery.supportsAnnounceOf(context))) &&
@@ -1570,13 +1611,31 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
       _direction = false;
     });
     if (!await checking || !mounted) return;
-    final mark = controller.confirmedReplayMark;
-    if (mark == null || mark.id != target) return;
-    _replayFeedbackPoint = mark;
+    final checkpoint = controller.confirmedReplayPoint;
+    if (checkpoint == null || checkpoint.id != target) return;
+    _replayFeedbackPoint = checkpoint;
     unawaited(
       _feedback(
-        _replayMarkMessage(controller, mark),
-        isCurrent: () => identical(controller.confirmedReplayMark, mark),
+        _replayCheckpointMessage(controller, checkpoint),
+        isCurrent: () => identical(controller.confirmedReplayPoint, checkpoint),
+      ),
+    );
+  }
+
+  String _blockedPassagePrompt() => t(
+    '通道已封閉，重行已暫停。請停低，搵附近職員或其他人幫手。確認可以安全繼續後，再核對位置。',
+    'Passage blocked. Replay paused. Stop and ask nearby staff or another person for help. Resume when it is safe and check your location again.',
+  );
+
+  void _reportBlockedPassage() {
+    final controller = c!;
+    if (!controller.canReportBlockedPassage) return;
+    _actualFloor.clear();
+    unawaited(controller.reportBlockedPassage());
+    unawaited(
+      _feedback(
+        _blockedPassagePrompt(),
+        isCurrent: () => controller.passageBlocked,
       ),
     );
   }
@@ -1652,6 +1711,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
   List<Widget> _replay() {
     final controller = c!, exit = c!.transitionExit;
     final nodes = controller.nodes, next = controller.nextPoint;
+    final checkpoint = controller.confirmedReplayPoint;
     final mark = controller.confirmedReplayMark;
     final noteUsesLiveRegion =
         MediaQuery.accessibleNavigationOf(context) &&
@@ -1720,6 +1780,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
           !controller.busy &&
                   !controller.running &&
                   !controller.learningBusy &&
+                  !controller.passageBlocked &&
                   controller.notice != 'stopUnconfirmed'
               ? _openLearningReview
               : null,
@@ -1732,7 +1793,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
         Text(
           '${t('預期出口樓層', 'Expected exit floor')}: ${controller.expectedFloor!.label}',
         ),
-      if (next != null && controller.actualNodeId != null)
+      if (next != null && controller.replayDirection != null)
         Text(
           '${t('記錄的下一路標', 'Recorded next landmark')}: ${_replayPointLabel(next, nodes.indexOf(next))}',
         ),
@@ -1794,7 +1855,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             ),
           ),
         ),
-        if (mark != null)
+        if (checkpoint != null)
           Semantics(
             liveRegion:
                 MediaQuery.accessibleNavigationOf(context) &&
@@ -1802,7 +1863,7 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
             child: Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(_replayMarkMessage(controller, mark)),
+                child: Text(_replayCheckpointMessage(controller, checkpoint)),
               ),
             ),
           ),
@@ -1943,17 +2004,29 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                         (c!.mode == RecordedRouteMode.record ||
                             c!.replayAvailable))
                       button(
-                        c!.mode == RecordedRouteMode.record ? '繼續錄路' : '開始重行',
+                        c!.mode == RecordedRouteMode.record
+                            ? '繼續錄路'
+                            : c!.passageBlocked
+                            ? '安全後繼續重行'
+                            : '開始重行',
                         c!.mode == RecordedRouteMode.record
                             ? 'Resume recording'
+                            : c!.passageBlocked
+                            ? 'Resume replay when safe'
                             : 'Start replay',
                         c!.busy ? null : c!.resume,
                         primary: true,
                       ),
+                    if (c!.canReportBlockedPassage)
+                      button(
+                        '通道封閉，暫停重行',
+                        'Passage blocked. Pause replay',
+                        _reportBlockedPassage,
+                      ),
                     button(
                       c!.running ? '暫停' : '停止',
                       c!.running ? 'Pause' : 'Stop',
-                      c!.pause,
+                      c!.passageBlocked && c!.busy ? null : c!.pause,
                     ),
                   ],
                 ),

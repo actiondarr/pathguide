@@ -709,7 +709,7 @@ void main() {
   );
   for (final useReader in [true, false]) {
     testWidgets(
-      'replay confirms a junction and reads its note only on request (reader: $useReader)',
+      'replay confirms notes on request and withdraws guidance for a blocked passage (reader: $useReader)',
       (t) async {
         final language = useReader ? AppLanguage.chinese : AppLanguage.english;
         String label(String zh, String en) => useReader ? zh : en;
@@ -755,7 +755,6 @@ void main() {
           () =>
               messenger.setMockMethodCallHandler(RouteNoteAudio.channel, null),
         );
-        var speechStops = 0;
         messenger.setMockDecodedMessageHandler(SystemChannels.accessibility, (
           message,
         ) async {
@@ -767,7 +766,6 @@ void main() {
         messenger.setMockMethodCallHandler(speech, (call) async {
           if (call.method == 'getLanguages') return ['en-HK'];
           if (call.method == 'speak') spoken.add(call.arguments as String);
-          if (call.method == 'stop') speechStops++;
           return 1;
         });
         messenger.setMockMethodCallHandler(landmark, (call) async {
@@ -848,7 +846,15 @@ void main() {
             delta,
             scrollable: find.byType(Scrollable).first,
           );
-          await t.ensureVisible(finder);
+          await Scrollable.ensureVisible(t.element(finder), alignment: 0.5);
+          await t.pumpAndSettle();
+        }
+
+        Future<void> resetScroll() async {
+          final scroll = t.state<ScrollableState>(
+            find.byType(Scrollable).first,
+          );
+          scroll.position.jumpTo(scroll.position.minScrollExtent);
           await t.pumpAndSettle();
         }
 
@@ -900,8 +906,10 @@ void main() {
 
         await reveal(floor);
         await t.enterText(floor, 'G');
+        FocusManager.instance.primaryFocus?.unfocus();
+        await t.pumpAndSettle();
         await reveal(confirm);
-        await t.tap(confirm);
+        await t.tap(confirm.hitTestable());
         await t.pumpAndSettle();
         expect(c.notice, 'wrongDirection');
         expect(readNote, findsNothing);
@@ -910,11 +918,13 @@ void main() {
 
         await reveal(floor, delta: -100);
         await t.enterText(floor, 'G');
+        FocusManager.instance.primaryFocus?.unfocus();
+        await t.pumpAndSettle();
         final attestation = find.byType(CheckboxListTile);
         await reveal(attestation);
-        await t.tap(attestation);
+        await t.tap(attestation.hitTestable());
         await reveal(confirm);
-        await t.tap(confirm);
+        await t.tap(confirm.hitTestable());
         await t.pumpAndSettle();
         expect(c.replayDirection, 'left');
         await reveal(find.text(message), delta: -100);
@@ -941,26 +951,72 @@ void main() {
           await t.runAsync(() => Future<void>.delayed(RouteLocalizer.validity));
           await t.pump(const Duration(seconds: 1));
           expect(c.confirmedReplayMark, isNull);
+          // Removing the expired checkpoint card changes the scroll position.
+          await resetScroll();
+          await reveal(find.text(note));
           expect(find.text(note), findsOneWidget);
           final repeat = find.text('Read note again');
           await reveal(repeat);
-          await t.tap(repeat);
+          await t.tap(repeat.hitTestable());
           await t.pumpAndSettle();
           expect(spoken, [message, note, note]);
           final close = find.text('Close note');
           await reveal(close);
-          await t.tap(close);
+          await t.tap(close.hitTestable());
           await t.pumpAndSettle();
           expect(find.text(note), findsNothing);
           expect(readNote, findsNothing);
         }
-        final stopsBeforePause = speechStops;
-        await t.tap(find.text(label('暫停', 'Pause')));
+        final startBeforeReport = native.current!['requestId'];
+        final blocked = find.text(
+          label('通道封閉，暫停重行', 'Passage blocked. Pause replay'),
+        );
+        final help = label(
+          '通道已封閉，重行已暫停。請停低，搵附近職員或其他人幫手。確認可以安全繼續後，再核對位置。',
+          'Passage blocked. Replay paused. Stop and ask nearby staff or another person for help. Resume when it is safe and check your location again.',
+        );
+        final resume = find.text(label('安全後繼續重行', 'Resume replay when safe'));
+        if (useReader) native.stopStatus = 'failed';
+        await t.tap(blocked);
         await t.pumpAndSettle();
+        expect(c.running, isFalse);
+        expect(c.passageBlocked, isTrue);
+        expect(c.replayDirection, isNull);
+        expect(c.actualFloor, isNull);
+        expect(c.nextPoint, isNull);
+        expect(native.current!['requestId'], startBeforeReport);
         expect(find.text(message), findsNothing);
         expect(find.text(note), findsNothing);
-        expect(speechStops, stopsBeforePause);
+        expect(blocked, findsNothing);
+        final helpOutput = useReader ? announced : spoken;
+        expect(helpOutput.where((message) => message == help), hasLength(1));
         expect(audioCalls, useReader ? ['play', 'cancel'] : isEmpty);
+
+        if (useReader) {
+          expect(c.notice, 'stopUnconfirmed');
+          expect(resume, findsNothing);
+          await c.resume();
+          expect(native.current!['requestId'], startBeforeReport);
+          native.stopStatus = 'stopped';
+          await t.tap(find.text('停止'));
+          await t.pumpAndSettle();
+        }
+        expect(c.notice, 'blockedPassage');
+        expect(c.running, isFalse);
+        expect(resume, findsOneWidget);
+
+        await t.tap(resume);
+        await t.pumpAndSettle();
+        expect(c.running, isTrue);
+        expect(c.passageBlocked, isFalse);
+        expect(c.actualNodeId, isNull);
+        expect(c.replayDirection, isNull);
+        expect(native.current!['requestId'], isNot(startBeforeReport));
+        expect(find.text(message), findsNothing);
+        expect(find.text(help), findsNothing);
+        await resetScroll();
+        await reveal(attestation);
+        expect(t.widget<CheckboxListTile>(attestation).value, isFalse);
         expect(t.takeException(), isNull);
         await t.pumpWidget(const SizedBox());
         if (useReader) debugDefaultTargetPlatformOverride = null;
