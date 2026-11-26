@@ -24,6 +24,7 @@ class DeviceRouteKeyVault implements RouteKeyVault {
   DeviceRouteKeyVault() : _key = keyName;
   DeviceRouteKeyVault.probe() : _key = _probeKey;
   DeviceRouteKeyVault.learning() : _key = 'pathguide.route_learning.aes.v1';
+  DeviceRouteKeyVault.outdoor() : _key = 'pathguide.outdoor_routes.aes.v1';
   final String _key;
   Future<void> deleteProbeKey() async {
     if (_key != _probeKey) throw StateError('Not a probe vault');
@@ -108,14 +109,15 @@ class EncryptedRouteStore {
     Directory? root,
     RouteKeyVault? vault,
     RouteFilePolicy? filePolicy,
-    RouteStoreLimits limits = const RouteStoreLimits(),
+    bool outdoor = false,
+    RouteStoreLimits? limits,
     Future<void> Function(String)? checkpoint,
   }) async {
     try {
       final policy =
           filePolicy ??
           (root == null && Platform.isIOS
-              ? await RouteFilePolicy.open()
+              ? await RouteFilePolicy.open(outdoor: outdoor)
               : null);
       final base =
           root ??
@@ -124,12 +126,17 @@ class EncryptedRouteStore {
               : policy.directory.parent);
       final dir =
           policy?.directory ??
-          await Directory('${base.path}/route_memory_v1')
-              .create(recursive: true);
+          await Directory(
+            '${base.path}/${outdoor ? 'outdoor_routes_v1' : 'route_memory_v1'}',
+          ).create(recursive: true);
       return EncryptedRouteStore._(
         Directory(await dir.resolveSymbolicLinks()),
-        vault ?? DeviceRouteKeyVault(),
-        limits,
+        vault ??
+            (outdoor ? DeviceRouteKeyVault.outdoor() : DeviceRouteKeyVault()),
+        limits ??
+            (outdoor
+                ? const RouteStoreLimits(documentBytes: 512 * 1024)
+                : const RouteStoreLimits()),
         checkpoint,
         policy,
       );

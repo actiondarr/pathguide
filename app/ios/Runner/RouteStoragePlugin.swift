@@ -121,7 +121,7 @@ final class RouteStoragePlugin: NSObject, FlutterPlugin {
     registrar.addMethodCallDelegate(plugin, channel: channel)
   }
   private func files(_ scope: String) throws -> RouteProtectedFiles {
-    let directories = ["library": "route_memory_v1", "probe": "route_memory_probe_v1", "learning": "route_learning_v1"]
+    let directories = ["library": "route_memory_v1", "probe": "route_memory_probe_v1", "learning": "route_learning_v1", "outdoor": "outdoor_routes_v1"]
     guard let directory = directories[scope] else { throw CocoaError(.fileWriteInvalidFileName) }
     return RouteProtectedFiles(root: support.appendingPathComponent(directory))
   }

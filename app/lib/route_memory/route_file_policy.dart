@@ -13,9 +13,14 @@ class RouteFilePolicy {
   static Future<RouteFilePolicy> open({
     bool probe = false,
     bool learning = false,
+    bool outdoor = false,
   }) async {
-    if (probe && learning) throw ArgumentError('Conflicting storage scope');
-    final scope = learning
+    if ([probe, learning, outdoor].where((enabled) => enabled).length > 1) {
+      throw ArgumentError('Conflicting storage scope');
+    }
+    final scope = outdoor
+        ? 'outdoor'
+        : learning
         ? 'learning'
         : probe
         ? 'probe'

@@ -148,11 +148,15 @@ class LocationFix {
     required this.receivedAt,
     this.ageSeconds = 0,
     this.course,
+    this.sampledAt,
+    this.speed,
+    this.speedAccuracy,
   });
   final Coordinate coordinate;
   final double accuracy, ageSeconds;
   final Duration receivedAt;
-  final double? course;
+  final DateTime? sampledAt;
+  final double? course, speed, speedAccuracy;
   bool usable(Duration now, NavigationRules rules) =>
       coordinate.valid &&
       accuracy.isFinite &&

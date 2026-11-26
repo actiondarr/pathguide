@@ -1,6 +1,7 @@
 import '../l10n/app_language.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../settings/app_settings.dart';
 import 'app_theme.dart';
@@ -14,6 +15,7 @@ import '../account/account_ui.dart';
 import '../menu/menu_page.dart';
 import '../navigation/navigation_page.dart';
 import '../navigation/navigation_hub_page.dart';
+import '../outdoor_routes/outdoor_recording_page.dart';
 import '../route_memory/route_journey_page.dart';
 import '../indoor/graph_replay_page.dart';
 import '../depth/depth_page.dart';
@@ -131,9 +133,25 @@ class _AppShellState extends State<AppShell> {
       builder: (_) => RouteJourneyPage(
         settings: widget.settings,
         initialRecording: recording,
+        showOutdoorRoutes: !recording && _outdoorTracksSupported,
       ),
     ),
   );
+
+  bool get _outdoorTracksSupported =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  Future<void> _openOutdoorRecorder() async {
+    final message = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => OutdoorRecordingPage(settings: widget.settings),
+      ),
+    );
+    if (mounted && message != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
 
   void _openAccount() => setState(() => _accountVisible = true);
 
@@ -157,6 +175,7 @@ class _AppShellState extends State<AppShell> {
       onSearch: () => _select(AppSection.outdoor),
       onLibrary: () => _openRoutes(false),
       onRecord: () => _openRoutes(true),
+      onRecordOutdoor: _outdoorTracksSupported ? _openOutdoorRecorder : null,
       onBack: () => _select(AppSection.home),
     ),
     AppSection.outdoor => NavigationPage(

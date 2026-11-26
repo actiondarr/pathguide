@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../l10n/app_language.dart';
 import '../settings/app_settings.dart';
@@ -6,6 +7,12 @@ import '../settings/app_settings.dart';
 Future<bool?> showTaskIntroduction(BuildContext context, AppTask task) {
   final (action, result) = switch (task) {
     AppTask.recognition => ('將相機對準前方，開始後聽取物件名稱。', '只辨識支援的物件；不代表前方暢通。可隨時暫停或返回。'),
+    AppTask.navigation
+        when !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS =>
+      (
+        '選擇搜尋目的地、錄製戶外路線、錄製新路線或我的路線。',
+        '戶外錄路用精確 GPS 記錄路線。保存後可由我的路線沿錄製方向重行。錄製新路線用於室內路標。',
+      ),
     AppTask.navigation => (
       '選擇搜尋目的地、我的路線或錄製新路線。',
       '搜尋提供戶外步行路線；室內可錄路標並逐點重認，樓層及方向須自行確認。',

@@ -17,6 +17,8 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
   private var fixReply: FlutterResult?
   private var fixTimeout: DispatchWorkItem?
   private var tracking = false
+  private var awaitingTrackAuthorization = false
+  private var recordedTracking = false
   private var idleBefore: Bool?
   private weak var map: MKMapView? { didSet { positionPin = nil; if let lastLocation { updateMap(lastLocation) } } }
   private var positionPin: MKPointAnnotation?
@@ -60,7 +62,11 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
     else if let old = idleBefore { UIApplication.shared.isIdleTimerDisabled = old; idleBefore = nil }
   }
   private func stop() {
-    tracking = false; manager.stopUpdatingLocation(); fixTimeout?.cancel(); fixTimeout = nil
+    tracking = false; awaitingTrackAuthorization = false; recordedTracking = false
+    manager.stopUpdatingLocation()
+    manager.distanceFilter = 2
+    manager.pausesLocationUpdatesAutomatically = true
+    fixTimeout?.cancel(); fixTimeout = nil
     let reply = fixReply; fixReply = nil; reply?(error("cancelled", "已停止定位。")); awake(false)
   }
   @objc private func background() { stop(); cancelSearch(); cancelRoute(); geocoder.cancelGeocode() }
@@ -103,8 +109,17 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
       fixTimeout = timeout; DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
       if manager.authorizationStatus == .notDetermined { manager.requestWhenInUseAuthorization() } else { requestFix() }
     case "startLocation":
+      let recorded = args["recordedTrack"] as? Bool == true
+      if recorded && manager.authorizationStatus == .notDetermined {
+        configureTracking(recorded: true)
+        awaitingTrackAuthorization = true
+        manager.requestWhenInUseAuthorization()
+        result(nil)
+        return
+      }
       guard authorized && manager.accuracyAuthorization == .fullAccuracy else { result(error("location_denied", "請開啟使用 App 期間的精確定位。")); return }
-      tracking = true; manager.startUpdatingLocation(); result(nil)
+      configureTracking(recorded: recorded)
+      manager.startUpdatingLocation(); result(nil)
     case "stopLocation": stop(); result(nil)
     case "keepAwake": awake(args["enabled"] as? Bool == true); result(nil)
     case "address":
@@ -133,6 +148,12 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
               "coordinate": ["latitude": c.latitude, "longitude": c.longitude]]
     }
   }
+  private func configureTracking(recorded: Bool) {
+    recordedTracking = recorded
+    tracking = true
+    manager.distanceFilter = recorded ? kCLDistanceFilterNone : 2
+    manager.pausesLocationUpdatesAutomatically = !recorded
+  }
   private var authorized: Bool { manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways }
   private func requestFix() {
     guard fixReply != nil else { return }
@@ -142,13 +163,25 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
   }
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
     if fixReply != nil && manager.authorizationStatus != .notDetermined { requestFix() }
+    if awaitingTrackAuthorization {
+      guard manager.authorizationStatus != .notDetermined else { return }
+      awaitingTrackAuthorization = false
+      if authorized && manager.accuracyAuthorization == .fullAccuracy {
+        manager.startUpdatingLocation()
+      }
+    }
     if tracking && (!authorized || manager.accuracyAuthorization != .fullAccuracy) {
-      sink?(error(authorized ? "location_poor" : "location_denied", "定位權限已變更，請重新開啟精確定位後繼續。"))
+      sink?(error(authorized ? (recordedTracking ? "location_permission_changed" : "location_poor") : "location_denied", "定位權限已變更，請重新開啟精確定位後繼續。"))
       stop()
     }
   }
   private func data(_ location: CLLocation) -> [String: Any] {
-    var value: [String: Any] = ["coordinate": point(location.coordinate), "accuracy": location.horizontalAccuracy, "ageSeconds": max(0, -location.timestamp.timeIntervalSinceNow)]
+    var value: [String: Any] = ["coordinate": point(location.coordinate), "accuracy": location.horizontalAccuracy, "ageSeconds": max(0, -location.timestamp.timeIntervalSinceNow),
+      "sampledAtMillis": Int64((location.timestamp.timeIntervalSince1970 * 1000).rounded())]
+    if location.speed >= 0 && location.speedAccuracy >= 0 {
+      value["speed"] = location.speed
+      value["speedAccuracy"] = location.speedAccuracy
+    }
     if location.course >= 0 && location.speed > 0.8 { value["course"] = location.course }
     return value
   }
@@ -167,10 +200,16 @@ final class NavigationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLL
     guard let latest = locations.last else { return }
     lastLocation = latest; updateMap(latest)
     if fixReply != nil && latest.horizontalAccuracy >= 0 && latest.horizontalAccuracy <= 25 && abs(latest.timestamp.timeIntervalSinceNow) <= 10 { finishFix(latest) }
-    if tracking { sink?(data(latest)) }
+    if tracking && !awaitingTrackAuthorization && authorized { sink?(data(latest)) }
   }
   func locationManager(_ manager: CLLocationManager, didFailWithError failure: Error) {
-    if (failure as? CLError)?.code == .locationUnknown { return }
+    let code = (failure as? CLError)?.code
+    if code == .locationUnknown { return }
+    if tracking && recordedTracking && code == .denied {
+      sink?(error("location_denied", "定位服務已停止，請檢查系統設定。"))
+      stop()
+      return
+    }
     finishFix(nil, failure: error("location_poor", "定位暫時不可用，請檢查權限或重試。"))
     if tracking { sink?(error("location_poor", "定位暫時不可用。")) }
   }

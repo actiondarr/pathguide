@@ -6,6 +6,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../tts/flutter_tts_speaker.dart';
+import '../outdoor_routes/outdoor_route_list.dart';
 
 import '../settings/app_settings.dart';
 import 'cross_floor_contract.dart';
@@ -22,11 +23,12 @@ class RouteJourneyPage extends StatefulWidget {
     super.key,
     required this.settings,
     this.initialRecording = false,
+    this.showOutdoorRoutes = false,
     this.createController,
     this.previewBuilder,
   });
   final AppSettings settings;
-  final bool initialRecording;
+  final bool initialRecording, showOutdoorRoutes;
   final Future<RecordedRouteController> Function()? createController;
   final WidgetBuilder? previewBuilder;
   @override
@@ -1069,6 +1071,11 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
     ConnectorMode.escalator => t('扶手電梯', 'Escalator'),
   };
   List<Widget> _library() => [
+    if (widget.showOutdoorRoutes) ...[
+      OutdoorRouteList(settings: widget.settings),
+      const SizedBox(height: 24),
+      heading(t('室內路線', 'Indoor routes')),
+    ],
     Text(
       t(
         '路標照片及樓層只在此裝置加密保存。沒有已錄路線或室內地圖時，無法自動找室內目的地。',
@@ -1967,6 +1974,8 @@ class _RouteJourneyPageState extends State<RouteJourneyPage>
                     ),
                   ),
                   button('重試', 'Retry', _load),
+                  if (widget.showOutdoorRoutes)
+                    OutdoorRouteList(settings: widget.settings),
                 ],
               )
             : ListView(

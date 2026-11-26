@@ -29,6 +29,8 @@ const english = <String, String>{
   "略過說明": "Skip introduction",
   "將相機對準前方，開始後聽取物件名稱。": "Point the camera ahead. Start to hear object names.",
   "只辨識支援的物件；不代表前方暢通。可隨時暫停或返回。": "Only supported objects are recognized. This does not establish clear space. Pause or go back at any time.",
+  "選擇搜尋目的地、錄製戶外路線、錄製新路線或我的路線。": "Choose Search destination, Record outdoor route, Record new route or My routes.",
+  "戶外錄路用精確 GPS 記錄路線。保存後可由我的路線沿錄製方向重行。錄製新路線用於室內路標。": "Outdoor recording uses precise GPS. Open My routes to follow a saved walk in the recorded direction. Record new route captures indoor landmarks.",
   "選擇搜尋目的地、我的路線或錄製新路線。":
       "Choose Search destination, My routes or Record new route.",
   "搜尋提供戶外步行路線；室內可錄路標並逐點重認，樓層及方向須自行確認。": "Search provides outdoor routes. Record and rematch indoor landmarks; check floors and direction yourself.",

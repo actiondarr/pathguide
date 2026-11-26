@@ -1027,6 +1027,56 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(manager.starts, 0)
   }
 
+  func testOutdoorTrackRequestsForegroundPermissionAndEmitsSampleMetadata() throws {
+    let manager = NavigationTestLocationManager()
+    manager.status = .notDetermined
+    let plugin = NavigationPlugin(messenger: NavigationTestMessenger(), locationManager: manager,
+                                  locationServicesEnabled: { true })
+    var events: [Any] = []
+    _ = plugin.onListen(withArguments: nil, eventSink: { if let event = $0 { events.append(event) } })
+    plugin.handle(FlutterMethodCall(methodName: "startLocation", arguments: ["recordedTrack": true]),
+                  result: { XCTAssertNil($0) })
+    XCTAssertEqual(manager.authorizationRequests, 1)
+    XCTAssertEqual(manager.starts, 0)
+    XCTAssertEqual(manager.distanceFilter, kCLDistanceFilterNone)
+    XCTAssertFalse(manager.pausesLocationUpdatesAutomatically)
+
+    manager.status = .authorizedWhenInUse
+    plugin.locationManagerDidChangeAuthorization(manager)
+    XCTAssertEqual(manager.starts, 1)
+    let timestamp = Date(timeIntervalSince1970: 1_800_000_000)
+    let sample = CLLocation(coordinate: CLLocationCoordinate2D(latitude: 22.3, longitude: 114.2),
+                            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+                            course: -1, courseAccuracy: -1, speed: 0, speedAccuracy: 0.2,
+                            timestamp: timestamp)
+    plugin.locationManager(manager, didUpdateLocations: [sample])
+    let value = try XCTUnwrap(events.last as? [String: Any])
+    XCTAssertEqual(value["sampledAtMillis"] as? Int64, 1_800_000_000_000)
+    XCTAssertEqual(value["speed"] as? Double, 0)
+    XCTAssertEqual(value["speedAccuracy"] as? Double, 0.2)
+    XCTAssertNil(value["course"])
+    _ = plugin.onCancel(withArguments: nil)
+    XCTAssertGreaterThan(manager.stops, 0)
+  }
+
+  func testOutdoorPrecisionRevocationStopsStreamAndWakesNormally() {
+    let manager = NavigationTestLocationManager()
+    let plugin = NavigationPlugin(messenger: NavigationTestMessenger(), locationManager: manager,
+                                  locationServicesEnabled: { true })
+    let idleBefore = UIApplication.shared.isIdleTimerDisabled
+    var events: [Any] = []
+    _ = plugin.onListen(withArguments: nil, eventSink: { if let event = $0 { events.append(event) } })
+    plugin.handle(FlutterMethodCall(methodName: "startLocation", arguments: ["recordedTrack": true]),
+                  result: { XCTAssertNil($0) })
+    plugin.handle(FlutterMethodCall(methodName: "keepAwake", arguments: ["enabled": true]), result: { _ in })
+    manager.accuracy = .reducedAccuracy
+    plugin.locationManagerDidChangeAuthorization(manager)
+    XCTAssertEqual((events.last as? FlutterError)?.code, "location_permission_changed")
+    XCTAssertGreaterThan(manager.stops, 0)
+    XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleBefore)
+    _ = plugin.onCancel(withArguments: nil)
+  }
+
   func testNavigationAccuracyDowngradeStopsTrackingAndRestoresWakeState() {
     let manager = NavigationTestLocationManager()
     let plugin = NavigationPlugin(messenger: NavigationTestMessenger(), locationManager: manager)
@@ -1260,9 +1310,10 @@ private final class NavigationTestMessenger: NSObject, FlutterBinaryMessenger {
 private final class NavigationTestLocationManager: CLLocationManager {
   var status: CLAuthorizationStatus = .authorizedWhenInUse
   var accuracy: CLAccuracyAuthorization = .fullAccuracy
-  var starts = 0, stops = 0
+  var starts = 0, stops = 0, authorizationRequests = 0
   override var authorizationStatus: CLAuthorizationStatus { status }
   override var accuracyAuthorization: CLAccuracyAuthorization { accuracy }
+  override func requestWhenInUseAuthorization() { authorizationRequests += 1 }
   override func startUpdatingLocation() { starts += 1 }
   override func stopUpdatingLocation() { stops += 1 }
 }

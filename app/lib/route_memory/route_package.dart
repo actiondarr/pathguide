@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show StringCharacters;
 
+import '../outdoor_routes/outdoor_track.dart';
 import 'cross_floor_contract.dart';
 import 'route_media.dart';
 export 'route_media.dart';
@@ -134,7 +135,7 @@ class RouteSegment {
   final bool confirmed;
 }
 
-enum RouteContentSource { synthetic, captured }
+enum RouteContentSource { synthetic, captured, outdoor }
 
 /// Schema 1 remains synthetic; schema 2 explicitly references captured media.
 /// 'Complete' means structurally checked; never human/field approved.
@@ -146,6 +147,7 @@ class RouteDocument {
     required List<RoutePoint> nodes,
     required List<RouteSegment> edges,
     this.source = RouteContentSource.synthetic,
+    this.outdoor,
     List<CapturedRouteView> views = const [],
     List<RouteMarkFailure> markFailures = const [],
     this.featureRevision = 'p0-synthetic-v1',
@@ -158,24 +160,43 @@ class RouteDocument {
   }
   final String id, name, buildingId, featureRevision, preprocessRevision;
   final RouteContentSource source;
+  final OutdoorTrack? outdoor;
   final List<CapturedRouteView> views;
   final List<RoutePoint> nodes;
   final List<RouteSegment> edges;
   final List<RouteMarkFailure> markFailures;
   static const maxMarkFailures = 64;
   int get audioNoteBytes =>
+      outdoor?.audioBytes ??
       nodes.fold(0, (sum, n) => sum + (n.audioNote?.bytes.length ?? 0));
   int get encodedAudioNoteLength =>
+      outdoor?.encodedAudioLength ??
       nodes.fold(0, (sum, n) => sum + (n.audioNote?.encoded.length ?? 0));
   static bool validId(String id) =>
       RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(id);
-  bool get compatible => source == RouteContentSource.synthetic
-      ? featureRevision == 'p0-synthetic-v1' &&
-            preprocessRevision == 'none-synthetic'
-      : featureRevision == 'vision-featureprint-v1' &&
-            preprocessRevision == 'upright-jpeg-v1';
+  bool get compatible =>
+      source == RouteContentSource.outdoor ||
+      (source == RouteContentSource.synthetic
+          ? featureRevision == 'p0-synthetic-v1' &&
+                preprocessRevision == 'none-synthetic'
+          : featureRevision == 'vision-featureprint-v1' &&
+                preprocessRevision == 'upright-jpeg-v1');
 
   void validate() {
+    if (source == RouteContentSource.outdoor) {
+      if (outdoor == null ||
+          !validId(id) ||
+          name.trim().isEmpty ||
+          name.length > 120 ||
+          nodes.isNotEmpty ||
+          edges.isNotEmpty ||
+          views.isNotEmpty ||
+          markFailures.isNotEmpty) {
+        throw const RouteStoreFailure(RouteProblem.invalid);
+      }
+      return;
+    }
+    if (outdoor != null) throw const RouteStoreFailure(RouteProblem.invalid);
     if ((source == RouteContentSource.synthetic &&
             (views.isNotEmpty || markFailures.isNotEmpty)) ||
         (source == RouteContentSource.captured &&
@@ -292,6 +313,7 @@ class RouteDocument {
       markFailures.isNotEmpty || nodes.any((n) => n.markType != null);
 
   bool get complete {
+    if (outdoor != null) return outdoor!.draftReason == null;
     if (nodes.length < 2 ||
         edges.length != nodes.length - 1 ||
         nodes.any(
@@ -323,69 +345,80 @@ class RouteDocument {
     return true;
   }
 
-  Map<String, Object?> toMap() => {
-    'schemaVersion': source == RouteContentSource.synthetic
-        ? 1
-        : nodes.any((n) => n.audioNote != null)
-        ? 8
-        : nodes.any((n) => n.textNote != null)
-        ? 7
-        : markFailures.isNotEmpty
-        ? 6
-        : nodes.any((n) => RoutePoint.moreMarkTypes.contains(n.markType))
-        ? 5
-        : _hasMarkMetadata
-        ? 4
-        : _hasProvenance
-        ? 3
-        : 2,
-    'source': source.name,
-    if (source == RouteContentSource.captured)
-      'views': [for (final view in views) view.toMap()],
-    if (markFailures.isNotEmpty)
-      'markFailures': [for (final failure in markFailures) failure.toMap()],
-    'direction': 'recorded',
-    'id': id,
-    'name': name,
-    'buildingId': buildingId,
-    'featureRevision': featureRevision,
-    'preprocessRevision': preprocessRevision,
-    'nodes': [
-      for (final n in nodes)
-        {
-          'id': n.id,
-          if (_hasMarkMetadata) 'markType': n.markType,
-          if (_hasMarkMetadata) 'markDirection': n.direction,
-          if (n.textNote != null) 'textNote': n.textNote,
-          if (n.audioNote != null) 'audioNote': n.audioNote!.encoded,
-          if (_hasProvenance || _hasMarkMetadata)
-            'floorEvidence': n.floorEvidence.name,
-          if (_hasProvenance || _hasMarkMetadata)
-            'floorAnchor': n.floorAnchorId,
-          if (_hasProvenance || _hasMarkMetadata)
-            'floorContextAnchor': n.isFloorContextAnchor,
-          'zh': n.nameZh,
-          'en': n.nameEn,
-          'floor': n.floor == null
-              ? null
-              : {
-                  'building': n.floor!.buildingId,
-                  'id': n.floor!.id,
-                  'label': n.floor!.label,
-                },
-        },
-    ],
-    'edges': [
-      for (final e in edges)
-        {
-          'from': e.fromId,
-          'to': e.toId,
-          'mode': e.mode.name,
-          'connector': e.connectorId,
-          'confirmed': e.confirmed,
-        },
-    ],
-  };
+  Map<String, Object?> toMap() => outdoor != null
+      ? {
+          'schemaVersion': 9,
+          'source': source.name,
+          'direction': 'recorded',
+          'id': id,
+          'name': name,
+          'outdoor': outdoor!.toMap(),
+        }
+      : {
+          'schemaVersion': source == RouteContentSource.synthetic
+              ? 1
+              : nodes.any((n) => n.audioNote != null)
+              ? 8
+              : nodes.any((n) => n.textNote != null)
+              ? 7
+              : markFailures.isNotEmpty
+              ? 6
+              : nodes.any((n) => RoutePoint.moreMarkTypes.contains(n.markType))
+              ? 5
+              : _hasMarkMetadata
+              ? 4
+              : _hasProvenance
+              ? 3
+              : 2,
+          'source': source.name,
+          if (source == RouteContentSource.captured)
+            'views': [for (final view in views) view.toMap()],
+          if (markFailures.isNotEmpty)
+            'markFailures': [
+              for (final failure in markFailures) failure.toMap(),
+            ],
+          'direction': 'recorded',
+          'id': id,
+          'name': name,
+          'buildingId': buildingId,
+          'featureRevision': featureRevision,
+          'preprocessRevision': preprocessRevision,
+          'nodes': [
+            for (final n in nodes)
+              {
+                'id': n.id,
+                if (_hasMarkMetadata) 'markType': n.markType,
+                if (_hasMarkMetadata) 'markDirection': n.direction,
+                if (n.textNote != null) 'textNote': n.textNote,
+                if (n.audioNote != null) 'audioNote': n.audioNote!.encoded,
+                if (_hasProvenance || _hasMarkMetadata)
+                  'floorEvidence': n.floorEvidence.name,
+                if (_hasProvenance || _hasMarkMetadata)
+                  'floorAnchor': n.floorAnchorId,
+                if (_hasProvenance || _hasMarkMetadata)
+                  'floorContextAnchor': n.isFloorContextAnchor,
+                'zh': n.nameZh,
+                'en': n.nameEn,
+                'floor': n.floor == null
+                    ? null
+                    : {
+                        'building': n.floor!.buildingId,
+                        'id': n.floor!.id,
+                        'label': n.floor!.label,
+                      },
+              },
+          ],
+          'edges': [
+            for (final e in edges)
+              {
+                'from': e.fromId,
+                'to': e.toId,
+                'mode': e.mode.name,
+                'connector': e.connectorId,
+                'confirmed': e.confirmed,
+              },
+          ],
+        };
 
   static FloorEvidence _decodeFloorEvidence(Object? raw) {
     for (final value in FloorEvidence.values) {
@@ -396,6 +429,19 @@ class RouteDocument {
 
   factory RouteDocument.fromMap(Map<String, dynamic> v) {
     final schema = v['schemaVersion'];
+    if (schema == 9 &&
+        v['source'] == 'outdoor' &&
+        v['direction'] == 'recorded') {
+      return RouteDocument(
+        id: v['id'] as String,
+        name: v['name'] as String,
+        buildingId: 'outdoor',
+        nodes: const [],
+        edges: const [],
+        source: RouteContentSource.outdoor,
+        outdoor: OutdoorTrack.fromMap(v['outdoor'] as Map),
+      );
+    }
     final hasFloorEvidence = [3, 4, 5, 6, 7, 8].contains(schema);
     final hasMarks = [4, 5, 6, 7, 8].contains(schema);
     final synthetic =

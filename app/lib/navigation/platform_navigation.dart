@@ -38,10 +38,14 @@ Future<bool> _configureNavigationFirebase() async {
 
 class NativeNavigationServices
     implements PlaceSearchService, WalkingRouteService, LocationService {
-  NativeNavigationServices(this.provider, {MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel('hk.pathguide/navigation');
+  NativeNavigationServices(
+    this.provider, {
+    MethodChannel? channel,
+    this.recordedTrack = false,
+  }) : _channel = channel ?? const MethodChannel('hk.pathguide/navigation');
   @override
   final MapProvider provider;
+  final bool recordedTrack;
   final MethodChannel _channel;
   int _request = 0;
   Future<T?> _invoke<T>(
@@ -143,6 +147,14 @@ class NativeNavigationServices
     receivedAt: navigationNow(),
     ageSeconds: (m['ageSeconds'] as num).toDouble(),
     course: (m['course'] as num?)?.toDouble(),
+    sampledAt: m['sampledAtMillis'] == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(
+            m['sampledAtMillis'] as int,
+            isUtc: true,
+          ),
+    speed: (m['speed'] as num?)?.toDouble(),
+    speedAccuracy: (m['speedAccuracy'] as num?)?.toDouble(),
   );
   @override
   Future<LocationFix> current() async =>
@@ -154,7 +166,9 @@ class NativeNavigationServices
           .map((event) => _fix(event as Map));
   @override
   Future<void> start() async {
-    await _invoke<void>('startLocation');
+    await _invoke<void>('startLocation', {
+      if (recordedTrack) 'recordedTrack': true,
+    });
   }
 
   @override

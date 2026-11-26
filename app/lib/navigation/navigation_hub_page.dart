@@ -9,9 +9,11 @@ class NavigationHubPage extends StatelessWidget {
     required this.onSearch,
     required this.onLibrary,
     required this.onRecord,
+    this.onRecordOutdoor,
     required this.onBack,
   });
   final AppSettings settings;
+  final VoidCallback? onRecordOutdoor;
   final VoidCallback onSearch, onLibrary, onRecord, onBack;
   String t(String zh, String en) =>
       settings.language == AppLanguage.english ? en : zh;
@@ -36,8 +38,8 @@ class NavigationHubPage extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           t(
-            '搜尋戶外目的地，或錄下室內路標供日後重行。',
-            'Search outdoor destinations or record indoor landmarks to revisit.',
+            '搜尋目的地，或錄低實際行過嘅路線供日後重行。',
+            'Search destinations or record a walk to retrace later.',
           ),
         ),
         const SizedBox(height: 24),
@@ -50,14 +52,19 @@ class NavigationHubPage extends StatelessWidget {
         ),
         _entry(
           t('我的路線', 'My routes'),
-          t(
-            '開啟已錄路線，逐個確認路標。',
-            'Open a recorded route and confirm each landmark.',
-          ),
+          t('開啟已錄嘅戶外同室內路線。', 'Open a recorded outdoor or indoor route.'),
           Icons.map_outlined,
           Colors.green.shade800,
           onLibrary,
         ),
+        if (onRecordOutdoor != null)
+          _entry(
+            t('錄製戶外路線', 'Record outdoor route'),
+            t('用 GPS 記低實際行過嘅路。', 'Use GPS to record the path you walk.'),
+            Icons.directions_walk,
+            Colors.blue.shade800,
+            onRecordOutdoor!,
+          ),
         _entry(
           t('錄製新路線', 'Record new route'),
           t(

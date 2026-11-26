@@ -1,0 +1,102 @@
+{
+  "dateHongKong": "2026-11-27",
+  "branch": "feature/cross-platform-navigation",
+  "baseCommit": "cd4f2550a5ccf8c24c00d5a03294b6c92771af50",
+  "checkpoint": "source",
+  "toolchain": {
+    "flutter": "3.47.5",
+    "dart": "3.13.4",
+    "xcode": "27.2 (27B52)",
+    "simulator": "iPhone 18 Pro / iOS 27.0"
+  },
+  "checks": {
+    "flutterAnalyze": "no issues",
+    "flutterScoped": {
+      "passed": 127,
+      "skipped": 0,
+      "files": [
+        "test/outdoor_route_test.dart",
+        "test/outdoor_route_page_test.dart",
+        "test/navigation_test.dart",
+        "test/navigation_phase_b_test.dart",
+        "test/navigation_recognition_test.dart",
+        "test/encrypted_route_store_test.dart",
+        "test/route_journey_page_test.dart",
+        "test/route_record_replay_test.dart"
+      ]
+    },
+    "flutterFullDefault": {
+      "passed": 636,
+      "skipped": 7,
+      "skipCondition": "SCENE_DESCRIPTION_ENABLED is false"
+    },
+    "flutterFullSceneEnabled": {
+      "passed": 643,
+      "skipped": 0,
+      "dartDefines": { "SCENE_DESCRIPTION_ENABLED": true, "SCENE_DESCRIPTION_TRIAL": true }
+    },
+    "iosSimulatorBuild": {
+      "command": "flutter build ios --simulator --debug --no-pub",
+      "result": "passed"
+    },
+    "iosNativeSimulatorTests": {
+      "passed": 3,
+      "tests": [
+        "testOutdoorTrackRequestsForegroundPermissionAndEmitsSampleMetadata",
+        "testOutdoorPrecisionRevocationStopsStreamAndWakesNormally",
+        "testNavigationAccuracyDowngradeStopsTrackingAndRestoresWakeState"
+      ]
+    },
+    "iosSignedProfileBuild": {
+      "command": "app/tool/run_iphone.sh --build-scene-trial --no-pub",
+      "result": "passed",
+      "codesignDeepStrict": "passed",
+      "localBuildVersion": "1.12.1+31",
+      "sha256": {
+        "Runner": "7a0e6a6293b2eec5628cd6c57f291ebf0b5701cd6feacc29fc1a0d041439677e",
+        "Frameworks/App.framework/App": "0c5c4b4953c0264aab311c592d1f31a065c31a6f28f6e733b95498a49d370430"
+      }
+    }
+  },
+  "requiredRegression": {
+    "durationSeconds": 15,
+    "acceptedTrackPoints": 1,
+    "distanceMetres": 0,
+    "markSequence": ["aheadLeft", "steps"],
+    "afterUndo": { "marks": ["aheadLeft"], "trackPoints": 1, "distanceMetres": 0 },
+    "verifiedBy": ["recording model", "Flutter widget flow including semantics announcements and focus event"]
+  },
+  "otherVerifiedCases": [
+    "stale, duplicate and inaccurate samples; stationary GPS drift; valid zero speed and unavailable speed",
+    "normal walking, retained corner and arrival-area observations",
+    "manual pause, background, long and explicit location interruption, permission loss, resumed segments and distance",
+    "co-located quick marks, text and explicit audio recording, playback cancellation when position becomes uncertain",
+    "save failure and retry, lost commit acknowledgement with stable ID, reopened encrypted data, isolated indoor draft",
+    "wrong start, reverse direction, deviation and local recovery, overlapping paths, location expiry and explicit arrival confirmation"
+  ],
+  "engineeringRules": {
+    "maximumIncomingFixAgeSeconds": 5,
+    "maximumRecordingHorizontalErrorMetres": 15,
+    "newSegmentAfterTrustedFixIntervalOverSeconds": 8,
+    "recordingFixLossTimeoutSeconds": 20,
+    "replayFixLossTimeoutSeconds": 8,
+    "minimumTrialTrackPoints": 3,
+    "minimumContinuousTrialDistanceMetres": 20,
+    "requiresExplicitEndpointConfirmation": true
+  },
+  "phone": {
+    "installedVersionObserved": "1.12.1+31",
+    "inventory": "xcrun devicectl device info apps, bundle hk.pathguide.pathguide",
+    "installedThisTurn": false,
+    "tagOrReleaseCreated": false
+  },
+  "humanAcceptance": {
+    "state": "pending",
+    "scope": [
+      "foreground capture and independent same-direction outdoor replay after an accompanied recording",
+      "iPhone VoiceOver focus, summary, event announcements and microphone recording/playback",
+      "actual GPS drift and turns, permission interruption, finish/save/reopen, nearby entrances, manual recovery to the recorded track and endpoint confirmation",
+      "iPhone Keychain and protected-file read after reopen"
+    ]
+  }
+}
