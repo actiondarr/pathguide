@@ -18,6 +18,8 @@ enum OutdoorRecordingState {
 enum OutdoorMarkResult { added, noPosition, capacity, invalid }
 
 class OutdoorRecorder {
+  static const _movementCandidateAge = Duration(seconds: 8);
+
   final _segments = <List<OutdoorPoint>>[];
   final _marks = <OutdoorMark>[];
   final _speeds = <OutdoorSpeed>[];
@@ -174,6 +176,11 @@ class OutdoorRecorder {
       return;
     }
 
+    final pending = _candidate;
+    if (pending != null &&
+        sample.difference(pending.time) > _movementCandidateAge) {
+      _candidate = null;
+    }
     if (stationary) {
       final candidate = _candidate;
       if (candidate != null &&
@@ -199,15 +206,20 @@ class OutdoorRecorder {
         candidate.coordinate,
       );
       final fromCandidate = candidate.coordinate.distanceTo(point.coordinate);
-      final continued =
-          moved >= threshold &&
-          moved >= candidateDistance + math.max(1.5, point.accuracy * 0.25) &&
+      final minimumProgress = math.max(1.5, point.accuracy * 0.25);
+      final candidateBearing = outdoorBearing(
+        anchor.coordinate,
+        candidate.coordinate,
+      );
+      final sameDirection =
           outdoorTurn(
-                outdoorBearing(anchor.coordinate, candidate.coordinate),
-                outdoorBearing(anchor.coordinate, point.coordinate),
-              ).abs() <=
-              60;
-      if (continued) {
+            candidateBearing,
+            outdoorBearing(anchor.coordinate, point.coordinate),
+          ).abs() <=
+          60;
+      if (moved >= threshold &&
+          sameDirection &&
+          moved >= candidateDistance + minimumProgress) {
         _append(candidate, now);
         _candidate =
             !atCapacity &&
@@ -220,7 +232,7 @@ class OutdoorRecorder {
       // Consecutive moving fixes approaching and leaving a bend can
       // corroborate a vertex even when the total displacement barely changes.
       final bend = outdoorTurn(
-        outdoorBearing(anchor.coordinate, candidate.coordinate),
+        candidateBearing,
         outdoorBearing(candidate.coordinate, point.coordinate),
       ).abs();
       if (moved >= threshold &&
@@ -231,6 +243,13 @@ class OutdoorRecorder {
           bend <= 115) {
         _append(candidate, now);
         _candidate = null;
+        return;
+      }
+      // Keep the point while small, consistent GPS updates accumulate evidence
+      // of progress. Replacing it each time can leave a slow walk unrecorded.
+      if (moved >= threshold &&
+          sameDirection &&
+          moved >= candidateDistance - minimumProgress) {
         return;
       }
     }

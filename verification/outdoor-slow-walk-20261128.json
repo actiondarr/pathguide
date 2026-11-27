@@ -1,0 +1,44 @@
+{
+  "dateHongKong": "2026-11-28",
+  "branch": "feature/cross-platform-navigation",
+  "baseCommit": "978a83ba63c87ed727b10be25afd798c39b8316a",
+  "checkpoint": "source",
+  "phoneReport": {
+    "draftReason": "只記錄到起點一個軌跡點",
+    "originalRawFixesAvailable": false,
+    "installedVersionObserved": "1.12.2+32",
+    "installedThisTurn": false
+  },
+  "reproduction": {
+    "fixture": "one-metre GPS updates confirm a slow continuous walk",
+    "durationSeconds": 45,
+    "fixIntervalSeconds": 1,
+    "fixSpacingMetres": 1,
+    "horizontalAccuracyMetres": 8,
+    "baselineAcceptedPoints": 1,
+    "fixedResult": "one continuous segment, at least three points, at least twenty metres, no draft reason",
+    "movementCandidateAgeLimitSeconds": 8
+  },
+  "checks": {
+    "flutterAnalyze": "no issues",
+    "flutterScoped": {
+      "files": ["test/outdoor_route_test.dart", "test/outdoor_route_page_test.dart"],
+      "passed": 23,
+      "skipped": 0
+    },
+    "flutterFullSceneEnabled": {
+      "command": "flutter test --no-pub --dart-define-from-file=config/scene.ios-trial.json --reporter expanded",
+      "passed": 650,
+      "skipped": 0
+    },
+    "iosSimulatorBuild": {
+      "command": "flutter build ios --simulator --debug --no-pub --dart-define-from-file=config/scene.ios-trial.json",
+      "result": "passed",
+      "existingWarning": "flutter_tts does not support Swift Package Manager for iOS"
+    }
+  },
+  "humanAcceptance": {
+    "state": "pending",
+    "scope": ["new foreground slow walk on iPhone", "saving, reopening and replaying the new recording with VoiceOver", "real GPS drift and candidate timing"]
+  }
+}

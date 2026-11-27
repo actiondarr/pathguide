@@ -121,6 +121,17 @@ void main() {
     expect(recorder.distance, 0);
   });
 
+  test('one-metre GPS updates confirm a slow continuous walk', () {
+    for (var second = 0; second <= 45; second++) {
+      record(second, second, 0, accuracy: 8, speed: 1);
+    }
+    final track = recorder.finish(elapsed(45));
+    expect(track.pointCount, greaterThanOrEqualTo(3));
+    expect(track.distance, greaterThanOrEqualTo(OutdoorTrack.minimumDistance));
+    expect(track.segments, hasLength(1));
+    expect(track.draftReason, isNull);
+  });
+
   test('normal walking retains a corner and last corroborated endpoint', () {
     for (var i = 0; i <= 15; i++) {
       record(i, i * 2, 0);
