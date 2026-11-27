@@ -1,0 +1,17 @@
+{
+  "dateHongKong": "2026-11-27",
+  "version": "1.12.2+32",
+  "sourceCommit": "d1863cd9e22086b7fc2a7327d2494a8d9f8d4583",
+  "release": "https://github.com/actiondarr/pathguide/releases/tag/v1.12.2%2B32",
+  "build": "Signed iOS Profile, private scene flags enabled, deep strict signature verified",
+  "sha256": {
+    "Runner": "f06312c5ad190a7795fac1f50012d055417483f6ea8bb823790b28f9f42f75b3",
+    "Frameworks/App.framework/App": "fdf782d559de0e482c8ab8c22a09fa603239ba1a0df49f09358e2a710f8bcc09"
+  },
+  "phoneInstall": {
+    "inPlace": true,
+    "independentInventoryVerified": true,
+    "launchAccepted": true
+  },
+  "humanAcceptance": "pending"
+}

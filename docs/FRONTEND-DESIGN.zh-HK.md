@@ -12,7 +12,7 @@
 
 ## 現版 App 可以做甚麼
 
-iPhone 目前裝有 **1.12.1+31**，已從裝置清單核對。開發分支加入前景戶外錄製、管理與重行，已完成 Flutter 與 iOS 工程驗證。戶外路線仍待實地試行及 VoiceOver 驗收。 [裝機收據](../verification/release-receipts/app-1.12.1+31.json) · [工程驗證](../verification/outdoor-route-recording-replay-20261127.json)
+iPhone 目前裝有 **1.12.2+32**，已原位安裝、核對及啟動。真人驗收待做。 [裝機收據](../verification/release-receipts/app-1.12.2+32.json)開發分支加入前景戶外錄製、管理與重行，已完成 Flutter 與 iOS 工程驗證。戶外路線仍待實地試行及 VoiceOver 驗收。 [裝機收據](../verification/release-receipts/app-1.12.1+31.json) · [工程驗證](../verification/outdoor-route-recording-replay-20261127.json)
 
 首頁先選任務。首次開啟即時辨識、路線導航或菜單會顯示教學。相機按任務使用，首頁本身不開相機。設定保存繁體中文／English、粵語播報速度及首次教學狀態。[首頁](../app/lib/ui/task_home_page.dart) · [任務入口](../app/lib/ui/app_shell.dart)
 
