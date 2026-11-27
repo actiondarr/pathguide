@@ -73,6 +73,27 @@ class OutdoorReplay {
   LocationFix? _motionAnchor;
   int _nearEndFixes = 0;
 
+  bool get positionMatched =>
+      state == OutdoorReplayState.following ||
+      state == OutdoorReplayState.nearEnd;
+
+  int? get matchedSegment {
+    if (!positionMatched) return null;
+    final next = geometry.cumulative.indexWhere((metres) => metres > along);
+    return next < 1 ? geometry.cumulative.length - 2 : next - 1;
+  }
+
+  OutdoorMark? get nextLandmark {
+    if (!positionMatched) return null;
+    ({double along, OutdoorMark mark})? next;
+    for (final mark in _marks) {
+      if (mark.along >= along && (next == null || mark.along < next.along)) {
+        next = mark;
+      }
+    }
+    return next?.mark;
+  }
+
   double get remaining => math.max(0, geometry.length - along);
   OutdoorPoint get _start => _track.segments.single.first;
   OutdoorPoint get _end => _track.segments.single.last;
@@ -263,8 +284,8 @@ class OutdoorReplay {
     if (state == OutdoorReplayState.following) {
       for (var i = 0; i < _turns.length; i++) {
         final turn = _turns[i];
-        final distance = turn.along - matched;
-        if (distance >= -3 &&
+        final distance = turn.along - math.max(along, matched);
+        if (distance >= 0 &&
             distance <= 18 &&
             (active == i || !_spokenTurns.contains(i))) {
           _currentTurn = i;

@@ -1,4 +1,6 @@
 import '../l10n/app_language.dart';
+import '../feedback/feedback_page.dart';
+import '../feedback/feedback_trace.dart';
 
 import 'dart:async';
 
@@ -65,7 +67,11 @@ class _NavigationPageState extends State<NavigationPage>
   late final _speech = widget.speech ?? _platform.speech;
   late final Speaker _speaker =
       widget.speaker ??
-      FlutterTtsSpeaker(speechRate: widget.settings.speechSpeed.rate);
+      FlutterTtsSpeaker(
+        speechRate: widget.settings.speechSpeed.rate,
+        onPlaybackEvent: _feedback.playback,
+      );
+  late final _feedback = FeedbackTrace(widget.settings, 'outdoorNavigation');
   final _query = TextEditingController();
   int _outputGeneration = 0, _voiceGeneration = 0, _lastAnnouncement = 0;
   int _backendGeneration = 0;
@@ -88,6 +94,7 @@ class _NavigationPageState extends State<NavigationPage>
       ),
     )..addListener(_visionChanged);
     _nav.addListener(_changed);
+    widget.settings.addListener(_settingsChanged);
     unawaited(_nav.initialize());
   }
 
@@ -121,8 +128,27 @@ class _NavigationPageState extends State<NavigationPage>
     }
   }
 
+  void _settingsChanged() {
+    if (mounted) setState(() {});
+  }
+
   void _changed() {
     if (!mounted) return;
+    if (widget.settings.feedbackEnabled && _nav.hasTask) {
+      final fix = _nav.fix;
+      _feedback.context = {
+        if (fix != null &&
+            fix.usable(navigationNow(), const NavigationRules())) ...{
+          'lat': fix.coordinate.latitude,
+          'lng': fix.coordinate.longitude,
+          'accuracy': fix.accuracy,
+        },
+        'state': _nav.state.name,
+        if (_nav.state == NavigationState.navigating)
+          'segment': _nav.progress?.stepIndex,
+      };
+      _feedback.event('navigation');
+    }
     widget.onTaskChanged?.call(_nav.hasTask);
     _syncRecognition();
     if (_lastAnnouncement != _nav.announcementId) {
@@ -139,6 +165,7 @@ class _NavigationPageState extends State<NavigationPage>
   }
 
   Future<void> _say(String text) async {
+    _feedback.queue(context.tr(text));
     final stopping = _stop();
     final generation = _outputGeneration;
     await stopping;
@@ -156,6 +183,7 @@ class _NavigationPageState extends State<NavigationPage>
     text = context.tr(text);
     try {
       if (MediaQuery.accessibleNavigationOf(context)) {
+        _feedback.submitted(text, voiceOver: true);
         await SemanticsService.sendAnnouncement(
           View.of(context),
           text,
@@ -176,6 +204,7 @@ class _NavigationPageState extends State<NavigationPage>
             setState(() => _speechStatus = '此裝置未提供粵語，正使用其他中文語音。');
           }
         }
+        _feedback.submitted(text, voiceOver: false);
         await _speaker.speak(text);
       }
     } catch (_) {
@@ -186,6 +215,10 @@ class _NavigationPageState extends State<NavigationPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _feedback.clear();
+    }
     _syncRecognition();
     if (state == AppLifecycleState.resumed) {
       _nav.foreground();
@@ -409,6 +442,8 @@ class _NavigationPageState extends State<NavigationPage>
   );
   @override
   void dispose() {
+    widget.settings.removeListener(_settingsChanged);
+    _feedback.dispose();
     WidgetsBinding.instance.removeObserver(this);
     ++_voiceGeneration;
     _pending = null;
@@ -606,6 +641,8 @@ class _NavigationPageState extends State<NavigationPage>
                   child: const AppText('導航服務及私隱說明'),
                 ),
                 AppText(nav.message),
+                if (hasTask && widget.settings.feedbackEnabled)
+                  CaptureFeedbackButton(trace: _feedback),
                 if (_speechStatus != null) AppText(_speechStatus!),
                 if (nav.busy) const LinearProgressIndicator(),
                 if (hasTask) ...[

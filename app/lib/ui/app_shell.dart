@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
 import '../settings/app_settings.dart';
+import '../feedback/feedback_page.dart';
 import 'app_theme.dart';
 import 'demo_page.dart';
 import 'task_home_page.dart';
@@ -426,6 +427,32 @@ class _SettingsPageState extends State<SettingsPage> {
               const AppText('相機試驗、合成樣例及診斷工具；不提供室內導航。'),
               const SizedBox(height: 24),
             ],
+            SwitchListTile(
+              title: Text(
+                settings.language == AppLanguage.english
+                    ? 'Record feedback'
+                    : '記錄回饋',
+              ),
+              subtitle: Text(
+                settings.language == AppLanguage.english
+                    ? 'Keep a short local event history. Save a clip with one tap.'
+                    : '只喺本機短暫保留事件，可以一撳記低。',
+              ),
+              value: settings.feedbackEnabled,
+              onChanged: settings.setFeedbackEnabled,
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(
+                  builder: (_) => FeedbackPage(settings: settings),
+                ),
+              ),
+              child: Text(
+                settings.language == AppLanguage.english
+                    ? 'Saved feedback'
+                    : '待處理回饋',
+              ),
+            ),
             const _NativeSettingsSection(
               title: '私隱',
               children: <Widget>[

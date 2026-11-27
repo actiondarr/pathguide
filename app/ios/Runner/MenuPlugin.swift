@@ -38,6 +38,7 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
   private let requestCameraAccess: (@escaping (Bool) -> Void) -> Void
   private var cameraAccess: CameraLeaseClient?
   private var finishingCapture = false
+  private var pickingFeedbackPhoto = false
   private var dismissingPicker = false
   private var dismissalWaiters: [() -> Void] = []
   // Injectable presentation keeps lifecycle tests independent of camera hardware.
@@ -78,7 +79,7 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     if call.method == "cancelMenu" { releaseCamera { result(nil) }; return }
     if call.method == "finishMenuSpeech" { finishSpeech(); result(nil); return }
-    guard ["readMenu", "listenMenuQuery"].contains(call.method) else { result(FlutterMethodNotImplemented); return }
+    guard ["readMenu", "listenMenuQuery", "pickFeedbackPhoto"].contains(call.method) else { result(FlutterMethodNotImplemented); return }
     guard pending == nil, !dismissingPicker, !completingRequest else { result(FlutterError(code: "busy", message: "請先完成或取消目前操作。", details: nil)); return }
     guard let args = call.arguments as? [String: Any], let id = args["requestId"] as? String else {
       result(FlutterError(code: "bad_args", message: "缺少請求識別碼。", details: nil)); return
@@ -88,7 +89,9 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
     finishingCapture = false
     pending = result; requestId = id
     isSpeechRequest = call.method == "listenMenuQuery"
+    pickingFeedbackPhoto = call.method == "pickFeedbackPhoto"
     includeGeneral = args["includeGeneral"] as? Bool == true
+    if pickingFeedbackPhoto { openLibrary(); return }
     if isSpeechRequest { authorizeSpeech(id: id, allowNetwork: args["allowNetwork"] as? Bool == true); return }
     guard #available(iOS 16.0, *) else { fail("unsupported", "繁體中文菜單辨識需要 iOS 16 或以上。"); return }
     if args["source"] as? String == "library" { openLibrary() }
@@ -278,6 +281,19 @@ final class MenuPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerD
       DispatchQueue.main.async {
         guard let self, self.requestId == id, self.pending != nil else { return }
         guard let image = value as? UIImage else { self.fail("image_failed", "照片未能載入，若在 iCloud 可先下載再試。"); return }
+        if self.pickingFeedbackPhoto {
+          let scale = min(1, 768 / max(1, max(image.size.width, image.size.height)))
+          let size = CGSize(width: max(1, image.size.width * scale), height: max(1, image.size.height * scale))
+          let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
+          let rendered = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+          }
+          guard let data = rendered.jpegData(compressionQuality: 0.65), data.count <= 256 * 1024 else {
+            self.fail("image_failed", "未能準備附圖。"); return
+          }
+          self.complete(FlutterStandardTypedData(bytes: data))
+          return
+        }
         self.recognize([image], truncated: false)
       }
     }

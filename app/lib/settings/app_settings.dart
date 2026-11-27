@@ -16,6 +16,8 @@ enum AppTask {
 
 enum AppLanguage { chinese, english }
 
+enum SceneDetail { quick, concise, detailed }
+
 /// The three user-facing speech rates map to the values expected by
 /// `flutter_tts`. The labels deliberately describe relative speed rather than
 /// exposing implementation-specific decimal values.
@@ -44,10 +46,18 @@ class AppSettings extends ChangeNotifier {
   AppSettings._({
     required this._preferences,
     SpeechSpeed? speed,
+    bool feedback = false,
+    SceneDetail sceneDetail = SceneDetail.concise,
+    bool objectSpeech = true,
     double? speakThreshold,
     AppLanguage language = AppLanguage.chinese,
     Iterable<String> completedIntroductions = const [],
-  }) : _speechSpeed = speed ?? SpeechSpeed.normal,
+  }) : _feedbackEnabled = feedback,
+       // ignore: prefer_initializing_formals
+       _sceneDetail = sceneDetail,
+       // ignore: prefer_initializing_formals
+       _objectSpeech = objectSpeech,
+       _speechSpeed = speed ?? SpeechSpeed.normal,
        // ignore: prefer_initializing_formals
        _language = language,
        _speakThreshold = speakThreshold ?? kMinSpeakScore,
@@ -83,6 +93,30 @@ class AppSettings extends ChangeNotifier {
     await _preferences?.setString(languageKey, value.name);
   }
 
+  bool _feedbackEnabled, _objectSpeech;
+  SceneDetail _sceneDetail;
+  bool get feedbackEnabled => _feedbackEnabled;
+  bool get objectSpeech => _objectSpeech;
+  SceneDetail get sceneDetail => _sceneDetail;
+
+  Future<void> setFeedbackEnabled(bool enabled) async {
+    _feedbackEnabled = enabled;
+    notifyListeners();
+    await _preferences?.setBool('feedbackEnabled', enabled);
+  }
+
+  Future<void> setObjectSpeech(bool enabled) async {
+    _objectSpeech = enabled;
+    notifyListeners();
+    await _preferences?.setBool('objectSpeech', enabled);
+  }
+
+  Future<void> setSceneDetail(SceneDetail detail) async {
+    _sceneDetail = detail;
+    notifyListeners();
+    await _preferences?.setString('sceneDetail', detail.name);
+  }
+
   final SharedPreferences? _preferences;
   SpeechSpeed _speechSpeed;
   double _speakThreshold;
@@ -108,6 +142,12 @@ class AppSettings extends ChangeNotifier {
     final preferences = await SharedPreferences.getInstance();
     return AppSettings._(
       preferences: preferences,
+      feedback: preferences.getBool('feedbackEnabled') ?? false,
+      sceneDetail: SceneDetail.values.firstWhere(
+        (detail) => detail.name == preferences.getString('sceneDetail'),
+        orElse: () => SceneDetail.concise,
+      ),
+      objectSpeech: preferences.getBool('objectSpeech') ?? true,
       completedIntroductions:
           preferences.getStringList(introductionsKey) ?? const [],
       language: preferences.getString(languageKey) == 'english'

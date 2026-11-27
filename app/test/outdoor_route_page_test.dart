@@ -15,6 +15,10 @@ import 'package:pathguide/route_memory/route_audio_note_dialog.dart';
 import 'package:pathguide/settings/app_settings.dart';
 import 'package:pathguide/tts/announcer.dart';
 import 'package:pathguide/ui/app_shell.dart';
+import 'package:pathguide/vision/detection.dart';
+import 'package:pathguide/vision/vision_source.dart';
+
+import 'recognition_session_test.dart' as camera_fixture;
 
 import 'outdoor_route_fixtures.dart';
 import 'support/route_audio_fixture.dart';
@@ -350,6 +354,114 @@ void main() {
       expect(location.awake.last, isFalse);
     },
   );
+  for (final authorized in [true, false]) {
+    testWidgets(
+      'recorded replay camera and fresh repeat (authorized: $authorized)',
+      (t) async {
+        t.view.devicePixelRatio = 1;
+        t.view.physicalSize = const Size(430, 932);
+        addTearDown(t.view.reset);
+        final location = TestLocation(), speech = RecordingSpeaker();
+        final camera = camera_fixture.Camera();
+        addTearDown(location.events.close);
+        var time = 0, starts = 0;
+        final track = cornerRoute();
+        final store = TestStore()..writes = 1;
+        await store.save('outdoor', '實錄路線', track);
+        final settings = AppSettings.memory();
+        await t.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: OutdoorRouteList(
+                settings: settings,
+                openStore: () async => store,
+                replayBuilder: (snapshot) => OutdoorReplayPage(
+                  settings: settings,
+                  location: location,
+                  speaker: speech,
+                  clock: () => elapsed(time),
+                  wallClock: () => at(time),
+                  snapshot: snapshot,
+                  visionFactory: () {
+                    starts++;
+                    return camera;
+                  },
+                  preview: const SizedBox(key: ValueKey('live-replay-preview')),
+                ),
+              ),
+            ),
+          ),
+        );
+        await t.pumpAndSettle();
+        await t.tap(find.text('實錄路線'));
+        await t.pumpAndSettle();
+        expect(starts, 0);
+        await t.tap(find.text('開始重行'));
+        await t.pump();
+        expect(starts, 1);
+        camera.ready.complete(
+          VisionSourceStatus(
+            ok: authorized,
+            message: authorized ? '辨識中' : '請在系統設定允許相機。',
+          ),
+        );
+        await t.pumpAndSettle();
+        if (authorized) {
+          expect(
+            find.byKey(const ValueKey('live-replay-preview')),
+            findsOneWidget,
+          );
+          camera.events.add(
+            const VisionFrame(
+              detections: [
+                Detection(id: 7, score: .95, cx: .5, cy: .5, w: .2, h: .2),
+              ],
+              inferenceMs: 2,
+              frameWidth: 100,
+              frameHeight: 100,
+            ),
+          );
+          await t.pumpAndSettle();
+          expect(speech.spoken, contains('垃圾桶'));
+        } else {
+          expect(speech.spoken.last, contains('允許相機'));
+          expect(
+            find.byKey(const ValueKey('live-replay-preview')),
+            findsNothing,
+          );
+        }
+        Future<void> go(int second, int x, int y, double course) async {
+          time = second;
+          location.events.add(fix(second, x, y, course: course));
+          await t.pumpAndSettle();
+        }
+
+        await go(1, 0, 0, 90);
+        await go(5, 8, 0, 90);
+        await go(11, 22, 0, 90);
+        final repeat = find.text('重聽下一步');
+        await t.tap(repeat);
+        await t.pumpAndSettle();
+        expect(speech.spoken.last, contains('米後左轉'));
+        await go(17, 30, 5, 0);
+        await t.tap(repeat);
+        await t.pumpAndSettle();
+        expect(speech.spoken.last, isNot(contains('左轉')));
+        time = 27;
+        await t.tap(repeat);
+        await t.pumpAndSettle();
+        expect(speech.spoken.last, contains('定位暫時不足'));
+        t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        await t.pumpAndSettle();
+        expect(camera.disposed, 1);
+        expect(location.stops, 1);
+        t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await t.pumpAndSettle();
+        expect(starts, 1);
+      },
+    );
+  }
+
   testWidgets(
     'saved route guides, reads marks and withholds arrival until confirmed',
     (t) async {
@@ -395,6 +507,10 @@ void main() {
       await t.pumpWidget(
         MaterialApp(
           home: OutdoorReplayPage(
+            visionFactory: () => camera_fixture.Camera()
+              ..ready.complete(
+                const VisionSourceStatus(ok: false, message: '相機未開啟。'),
+              ),
             settings: AppSettings.memory(),
             location: location,
             speaker: speech,

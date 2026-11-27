@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../tts/announcer.dart';
+import '../settings/app_settings.dart';
 import '../tts/speech_coordinator.dart';
 import 'scene_backend.dart';
 import 'live_scene_signal.dart';
@@ -21,6 +22,7 @@ class LiveSceneController extends ChangeNotifier {
     this.stableFor = const Duration(milliseconds: 250),
     this.maxSessionAttempts = 100,
     this.speechEnvironment,
+    this.detail,
   }) : _clock = clock ?? DateTime.now {
     _historyScope = backend is FirebaseSceneBackend
         ? (backend as FirebaseSceneBackend).diagnosticScope
@@ -38,6 +40,7 @@ class LiveSceneController extends ChangeNotifier {
   final Duration cooldown, stableFor;
   final int maxSessionAttempts;
   final String Function()? speechEnvironment;
+  final SceneDetail Function()? detail;
   static String? _savedScope;
   static final Map<String, String> _savedReports = {};
   String? _historyScope;
@@ -704,13 +707,19 @@ class LiveSceneController extends ChangeNotifier {
       _previousFullText = full;
       _previousObservations = reply.observations;
       _deliveredEvidence = _latest;
-      final spoken = reply.mode == null && !manual && previousFullText != null
+      final newText = reply.mode == null && !manual && previousFullText != null
           ? RegExp(r'[^。！？]+[。！？]')
                 .allMatches(full)
                 .map((m) => m[0]!)
                 .where((sentence) => !previousFullText.contains(sentence))
                 .join()
           : full;
+      final spoken = switch (detail?.call()) {
+        SceneDetail.quick => _summarySentences(newText, 1),
+        SceneDetail.concise => _summarySentences(newText, 2),
+        SceneDetail.detailed => _details(newText, reply.observations),
+        null => newText,
+      };
       if (spoken.isEmpty) {
         status = '沒有新句子，略過重複播音。';
         return;
@@ -814,4 +823,21 @@ class LiveSceneController extends ChangeNotifier {
     _speechExpiry?.cancel();
     super.dispose();
   }
+}
+
+String _summarySentences(String text, int count) {
+  final sentences = RegExp(r'[^。！？]+[。！？]').allMatches(text);
+  return sentences.isEmpty
+      ? text
+      : sentences.take(count).map((m) => m[0]!).join();
+}
+
+String _details(String text, List<SceneObservation> observations) {
+  if (text.isEmpty) return text;
+  final details = observations
+      .map((item) => item.detail)
+      .where((detail) => !text.contains(detail))
+      .toSet()
+      .take(2);
+  return text + details.map((detail) => '$detail。').join();
 }

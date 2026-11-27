@@ -26,6 +26,7 @@ abstract class OutdoorRoutePageState<T extends StatefulWidget> extends State<T>
   late final _speaker =
       speakerOverride ??
       FlutterTtsSpeaker(
+        onPlaybackEvent: onSpeechPlayback,
         language: settings.language,
         speechRate: settings.speechSpeed.rate,
       );
@@ -49,6 +50,8 @@ abstract class OutdoorRoutePageState<T extends StatefulWidget> extends State<T>
   Future<void> _locationQueue = Future.value();
   StreamSubscription<LocationFix>? _updates;
 
+  void onSpeechPlayback(TtsPlaybackEvent event) {}
+  void onSpeechSubmitted(String message, {required bool voiceOver}) {}
   void onFix(LocationFix fix);
   void onLocationError(bool permission);
   void onPulse();
@@ -163,6 +166,7 @@ abstract class OutdoorRoutePageState<T extends StatefulWidget> extends State<T>
     try {
       if (MediaQuery.accessibleNavigationOf(context)) {
         if (MediaQuery.supportsAnnounceOf(context)) {
+          onSpeechSubmitted(message, voiceOver: true);
           await SemanticsService.sendAnnouncement(
             View.of(context),
             message,
@@ -176,6 +180,7 @@ abstract class OutdoorRoutePageState<T extends StatefulWidget> extends State<T>
           foreground &&
           ticket == _speechEpoch &&
           isCurrent?.call() != false) {
+        onSpeechSubmitted(message, voiceOver: false);
         await _speaker.speak(message);
       }
     } catch (_) {

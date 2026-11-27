@@ -14,11 +14,20 @@ class RouteFilePolicy {
     bool probe = false,
     bool learning = false,
     bool outdoor = false,
+    bool feedback = false,
   }) async {
-    if ([probe, learning, outdoor].where((enabled) => enabled).length > 1) {
+    if ([
+          probe,
+          learning,
+          outdoor,
+          feedback,
+        ].where((enabled) => enabled).length >
+        1) {
       throw ArgumentError('Conflicting storage scope');
     }
-    final scope = outdoor
+    final scope = feedback
+        ? "feedback"
+        : outdoor
         ? 'outdoor'
         : learning
         ? 'learning'

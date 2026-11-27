@@ -4,6 +4,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import '../scene/live_scene_controller.dart';
+import '../feedback/feedback_page.dart';
+import '../feedback/feedback_trace.dart';
+import '../settings/prompt_settings.dart';
 import '../scene/live_scene_signal.dart';
 import '../scene/scene_backend.dart';
 import '../tts/speech_coordinator.dart';
@@ -80,6 +83,8 @@ class DemoPage extends StatefulWidget {
 class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
   late final FlutterTtsSpeaker _speaker;
   late final EnvironmentSpeaker _environmentSpeaker;
+  late final _feedback = FeedbackTrace(widget.settings, 'recognition');
+  DateTime? _lastFeedbackFrame;
   late final Announcer _announcer;
   late final SpeechCoordinator _voice;
   late final LiveSceneController _scene;
@@ -389,6 +394,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       speechRate: widget.settings.speechSpeed.rate,
       language: widget.settings.language,
       onPlaybackEvent: (event) {
+        _feedback.playback(event);
         if (_voice.owner == SpeechChannel.scene &&
             _scene.speechOutputSubmitted) {
           _scene.playbackEvent(event.name);
@@ -396,7 +402,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       },
     );
     _environmentSpeaker = EnvironmentSpeaker(
-      tts: _speaker,
+      tts: FeedbackTts(_feedback, _speaker),
       screenReaderActive: () => _screenReader,
       announce: _announceWithScreenReader,
       translate: (text) => appText(text, widget.settings.language),
@@ -405,6 +411,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     _scene = LiveSceneController(
       capture: _captureScene,
       backend: FirebaseSceneBackend(),
+      detail: () => widget.settings.sceneDetail,
       speaker: _CantoneseSceneSpeaker(
         _voice,
         () => _speakEnabled && (_screenReader || _speaker.isCantonese),
@@ -445,6 +452,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     if (!mounted || !_active || !_requestedRunning || _controlsOpen) return;
     if (_voice.owner == SpeechChannel.scene) _scene.playbackEvent('voiceover');
     if (MediaQuery.supportsAnnounceOf(context)) {
+      _feedback.submitted(text, voiceOver: true);
       await SemanticsService.sendAnnouncement(
         View.of(context),
         text,
@@ -454,10 +462,14 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
       // Accessible result remains available even when a platform cannot send
       // explicit announcements. Do not fall back to simultaneous TTS.
       setState(() => _readback = text);
+      _feedback.submitted(text, voiceOver: true);
     }
   }
 
   void _applySettings() {
+    if (!widget.settings.objectSpeech) {
+      unawaited(_voice.stopOwned(SpeechChannel.environment));
+    }
     _announcer.minSpeakScore = widget.settings.speakThreshold;
     if (mounted) setState(() {});
     if (_speaker.speechRate != widget.settings.speechSpeed.rate) {
@@ -770,6 +782,10 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _feedback.clear();
+    }
     _photos?.foreground(state == AppLifecycleState.resumed);
     if (state != AppLifecycleState.resumed) {
       unawaited(
@@ -863,6 +879,19 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
     final now = DateTime.now();
     final dt = now.difference(_lastFrameAt).inMicroseconds;
     _lastFrameAt = now;
+    if (widget.settings.feedbackEnabled &&
+        _mode == SourceMode.camera &&
+        (_lastFeedbackFrame == null ||
+            now.difference(_lastFeedbackFrame!) >=
+                const Duration(seconds: 1))) {
+      _lastFeedbackFrame = now;
+      _feedback.event('detection', {
+        'summary': resultSummary(
+          frame.detections,
+          minScore: widget.settings.speakThreshold,
+        ),
+      });
+    }
 
     // **不再按阈值过滤**：阈值已在来源内部生效（原生侧丢弃低分框，
     // 假源同样按 threshold 过滤）。两处各过滤一次时，不一致的表现是
@@ -886,6 +915,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
         _pendingStatusAnnouncement == null;
     if (_announcer.enabled &&
         !_announcer.isSpeaking &&
+        widget.settings.objectSpeech &&
         _announcer.onFrame(frame.detections) != null) {
       unawaited(
         _announcer.lastSpeech!.catchError((Object e) {
@@ -933,6 +963,7 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _feedback.dispose();
     _scenePreparationRetry?.cancel();
     _scene.removeListener(_sceneChanged);
     _resultExpiry?.cancel();
@@ -989,9 +1020,12 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
+                  PromptSettingsButton(settings: widget.settings),
                 ],
               ),
             ),
+            if (widget.settings.feedbackEnabled && _mode == SourceMode.camera)
+              CaptureFeedbackButton(trace: _feedback),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Semantics(
@@ -1178,7 +1212,6 @@ class _DemoPageState extends State<DemoPage> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
                       key: const ValueKey<String>('vision-settings-button'),

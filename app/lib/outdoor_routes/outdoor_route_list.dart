@@ -6,8 +6,14 @@ import 'outdoor_replay_page.dart';
 import 'outdoor_route_store.dart';
 
 class OutdoorRouteList extends StatefulWidget {
-  const OutdoorRouteList({super.key, required this.settings, this.openStore});
+  const OutdoorRouteList({
+    super.key,
+    required this.settings,
+    this.openStore,
+    this.replayBuilder,
+  });
   final AppSettings settings;
+  final Widget Function(RouteSnapshot)? replayBuilder;
   final Future<OutdoorRouteStore> Function()? openStore;
 
   @override
@@ -63,6 +69,7 @@ class _OutdoorRouteListState extends State<OutdoorRouteList> {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
           builder: (_) =>
+              widget.replayBuilder?.call(snapshot) ??
               OutdoorReplayPage(settings: widget.settings, snapshot: snapshot),
         ),
       );

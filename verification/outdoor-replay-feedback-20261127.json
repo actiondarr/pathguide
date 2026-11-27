@@ -1,0 +1,46 @@
+{
+  "dateHongKong": "2026-11-27",
+  "branch": "feature/cross-platform-navigation",
+  "baseCommit": "0814717b2dec11f29e793f1f011c0ed2fbbaac8f",
+  "checks": {
+    "flutterAnalyze": "no issues",
+    "relatedWithSceneFlags": {
+      "passed": 94,
+      "skipped": 0
+    },
+    "fullWithSceneFlags": {
+      "passed": 649,
+      "skipped": 0
+    },
+    "iosSimulatorBuild": "passed",
+    "iosCommand": "flutter build ios --simulator --debug --no-pub --dart-define-from-file=config/scene.ios-trial.json"
+  },
+  "verifiedCases": [
+    "Production navigation entry opens recorder; recorded route list opens ready replay and reason-specific draft detail",
+    "Test vision frames render and speak; camera refusal still permits location-based guidance",
+    "Repeat uses current turn or state; clearing a passed turn, stale fix and background stop are exercised",
+    "Existing speech coordinator regression covers navigation priority and stale scene cancellation",
+    "Fifteen-second stationary regression preserves one point, two independent landmarks and zero metres",
+    "Feedback defaults off; delayed capture saves the earlier app playback event, with queue, cancellation and VoiceOver submission represented separately",
+    "Saved feedback remains reviewable with recording disabled; encrypted reopen and deletion; no implicit transport, failure retention and same-ID retry with injected transport"
+  ],
+  "feedback": {
+    "volatileSeconds": 45,
+    "maxVolatileEvents": 120,
+    "maxSavedDrafts": 12,
+    "maxEncryptedCatalogBytes": 2097152,
+    "productionTransport": "unconfigured",
+    "voiceOverSystemPlaybackStartObservable": false
+  },
+  "iphone": {
+    "installedVersionVerified": "1.12.1+31",
+    "installedThisTurn": false,
+    "humanAcceptance": "pending"
+  },
+  "pending": [
+    "Real iPhone route replay with camera permission, same-session native preview and frames, scene consent, screen reader focus and speech, location accuracy and turn recovery",
+    "Actual iPhone protected storage, user-selected photo and microphone note",
+    "Production feedback receiving contract and authenticated delivery",
+    "Validated collision and surface guidance capabilities"
+  ]
+}

@@ -83,6 +83,17 @@ class SpeechCoordinator {
   Future<void> speakStatus(String text, {required bool Function() isCurrent}) =>
       _speak(SpeechChannel.sceneStatus, text, isCurrent: isCurrent);
 
+  Future<void> speakNavigation(
+    String text, {
+    required bool Function() isCurrent,
+    void Function(SceneSpeechEvent)? onEvent,
+  }) => _speak(
+    SpeechChannel.navigation,
+    text,
+    isCurrent: isCurrent,
+    onSceneEvent: onEvent,
+  );
+
   Speaker channel(SpeechChannel channel) => _ChannelSpeaker(this, channel);
 
   Future<void> _serialize(Future<void> Function() action) {

@@ -8,7 +8,12 @@ import 'vision_source.dart';
 /// Camera ownership for navigation. No photo storage/upload is performed.
 /// Stop invalidates callbacks immediately; native start/stop remain serialized.
 class RecognitionSession extends ChangeNotifier {
-  RecognitionSession({required this.createSource, required this.announcer});
+  RecognitionSession({
+    required this.createSource,
+    required this.announcer,
+    this.speakObjects,
+  });
+  final bool Function()? speakObjects;
   final VisionSource Function() createSource;
   final Announcer announcer;
   VisionSource? source;
@@ -82,7 +87,7 @@ class RecognitionSession extends ChangeNotifier {
                   ? '暫未辨識到支援的物件。可繼續觀察或停止；不代表前方暢通。'
                   : '辨識中';
               _armFreshness(generation);
-              announcer.enabled = true;
+              announcer.enabled = speakObjects?.call() ?? true;
               announcer.onFrame(value.detections);
               _notify();
             },
